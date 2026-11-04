@@ -23,9 +23,17 @@ def _inline_styles(html):
             css = (ROOT / m.group(1).lstrip('/')).read_text(encoding='utf-8')
         except OSError:
             return m.group(0)
-        css = css.replace('</', '<\\/')
+        css = _minify_css(css).replace('</', '<\\/')
         return f'<style data-href="{m.group(1)}">{css}</style>'
-    return _STYLE_LINK.sub(swap, html)
+    html = _STYLE_LINK.sub(swap, html)
+    return re.sub(r'(<style\b[^>]*>)(.*?)(</style>)',
+                  lambda m: m.group(1) + _minify_css(m.group(2)) + m.group(3), html, flags=re.S)
+
+
+def _minify_css(css):
+    css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
+    css = re.sub(r'\s+', ' ', css)
+    return re.sub(r'\s*([{};,])\s*', r'\1', css).replace(';}', '}').strip()
 
 
 SPORT_NAMES = {
@@ -33,16 +41,20 @@ SPORT_NAMES = {
     'ncaaw': 'NCAAW', 'wnba': 'WNBA', 'cfl': 'CFL', 'soccer': 'Soccer', 'tennis': 'Tennis', 'ufc': 'UFC',
     'golf': 'Golf',
 }
-_SPORT_PAGE = re.compile(r'^/(%s)-(picks|projections)/?$' % '|'.join(SPORT_NAMES))
+_SPORT_PAGE = re.compile(r'^/(%s)-(picks|projections|predictions)/?$' % '|'.join(SPORT_NAMES))
+_OLD_SPORT_PAGE = re.compile(r'^/(%s|all-sports)-(picks|projections)/?$' % '|'.join(SPORT_NAMES))
+_NEW_SPORT_PAGE = re.compile(r'^/(%s|all-sports)-predictions(/?)$' % '|'.join(SPORT_NAMES))
 _OTHER_PAGES = {
+    '/all-sports-predictions': ('All Sports Predictions Today | Prediction Lab',
+                                "Every sport's AI predictions on one page, with each prediction type's recent record."),
     '/': ('Prediction Lab | AI Sports Predictions for Every Sport',
           "Today's AI predictions and win probabilities for the NFL, NBA, NHL, MLB, college sports, "
           'soccer, tennis, UFC and golf, with every model graded in public.'),
     '/player-props': ('Player Props Predictions | Prediction Lab',
                       'AI player prop projections with each model graded in public.'),
-    '/all-sports-picks': ('All Sports Picks Today | Prediction Lab',
-                          "Every sport's AI picks on one page, with each pick type's recent record."),
-    '/all-sports-projections': ('All Sports Projections Today | Prediction Lab',
+    '/all-sports-picks': ('All Sports Predictions Today | Prediction Lab',
+                          "Every sport's AI predictions on one page, with each prediction type's recent record."),
+    '/all-sports-projections': ('All Sports Predictions Today | Prediction Lab',
                                 "Every sport's AI projections on one page, with each pick type's recent record."),
 }
 
@@ -56,13 +68,55 @@ def _page_meta(path):
     if not match:
         return None
     name = SPORT_NAMES[match.group(1)]
-    return (f'{name} Predictions Today: AI Picks and Win Probabilities | Prediction Lab',
+    return (f'{name} Predictions Today: AI Win Probabilities | Prediction Lab',
             f"Today's {name} predictions from Prediction Lab: win probabilities from six models, "
             'model lines, and every result graded in public.')
 
 
 def _esc(text):
     return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def _real_visitor(environ):
+    """A browser or crawler, not the site's own in-process page builds (test client, saved-page rebuilds)."""
+    if 'gunicorn.socket' not in environ and 'werkzeug.socket' not in environ:
+        return False
+    return not environ.get('HTTP_X_PL_RESULTS_REBUILD') and not environ.get('pl.classic')
+
+
+class PublicPaths:
+    """Sport pages are public at /<sport>-predictions; the old -picks / -projections addresses forward there (301).
+    The server's own builds keep reading the -picks paths, so nothing that builds or saves pages changes."""
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        path = environ.get('PATH_INFO', '')
+        match = _OLD_SPORT_PAGE.match(path)
+        host = (environ.get('HTTP_HOST') or '').split(':')[0].lower()
+        if (match and environ.get('REQUEST_METHOD') in ('GET', 'HEAD') and _real_visitor(environ)
+                and not host.startswith('www.') and not host.endswith('underdogs.bet')):
+            target = f'/{match.group(1)}-predictions'
+            if environ.get('QUERY_STRING'):
+                target += '?' + environ['QUERY_STRING']
+            start_response('301 Moved Permanently', [('Location', target), ('Content-Length', '0'),
+                                                     ('Cache-Control', 'public, max-age=3600')])
+            return [b'']
+        return self.wsgi_app(environ, start_response)
+
+
+class PredictionsToPicks:
+    """Inside the app the sport pages are still the -picks routes: /<sport>-predictions is read as /<sport>-picks."""
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        match = _NEW_SPORT_PAGE.match(environ.get('PATH_INFO', ''))
+        if match:
+            environ['PATH_INFO'] = f'/{match.group(1)}-picks{match.group(2)}'
+        return self.wsgi_app(environ, start_response)
 
 
 class ReactShell:

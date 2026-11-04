@@ -4,7 +4,7 @@ import { useDragScroll } from '../hooks/useDragScroll.js';
 
 // All Sports Picks: every open pick across the sports, from the same board the classic page shows
 // (members only, same rule). Picks by day, a sport filter, today's Ladder pick, and the graded results.
-const TABS = ['Picks', 'Results', 'Pick types'];
+const TABS = ['Predictions', 'Results', 'Prediction types'];
 
 function rateOf(record) {
   return record && typeof record.rate === 'number' ? Math.round(record.rate * 1000) / 10 : null;
@@ -14,7 +14,7 @@ function RecordBar({ record }) {
   const rate = rateOf(record);
   if (rate === null) return <span className="pl-asp-muted">No record yet</span>;
   return (
-    <span className="pl-asp-record" title={`Pick type record: ${record.text}`}>
+    <span className="pl-asp-record" title={`Prediction type record: ${record.text}`}>
       <span className="pl-asp-bar"><span style={{ width: `${Math.min(100, rate)}%` }} /></span>
       <span>{record.text}</span>
     </span>
@@ -28,7 +28,7 @@ function PickRow({ pick }) {
         <span className="pl-asp-market">{pick.market}</span>
         <span className="pl-asp-model">{pick.model}</span>
         <strong className="pl-asp-label">{pick.label}</strong>
-        {pick.ladder && <span className="pl-asp-ladder-tag" title="This pick type qualifies for The Ladder">Ladder</span>}
+        {pick.ladder && <span className="pl-asp-ladder-tag" title="This prediction type qualifies for The Ladder">Ladder</span>}
       </div>
       <div className="pl-asp-pick-side">
         {pick.win_pct && <span className="pl-asp-pct">{pick.win_pct}</span>}
@@ -62,7 +62,7 @@ function GameCard({ game }) {
 }
 
 function SummaryTable({ rows, label }) {
-  if (!rows || rows.length === 0) return <p className="pl-asp-muted">No graded picks.</p>;
+  if (!rows || rows.length === 0) return <p className="pl-asp-muted">No graded predictions.</p>;
   return (
     <table className="pl-asp-table">
       <thead><tr><th>Sport</th><th>Market</th><th>{label}</th></tr></thead>
@@ -80,7 +80,7 @@ function SummaryTable({ rows, label }) {
 export default function AllSportsPage() {
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState(null);
-  const [tab, setTab] = useState('Picks');
+  const [tab, setTab] = useState('Predictions');
   const [sport, setSport] = useState('All');
   const [copied, setCopied] = useState(false);
   const strip = useDragScroll();
@@ -155,20 +155,20 @@ export default function AllSportsPage() {
 
   let body = null;
   if (error) {
-    body = <p className="pl-empty">Could not load picks: {error}</p>;
+    body = <p className="pl-empty">Could not load predictions: {error}</p>;
   } else if (!payload) {
-    body = <p className="pl-empty">Loading picks…</p>;
+    body = <p className="pl-empty">Loading predictions…</p>;
   } else if (payload.locked) {
     body = (
       <div className="pl-asp-lock">
-        <h2>All Sports Picks is for members</h2>
-        <p>Every sport&apos;s picks on one page, each pick type&apos;s recent record, and last night&apos;s results.</p>
+        <h2>All Sports Predictions is for members</h2>
+        <p>Every sport&apos;s predictions on one page, each prediction type&apos;s recent record, and last night&apos;s results.</p>
         <a className="pl-asp-btn primary" href="/plans">Join Premium</a>
-        {!payload.loggedIn && <a className="pl-asp-btn ghost" href="/login?next=/all-sports-picks">Log in</a>}
+        {!payload.loggedIn && <a className="pl-asp-btn ghost" href="/login?next=/all-sports-predictions">Log in</a>}
       </div>
     );
   } else if (!board) {
-    body = <p className="pl-empty">Today&apos;s picks are loading…</p>;
+    body = <p className="pl-empty">Today&apos;s predictions are loading…</p>;
   } else {
     body = (
       <>
@@ -180,7 +180,7 @@ export default function AllSportsPage() {
           ))}
         </div>
 
-        {tab !== 'Pick types' && sports.length > 1 && (
+        {tab !== 'Prediction types' && sports.length > 1 && (
           <div className="pl-team-strip pl-league-strip" ref={strip.ref} {...strip.handlers}>
             <div className="pl-team-rows">
               <div className="pl-team-row">
@@ -199,21 +199,21 @@ export default function AllSportsPage() {
           </div>
         )}
 
-        {tab === 'Picks' && (
+        {tab === 'Predictions' && (
           <>
             {board.ladder_today && (sport === 'All' || board.ladder_today.sport === sport) && (
               <section className="pl-asp-hero">
-                <div className="pl-asp-hero-tag">Today&apos;s Ladder pick</div>
+                <div className="pl-asp-hero-tag">Today&apos;s Ladder prediction</div>
                 <div className="pl-asp-hero-pick">{board.ladder_today.pick}</div>
                 <div className="pl-asp-hero-meta">
                   <span>{board.ladder_today.sport} · {board.ladder_today.event}</span>
                   {board.ladder_today.odds && <span>Price {board.ladder_today.odds}</span>}
-                  {board.ladder_today.record && <span>Pick type record {board.ladder_today.record}</span>}
+                  {board.ladder_today.record && <span>Prediction type record {board.ladder_today.record}</span>}
                 </div>
                 <a className="pl-asp-hero-link" href="/ladder-picks">See The Ladder</a>
               </section>
             )}
-            {days.length === 0 && <p className="pl-empty">No open picks right now. New picks post as each sport&apos;s slate is set.</p>}
+            {days.length === 0 && <p className="pl-empty">No open predictions right now. New predictions post as each sport&apos;s slate is set.</p>}
             {days.map(([day, list]) => (
               <section key={day} className="pl-day">
                 <h2 className="pl-day-title">{day}</h2>
@@ -223,7 +223,7 @@ export default function AllSportsPage() {
               </section>
             ))}
             <p className="pl-asp-note">
-              <span className="pl-asp-ladder-tag">Ladder</span> marks a pick type with {board.rules.games}+ graded picks whose
+              <span className="pl-asp-ladder-tag">Ladder</span> marks a pick type with {board.rules.games}+ graded predictions whose
               record clears the rate its price needs. Past records do not guarantee future results.
             </p>
           </>
@@ -232,7 +232,7 @@ export default function AllSportsPage() {
         {tab === 'Results' && (
           <section className="pl-day">
             <h2 className="pl-day-title">Results · {board.results_label}</h2>
-            {results.length === 0 && <p className="pl-empty">No graded picks for this date.</p>}
+            {results.length === 0 && <p className="pl-empty">No graded predictions for this date.</p>}
             <div className="pl-asp-grid">
               {results.map((game, index) => (
                 <article className="pl-asp-game" key={`${game.sport}-${game.event}-${index}`}>
@@ -259,11 +259,11 @@ export default function AllSportsPage() {
           </section>
         )}
 
-        {tab === 'Pick types' && (
+        {tab === 'Prediction types' && (
           <section className="pl-day">
-            <h2 className="pl-day-title">Pick type records</h2>
+            <h2 className="pl-day-title">Prediction type records</h2>
             <table className="pl-asp-table">
-              <thead><tr><th>Pick type</th><th>Gap</th><th>Record</th><th>Return</th><th /></tr></thead>
+              <thead><tr><th>Prediction type</th><th>Gap</th><th>Record</th><th>Return</th><th /></tr></thead>
               <tbody>
                 {(board.types || []).map((row) => (
                   <tr key={`${row.type}-${row.gap}`}>
@@ -284,9 +284,9 @@ export default function AllSportsPage() {
       <main className="pl-center">
         <div className="pl-asp-head">
           <div>
-            <h1 className="pl-title">All Sports Picks</h1>
+            <h1 className="pl-title">All Sports Predictions</h1>
             <p className="pl-asp-sub">
-              Every pick our models make across all sports{board ? ` · Updated ${board.built_at}` : ''}
+              Every prediction our models make across all sports{board ? ` · Updated ${board.built_at}` : ''}
             </p>
           </div>
           {board && (

@@ -13,16 +13,16 @@
             <div class="pl-menu">
                 <button type="button" aria-expanded="false" aria-haspopup="true">Sports</button>
                 <div class="pl-menu-list" hidden>
-                    {% for name, slug in SPORTS %}<a href="/{{ slug }}-picks">{{ name }}</a>{% endfor %}
+                    {% for name, slug in SPORTS %}<a href="/{{ slug }}-predictions">{{ name }}</a>{% endfor %}
                 </div>
             </div>
             <div class="pl-menu">
                 <button type="button" aria-expanded="false" aria-haspopup="true">Models</button>
                 <div class="pl-menu-list" hidden>
                     <a href="/performance">Model Performance</a>
-                    <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+                    <a href="/our-model-vs-sportsbooks">Model vs the Market</a>
                     <a href="/ladder-picks">The Ladder</a>
-                    <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
+                    <a href="/ai-sports-betting-picks-today">AI Predictions Today</a>
                     <a href="/tutorial">Tutorial</a>
                 </div>
             </div>
@@ -70,8 +70,9 @@
     </div>
     <nav class="pl-secondary" aria-label="Quick links">
         <a href="/ladder-picks">The Ladder</a>
+        <a href="/player-props">Player Props</a>
         <a href="/performance">Model Performance</a>
-        <a href="/all-sports-picks">All Sports Projections</a>
+        <a href="/all-sports-predictions">All Sports Predictions</a>
         <a href="/all-sports-results">All Sports Results</a>
         <a href="/daily-report">Daily Results</a>
     </nav>
@@ -82,14 +83,14 @@
         </div>
         <details class="pl-drawer-folder">
             <summary>Sports</summary>
-            {% for name, slug in SPORTS %}<a href="/{{ slug }}-picks">{{ name }}</a>{% endfor %}
+            {% for name, slug in SPORTS %}<a href="/{{ slug }}-predictions">{{ name }}</a>{% endfor %}
         </details>
         <details class="pl-drawer-folder">
             <summary>Models</summary>
             <a href="/performance">Model Performance</a>
-            <a href="/our-model-vs-sportsbooks">Model vs Sportsbooks</a>
+            <a href="/our-model-vs-sportsbooks">Model vs the Market</a>
             <a href="/ladder-picks">The Ladder</a>
-            <a href="/ai-sports-betting-picks-today">AI Picks Today</a>
+            <a href="/ai-sports-betting-picks-today">AI Predictions Today</a>
             <a href="/tutorial">Tutorial</a>
         </details>
         <details class="pl-drawer-folder">
@@ -121,7 +122,7 @@
             <a href="/blog">Blog</a>
             <a href="/affiliate">Affiliate Program</a>
             <a href="/faq">FAQ</a>
-            <a href="/what-are-ai-sports-betting-picks">What are AI picks</a>
+            <a href="/what-are-ai-sports-betting-picks">What are AI predictions</a>
             <a href="/contact">Contact</a>
             <a href="/privacy">Privacy</a>
             <a href="/terms">Terms</a>

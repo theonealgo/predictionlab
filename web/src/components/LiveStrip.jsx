@@ -8,10 +8,14 @@ export default function LiveStrip() {
   const [items, setItems] = useState(null);
   const strip = useDragScroll();
 
+  // Refreshed every minute, so games move to Live as they start and the row turns over each day.
   useEffect(() => {
-    getJson('/api/web/live')
+    const load = () => getJson('/api/web/live')
       .then((data) => setItems(data.items || []))
-      .catch(() => setItems([]));
+      .catch(() => setItems((current) => current || []));
+    load();
+    const timer = setInterval(load, 60 * 1000);
+    return () => clearInterval(timer);
   }, []);
 
   // While the games load, empty boxes hold the strip's height so the page does not jump.
@@ -51,8 +55,8 @@ export default function LiveStrip() {
       </div>
       <div className="pl-live-row" ref={strip.ref} {...strip.handlers}>
         {items.map((item) => (
-          <a className="pl-live-box" key={`${item.sport}-${item.away}-${item.home}`} href={item.href}>
-            <div className="pl-live-meta">{item.sport} · Today</div>
+          <a className={item.live ? 'pl-live-box is-live' : 'pl-live-box'} key={`${item.sport}-${item.away}-${item.home}`} href={item.href}>
+            <div className="pl-live-meta">{item.sport} · {item.live ? 'Live' : 'Today'}</div>
             <div className="pl-live-team"><span>{item.away}</span><b>{item.awayPct}%</b></div>
             <div className="pl-live-team"><span>{item.home}</span><b>{item.homePct}%</b></div>
           </a>

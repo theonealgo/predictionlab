@@ -34,7 +34,15 @@
 .perf-tools a:hover{text-decoration:underline;}
 .sport-block{margin-top:18px;}
 .sport-title{font-size:1.02rem;font-weight:900;color:#0f172a;margin:0 0 8px;}
-.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;}
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:12px;}
+@media (max-width:760px){
+    .perf-card{padding:14px 10px;}
+    .perf-head h1{font-size:1.35rem;}
+    .perf-filters label,.perf-filters select{width:100%;min-width:0;}
+    .perf-table,.team-mini{display:block;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .perf-table th,.perf-table td{padding:6px;}
+    .perf-stat{min-height:56px;}
+}
 .team-explainer{
     margin:0 0 12px;
     color:#475569;

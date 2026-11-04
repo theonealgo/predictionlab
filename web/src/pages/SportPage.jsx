@@ -60,6 +60,12 @@ function leagueOf(card) {
   return match ? match[1] : '';
 }
 
+// The tournament a tennis card names in its Event row.
+function eventOf(card) {
+  const match = /Event<\/span>\s*<span class="sf-val">([^<]*)/.exec(card.html);
+  return match ? match[1].trim() : '';
+}
+
 // Filters for soccer: one per league. The 'All' chip is handled by the page.
 function leagueMatchers(labels) {
   return Object.fromEntries(
@@ -91,8 +97,11 @@ export default function SportPage({ slug }) {
   const [tab, setTab] = useState(nav.tabs[0]);
   const [payload, setPayload] = useState(null);
   const [error, setError] = useState(null);
+  // Phones show one column at a time; this switch flips between the games and the results.
+  const [mobilePane, setMobilePane] = useState('predictions');
   const [filter, setFilter] = useState(() => {
     const league = new URLSearchParams(window.location.search).get('league');
+    if (league && sport === 'TENNIS') return league;
     return league && nav.filters && nav.filters.includes(league) ? league : 'All';
   });
   const [teamFilter, setTeamFilter] = useState(
@@ -191,10 +200,24 @@ export default function SportPage({ slug }) {
     return [teams.slice(0, half), teams.slice(half)];
   }, [teams]);
 
+  // Tennis: one chip per tournament on the page, most matches first.
+  const tennisEvents = useMemo(() => {
+    if (sport !== 'TENNIS') return [];
+    const counts = new Map();
+    cards.forEach((card) => {
+      const name = eventOf(card);
+      if (name) counts.set(name, (counts.get(name) || 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([name]) => name);
+  }, [sport, cards]);
+  const shownNav = tennisEvents.length > 1 ? { ...nav, filters: ['All', ...tennisEvents], bubbles: true, text: true } : nav;
+
   // Filters: All, plus the groups each sport has. A chip with no teams behind it stays greyed out.
   const groupMatchers = college
     ? collegeMatchers(college.groups)
-    : sport === 'SOCCER' ? leagueMatchers(nav.filters) : nameMatchers(conference);
+    : sport === 'SOCCER' ? leagueMatchers(nav.filters)
+    : sport === 'TENNIS' ? Object.fromEntries(tennisEvents.map((name) => [name, (card) => eventOf(card) === name]))
+    : nameMatchers(conference);
   const filterWorks = (label) => label === 'All' || Boolean(groupMatchers && groupMatchers[label]);
 
   const matches = (card) => {
@@ -222,11 +245,25 @@ export default function SportPage({ slug }) {
   };
 
   const showGames = tab === 'Games' && picksView === 'cards';
-  const leagueSplit = nav.filters ? Math.ceil(nav.filters.length / 2) : 0;
+  const leagueSplit = shownNav.filters ? Math.ceil(shownNav.filters.length / 2) : 0;
 
   return (
     <>
-      <main className="pl-center">
+      <div className="pl-mobile-switch" role="tablist" aria-label="Show predictions or results">
+        {[['predictions', 'Predictions'], ['results', 'Results']].map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={mobilePane === key}
+            className={mobilePane === key ? 'active' : ''}
+            onClick={() => { setMobilePane(key); window.scrollTo({ top: 0 }); }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <main className={mobilePane === 'predictions' ? 'pl-center' : 'pl-center pl-mobile-hidden'}>
         <h1 className="pl-title">{sport}</h1>
         <div className="pl-tabs" role="tablist">
           {nav.tabs.map((name) => (
@@ -264,10 +301,10 @@ export default function SportPage({ slug }) {
           <PicksChart key={slug} slug={slug} onPredictions={() => setPicksView('cards')} />
         )}
 
-        {showGames && nav.filters && nav.bubbles && (
-          <div className={`pl-team-strip pl-league-strip${nav.text ? ' is-text' : ''}`} ref={leagueStrip.ref} {...leagueStrip.handlers}>
+        {showGames && shownNav.filters && shownNav.bubbles && (
+          <div className={`pl-team-strip pl-league-strip${shownNav.text ? ' is-text' : ''}`} ref={leagueStrip.ref} {...leagueStrip.handlers}>
             <div className="pl-team-rows">
-              {[nav.filters.slice(0, leagueSplit), nav.filters.slice(leagueSplit)].map((row, rowIndex) => (
+              {[shownNav.filters.slice(0, leagueSplit), shownNav.filters.slice(leagueSplit)].map((row, rowIndex) => (
                 <div className="pl-team-row" key={rowIndex}>
                   {row.map((label) => (
                     <button
@@ -286,9 +323,9 @@ export default function SportPage({ slug }) {
           </div>
         )}
 
-        {showGames && nav.filters && !nav.bubbles && (
-          <div className={`pl-conf-row${nav.filters.length > 4 ? ' is-long' : ''}`}>
-            {nav.filters.map((label) => (
+        {showGames && shownNav.filters && !shownNav.bubbles && (
+          <div className={`pl-conf-row${shownNav.filters.length > 4 ? ' is-long' : ''}`}>
+            {shownNav.filters.map((label) => (
               <button
                 key={label}
                 type="button"
@@ -373,12 +410,12 @@ export default function SportPage({ slug }) {
         {tab === 'Players' && <PlayersPanel sport={sport} />}
       </main>
 
-      <aside className="pl-right">
+      <aside className={mobilePane === 'results' ? 'pl-right' : 'pl-right pl-mobile-hidden'}>
         <div className="pl-right-title">Results</div>
         <ResultsPanel
           src={`/${slug.replace('-picks', '-results')}`}
           picksPath={`/${slug.replace('-projections', '-picks')}`}
-          onPredictions={() => chooseTab(nav.tabs[0])}
+          onPredictions={() => { chooseTab(nav.tabs[0]); setMobilePane('predictions'); }}
         />
       </aside>
     </>

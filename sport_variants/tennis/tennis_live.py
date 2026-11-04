@@ -91,23 +91,36 @@ def tennis_chart_payload() -> dict[str, Any]:
         return {"ok": False, "error": str(e)}
 
 
-_TENNIS_DB_SYNCED = False
+_TENNIS_SYNC_EVERY = 30 * 60
+_TENNIS_SYNC = {"at": 0.0, "running": False}
+_TENNIS_SYNC_LOCK = threading.Lock()
 
 
-def _sync_tennis_slate() -> None:
-    """Refresh isolation tennis DB so today's ESPN matches appear on picks."""
-    global _TENNIS_DB_SYNCED
-    if _TENNIS_DB_SYNCED:
-        return
+def _run_tennis_sync() -> None:
     try:
-        # Prefer hub package (DB tennis_page reads) after _load_locked_tennis.
         from tennis.espn_sync import sync_tennis_db
 
         result = sync_tennis_db(force=True)
         print(f"[tennis_live] espn sync: {result}", flush=True)
-        _TENNIS_DB_SYNCED = True
     except Exception as e:
         print(f"[tennis_live] espn sync failed: {e}", flush=True)
+    finally:
+        with _TENNIS_SYNC_LOCK:
+            _TENNIS_SYNC["running"] = False
+
+
+def _sync_tennis_slate() -> None:
+    """Refresh the tennis DB from ESPN (ATP + WTA) at most every 30 minutes.
+
+    Runs on its own thread: a visitor's page request has a short budget for outside calls, and the
+    ATP calls alone used it up, so the WTA matches never reached the DB. The page shows the last sync.
+    """
+    with _TENNIS_SYNC_LOCK:
+        if _TENNIS_SYNC["running"] or time.time() - _TENNIS_SYNC["at"] < _TENNIS_SYNC_EVERY:
+            return
+        _TENNIS_SYNC["running"] = True
+        _TENNIS_SYNC["at"] = time.time()
+    threading.Thread(target=_run_tennis_sync, name="tennis-espn-sync", daemon=True).start()
 
 
 def _strip_picks_view_scaffold(html: str) -> str:

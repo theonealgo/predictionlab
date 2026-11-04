@@ -61,8 +61,8 @@ export default function GolfPanel() {
         <span>{selected.date} · {selected.status}</span>
       </h2>
 
-      <h2 className="pl-day-title">Our picks</h2>
-      {data.picks.length === 0 && <p className="pl-empty">No picks for this tournament yet.</p>}
+      <h2 className="pl-day-title">Our predictions</h2>
+      {data.picks.length === 0 && <p className="pl-empty">No predictions for this tournament yet.</p>}
       <div className="pl-golf-picks">
         {data.picks.map((pick) => (
           <div className="pl-golf-pick" key={pick.market}>

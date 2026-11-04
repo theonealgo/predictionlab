@@ -151,10 +151,10 @@
   <section class="ld-card">
     <h2>Past ladders</h2>
     <div class="ld-scroll"><table class="ld-table">
-      <thead><tr><th>Ladder</th><th>Started</th><th>Ended</th><th>Last day</th><th>Outcome</th><th>Final amount</th></tr></thead>
+      <thead><tr><th>Ladder</th><th>Started</th><th>Ended</th><th>Last day</th><th>Outcome</th><th>Losing pick</th><th>Final amount</th></tr></thead>
       <tbody>
       {% for h in history %}
-      <tr><td>#{{ h.id }}</td><td>{{ h.start_date }}</td><td>{{ h.finished }}</td><td>{{ h.final_day }}</td><td><span class="ld-res {{ 'win' if h.status == 'completed' else ('loss' if h.status == 'failed' else 'no_pick') }}">{{ h.status_label }}</span></td><td>{{ h.final_amount }}</td></tr>
+      <tr><td>#{{ h.id }}</td><td>{{ h.start_date }}</td><td>{{ h.finished }}</td><td>{{ h.final_day }}</td><td><span class="ld-res {{ 'win' if h.status == 'completed' else ('loss' if h.status == 'failed' else 'no_pick') }}">{{ h.status_label }}</span></td><td>{{ h.losing_pick or '—' }}</td><td>{{ h.final_amount }}</td></tr>
       {% endfor %}
       </tbody>
     </table></div>

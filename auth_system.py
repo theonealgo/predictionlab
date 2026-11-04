@@ -77,7 +77,7 @@ except ImportError:
 
 from flask import (
     Blueprint, request, redirect, url_for, session,
-    render_template, render_template_string, jsonify, flash, g
+    render_template, render_template_string, jsonify, flash, g, current_app
 )
 from flask_login import (
     LoginManager, UserMixin, login_user, logout_user,
@@ -872,7 +872,14 @@ def signup_submit():
 @auth_bp.route('/logout')
 def logout():
     logout_user()
-    return redirect('/')
+    resp = redirect('/')
+    # Older logins left host-only copies of these cookies; the domain-wide delete does not reach them,
+    # so the old remember cookie signed the visitor straight back in.
+    secure = bool(current_app.config.get('SESSION_COOKIE_SECURE'))
+    for name in (current_app.config.get('REMEMBER_COOKIE_NAME', 'remember_token'),
+                 current_app.config.get('SESSION_COOKIE_NAME', 'session')):
+        resp.delete_cookie(name, path='/', secure=secure, samesite='Lax')
+    return resp
 
 
 @auth_bp.route('/admin-reset')

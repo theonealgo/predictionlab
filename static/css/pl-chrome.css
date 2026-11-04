@@ -38,7 +38,7 @@ header.pl2-header .pl-top {
 }
 
 header.pl2-header .pl-logo {
-  color: #000;
+  color: #0284c7;
   font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -224,11 +224,11 @@ header.pl2-header .pl-secondary {
   display: flex;
   flex-wrap: wrap;
   gap: 22px;
-  padding: 0 28px 12px;
+  padding: 0 28px 12px 42px;
 }
 
 header.pl2-header .pl-secondary a {
-  color: #111827;
+  color: #6b7280;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -330,15 +330,15 @@ header.pl2-header .pl-drawer-folder[open] {
   padding-bottom: 8px;
 }
 
-/* Footer: the Sign up blue with black text, links in four columns, then the legal line. */
+/* Footer: light grey, the PredictionLab name with the social icons, four link columns, then the legal line. */
 footer.site-directory-footer {
   position: static;
   z-index: auto;
   margin-top: 48px;
   padding: 40px 40px 32px;
-  background: #38bdf8;
-  color: #000;
-  border-top: 1px solid #0ea5e9;
+  background: #f5f5f5;
+  color: #374151;
+  border-top: 1px solid #e5e7eb;
   isolation: auto;
   content-visibility: visible;
   font-size: 14px;
@@ -346,27 +346,52 @@ footer.site-directory-footer {
 
 footer.site-directory-footer .pl-footer-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: 1.2fr repeat(4, minmax(0, 1fr));
   gap: 32px;
+}
+
+footer.site-directory-footer .pl-footer-logo {
+  display: block;
+  padding: 0 0 12px;
+  color: #7c8490;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+footer.site-directory-footer .pl-footer-brand .pl-footer-social {
+  display: flex;
+  gap: 4px;
+}
+
+footer.site-directory-footer .pl-footer-social img {
+  display: block;
+  width: 18px;
+  height: 18px;
+  opacity: 0.45;
+}
+
+footer.site-directory-footer .pl-footer-social a:hover img {
+  opacity: 0.8;
 }
 
 footer.site-directory-footer h2,
 footer.site-directory-footer h4 {
   margin: 0 0 12px;
-  color: #000;
+  color: #6b7280;
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: none;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 footer.site-directory-footer a {
   display: block;
-  padding: 4px 0;
-  color: #000;
+  padding: 6px 0;
+  color: #374151;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   text-decoration: none;
 }
 
@@ -381,8 +406,8 @@ footer.site-directory-footer .pl-footer-bottom {
   gap: 16px 28px;
   margin-top: 28px;
   padding-top: 18px;
-  border-top: 1px solid rgba(0, 0, 0, 0.18);
-  color: #000;
+  border-top: 1px solid #e5e7eb;
+  color: #6b7280;
   font-family: inherit;
   font-size: 13px;
   letter-spacing: 0;
@@ -392,13 +417,14 @@ footer.site-directory-footer .pl-footer-bottom {
 footer.site-directory-footer .pl-footer-bottom a {
   display: inline;
   padding: 0;
+  text-decoration: underline;
 }
 
 footer.site-directory-footer .pl-footer-social a {
   display: inline-block;
+  min-width: 24px;
   min-height: 24px;
-  padding: 4px 6px;
-  margin-right: 8px;
+  padding: 3px;
 }
 
 /* Narrow screens: the main links wrap under the logo, and the footer columns stack. */
@@ -424,7 +450,7 @@ footer.site-directory-footer .pl-footer-social a {
   header.pl2-header .pl-secondary {
     flex-wrap: nowrap;
     gap: 14px;
-    padding: 0 16px 10px;
+    padding: 0 16px 10px 28px;
     overflow-x: auto;
   }
 
@@ -439,6 +465,10 @@ footer.site-directory-footer .pl-footer-social a {
 
   footer.site-directory-footer .pl-footer-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  footer.site-directory-footer .pl-footer-brand {
+    grid-column: 1 / -1;
   }
 }
 

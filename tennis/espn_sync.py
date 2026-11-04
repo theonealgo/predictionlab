@@ -266,7 +266,8 @@ def fetch_tennis_slate() -> tuple[
         tour = "wta" if "/wta/" in url else "atp"
         try:
             data = _fetch_json(url)
-        except Exception:
+        except Exception as exc:
+            print(f"[tennis sync] {url} failed: {exc}", flush=True)
             continue
         rows, ids, fl = _parse_singles(data, tour, include_upcoming=True)
         logos.update(ids)

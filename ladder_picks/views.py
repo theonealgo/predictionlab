@@ -142,7 +142,20 @@ def page_context(conn, premium: bool, cfg: Config | None = None) -> dict:
     for r in conn.execute(
         "SELECT * FROM ladder_runs WHERE status != 'active' ORDER BY id DESC LIMIT 25"
     ):
+        loss = conn.execute(
+            "SELECT * FROM ladder_days WHERE ladder_id = ? AND result = 'loss' ORDER BY day_number DESC LIMIT 1",
+            (r["id"],),
+        ).fetchone()
+        losing_pick = ""
+        if loss:
+            lv = _day_view(loss, True)
+            losing_pick = " · ".join(x for x in (
+                {"soccer": "Soccer", "tennis": "Tennis", "golf": "Golf"}.get(
+                    lv.get("sport", "").lower(), lv.get("sport", "").upper()), lv.get("pick", ""), lv.get("odds", ""),
+                f"Final: {lv['score']}" if lv.get("score") else lv.get("event", ""),
+            ) if x and x != "—")
         history.append({
+            "losing_pick": losing_pick,
             "id": _number(conn, r["id"]),
             "start_date": r["start_date"],
             "finished": (r["finished_at"] or "")[:10],

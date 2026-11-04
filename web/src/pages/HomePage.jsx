@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getJson } from '../api.js';
 import { applyCardStyles } from '../cardStyles.js';
 import ChartFrame from '../components/ChartFrame.jsx';
+import { publicPath } from '../data/sportSlugs.js';
 
 // Home page: one sport, the first one with games today. The sports list on the left is how people pick any
 // other sport. The Chart button shows this sport's chart view, so people can flip between the two.
@@ -73,7 +74,7 @@ export default function HomePage() {
           <section className="pl-home-sport">
             <h2 className="pl-home-sport-title">
               <span>{sport.name}</span>
-              <a href={`/${sport.slug}`}>{cards === null ? 'Loading…' : `See all ${total} games`}</a>
+              <a href={publicPath(sport.slug)}>{cards === null ? 'Loading…' : `See all ${total} games`}</a>
             </h2>
             {cards === null && <p className="pl-empty">Loading games…</p>}
             {cards !== null && cards.length === 0 && <p className="pl-empty">No games scheduled right now.</p>}
@@ -91,7 +92,7 @@ export default function HomePage() {
           <section className="pl-home-sport">
             <h2 className="pl-home-sport-title">
               <span>{sport.name}</span>
-              <a href={`/${sport.slug}`}>See all games</a>
+              <a href={publicPath(sport.slug)}>See all games</a>
             </h2>
             {CHART_SPORTS.has(sport.key) ? (
               <ChartFrame src={`/${sport.slug.replace('-picks', '-results')}?view=chart`} title={`${sport.name} chart`} />

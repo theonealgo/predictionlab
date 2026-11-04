@@ -759,7 +759,7 @@ def _picks_page_canonical_url(*, sport=None, filter_date=None, grouped_predictio
         sport_key == 'GOLF' or not _picks_grouped_has_games(grouped_predictions)
     ):
         slug = SPORT_SEO_SLUGS.get(sport_key) or f'{sport_key.lower()}-picks'
-        return f'{_SITE_DOMAIN}/{slug}'
+        return f"{_SITE_DOMAIN}/{slug.replace('-projections', '-picks').replace('-picks', '-predictions')}"
     return _seo_canonical_url()
 
 
@@ -15959,9 +15959,9 @@ class _ClassicPrefix:
         return self.wsgi_app(environ, start_response)
 
 
-from react_shell import ReactShell as _ReactShell  # noqa: E402
+from react_shell import ReactShell as _ReactShell, PublicPaths as _PublicPaths, PredictionsToPicks as _PredictionsToPicks  # noqa: E402
 
-app.wsgi_app = _ClassicPrefix(_ReactShell(app.wsgi_app, lambda html: _ensure_site_gtags(html)))
+app.wsgi_app = _ClassicPrefix(_PublicPaths(_ReactShell(_PredictionsToPicks(app.wsgi_app), lambda html: _ensure_site_gtags(html))))
 
 
 # Results pages carry no emoji (see results_clean.py). This hook is registered first, so it runs last.
@@ -26494,7 +26494,9 @@ def _seo_canonical_url(path=None):
         except Exception:
             path = '/'
     path = path or '/'
-    base = f"https://predictionlab.io{path}"
+    from react_shell import _OLD_SPORT_PAGE
+    public = _OLD_SPORT_PAGE.match(path)
+    base = f"https://predictionlab.io/{public.group(1)}-predictions" if public else f"https://predictionlab.io{path}"
     if path not in ('/soccer-picks', '/soccer-results'):
         return base
     try:
@@ -71984,7 +71986,7 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - VALUE BETTING PICKS</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab active">💰 Value Picks</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab active">💰 Value Picks</a>
         <a href="/{{ sport_results_slug }}" class="tab">Results</a>
     </div>
     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: rgba(251, 191, 36, 0.1); border-radius: 10px;">
@@ -72205,7 +72207,7 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Predictions</h1>
     
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab active">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab active">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab">Results</a>
     </div>
     
@@ -72337,7 +72339,7 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Completed Games Results</h1>
     
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
     
@@ -72473,7 +72475,7 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
     <div class="results-container">
@@ -72680,7 +72682,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -73343,7 +73345,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -74005,7 +74007,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -74667,7 +74669,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -75329,7 +75331,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -75991,7 +75993,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -76653,7 +76655,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -77315,7 +77317,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -77977,7 +77979,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -78639,7 +78641,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -79301,7 +79303,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -79963,7 +79965,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -80625,7 +80627,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
 ).replace('{% block content %}{% endblock %}', """
     <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
@@ -81283,7 +81285,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Week by Week Results</h1>
     
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab">Predictions</a>
         <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
     
@@ -86926,6 +86928,7 @@ def _web_live_payload():
     """Every game dated today with no final score yet, across the sports, for the scrolling live row.
     The big leagues come first; the college leagues, which have the most games, come last."""
     sport_rank = {key: rank for rank, key in enumerate(_LIVE_ROW_ORDER)}
+    today_et = datetime.now(ZoneInfo('America/New_York')).date().isoformat()
     try:
         conn = get_db_connection()
         rows = conn.execute(
@@ -86933,10 +86936,11 @@ def _web_live_payload():
             "p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob "
             "FROM predictions p "
             "LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport "
-            "WHERE date(p.game_date) = date('now','localtime') "
+            "WHERE date(p.game_date) = ? "
             "AND (g.home_score IS NULL OR g.game_id IS NULL) "
             "AND p.win_probability IS NOT NULL "
-            "ORDER BY p.game_date ASC"
+            "ORDER BY p.game_date ASC",
+            (today_et,),
         ).fetchall()
         conn.close()
     except Exception as exc:
@@ -86964,7 +86968,7 @@ def _web_live_payload():
             'home': _clean_team_name(home),
             'awayPct': round((1.0 - home_prob) * 100, 1),
             'homePct': round(home_prob * 100, 1),
-            'href': '/' + SPORT_SEO_SLUGS.get(row['sport'], '').replace('-projections', '-picks'),
+            'href': '/' + SPORT_SEO_SLUGS.get(row['sport'], '').replace('-projections', '-picks').replace('-picks', '-predictions'),
         })
     return items
 
@@ -89056,7 +89060,7 @@ def sitemap_xml():
         results_slug = _SPORT_RESULTS_SLUGS.get(sport_key)
         _status, _is_live = get_season_status(sport_key, today=now)
         if picks_slug:
-            urls.append((f"{_SITE_DOMAIN}/{picks_slug}", 'daily', '0.9'))
+            urls.append((f"{_SITE_DOMAIN}/{picks_slug.replace('-picks', '-predictions')}", 'daily', '0.9'))
         if results_slug and _is_live:
             urls.append((f"{_SITE_DOMAIN}/{results_slug}", 'daily', '0.8'))
         # Dated SEO URLs only for calendar team sports that are in-season.

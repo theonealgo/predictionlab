@@ -11,7 +11,9 @@ import os
 import re
 import threading
 import time
+from datetime import datetime, timedelta
 from html import unescape
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import quote
 
@@ -204,7 +206,7 @@ def api_search():
     from NHL77FINAL import SPORT_SEO_SLUGS as slug_of
     results = [
         {'label': f'{sport.title() if sport in ("SOCCER", "TENNIS", "GOLF") else sport} Predictions',
-         'sport': sport, 'href': '/' + slug_of[sport]}
+         'sport': sport, 'href': '/' + slug_of[sport].replace('-picks', '-predictions')}
         for sport in _SPORT_ORDER if sport in slug_of and q in sport.lower()
     ]
     if 'props' in q or 'player' in q:
@@ -220,7 +222,7 @@ def api_search():
     for sport, name in teams[:12]:
         results.append({
             'label': name, 'sport': sport,
-            'href': f"/{slug_of[sport]}?team={quote(name)}",
+            'href': f"/{slug_of[sport].replace('-picks', '-predictions')}?team={quote(name)}",
         })
     return jsonify({'results': results[:14]})
 
@@ -245,10 +247,173 @@ def api_sports():
     return jsonify({'sports': _web_sports_payload()})
 
 
+@api.route('/api/web/soccer-leagues')
+def api_soccer_leagues():
+    """Today's soccer games per league, counted from the saved soccer cards (the menu's green league counts)."""
+    today = datetime.now(_ET).date().isoformat()
+    counts = {}
+    for tier in ('member', 'free', 'guest'):
+        saved = _saved_cards('soccer-picks', tier)
+        if not saved:
+            continue
+        for card in saved[1].get('cards') or []:
+            match = re.search(r'data-league="([^"]*)"', card.get('html') or '')
+            if card.get('date') == today and match:
+                counts[match.group(1)] = counts.get(match.group(1), 0) + 1
+        break
+    return jsonify({'today': counts})
+
+
+_CARD_DAY = re.compile(r'\b(\d{4}-\d{2}-\d{2}) ·')
+_TENNIS_EVENT = re.compile(r'Event</span>\s*<span class="sf-val">([^<]*)')
+
+
+@api.route('/api/web/tennis-events')
+def api_tennis_events():
+    """Tennis tournaments on the saved tennis cards: matches today and in all, most matches first (the menu list)."""
+    today = datetime.now(_ET).date().isoformat()
+    events = {}
+    for tier in ('member', 'free', 'guest'):
+        saved = _saved_cards('tennis-picks', tier)
+        if not saved:
+            continue
+        for card in saved[1].get('cards') or []:
+            match = _TENNIS_EVENT.search(card.get('html') or '')
+            if not match or 'FINAL' in (card.get('html') or ''):
+                continue
+            row = events.setdefault(match.group(1).strip(), {'name': match.group(1).strip(), 'today': 0, 'total': 0})
+            row['total'] += 1
+            day = card.get('date') or (_CARD_DAY.search(card.get('html') or '') or [None, ''])[1]
+            row['today'] += day == today
+        break
+    return jsonify({'events': sorted(events.values(), key=lambda r: (-r['total'], r['name']))})
+
+
 @api.route('/api/web/live')
 def api_live():
     from NHL77FINAL import _web_live_payload
-    return jsonify({'items': _web_live_payload()})
+    items = _web_live_payload()
+    starts = _card_start_times()
+    now = datetime.now(_ET)
+    for item in items:
+        start = starts.get(_team_key(item.get('home'))) or starts.get(_team_key(item.get('away')))
+        item['live'] = bool(start and start <= now < start + _LIVE_FOR)
+    items += _tennis_live_items()
+    items.sort(key=lambda item: not item['live'])
+    return jsonify({'items': items})
+
+
+_TENNIS_DB = Path(__file__).resolve().parent / 'tennis' / 'database' / 'tennis.sqlite'
+_TENNIS_SYNC = {'at': 0.0, 'running': False}
+_TENNIS_SYNC_EVERY = 10 * 60
+
+
+def _tennis_sync_in_background():
+    """Keep the tennis DB's live / scheduled matches fresh (ESPN, ATP + WTA) for the live row."""
+    with _CARDS_LOCK:
+        if _TENNIS_SYNC['running'] or time.time() - _TENNIS_SYNC['at'] < _TENNIS_SYNC_EVERY:
+            return
+        _TENNIS_SYNC.update(running=True, at=time.time())
+
+    def run():
+        try:
+            from tennis.espn_sync import sync_tennis_db
+            sync_tennis_db(force=True)
+            slate = _tennis_slate_ids()
+            if slate and slate != _TENNIS_SYNC.get('slate'):
+                _TENNIS_SYNC['slate'] = slate
+                _drop_saved_tennis_pages()
+        except Exception as exc:
+            logging.getLogger(__name__).info('[web] tennis sync failed: %s', exc)
+        finally:
+            _TENNIS_SYNC['running'] = False
+
+    threading.Thread(target=run, name='web-tennis-sync', daemon=True).start()
+
+
+def _tennis_slate_ids():
+    import sqlite3
+    try:
+        con = sqlite3.connect(f'file:{_TENNIS_DB}?mode=ro', uri=True, timeout=2)
+        ids = frozenset(r[0] for r in con.execute("SELECT match_id FROM matches WHERE status != 'final'"))
+        con.close()
+        return ids
+    except Exception:
+        return frozenset()
+
+
+def _drop_saved_tennis_pages():
+    """New matches in the tennis DB: the saved tennis pages and card feeds are rebuilt on the next visit."""
+    with _CARDS_LOCK:
+        for key in [k for k in _CARDS if k[0].startswith('tennis-')]:
+            _CARDS.pop(key, None)
+    for path in list(_CARDS_DIR.glob('tennis-*.json.gz')) + [
+        _CARDS_DIR.parent / 'served_picks_TENNIS.html',
+        _CARDS_DIR.parent / 'served_TENNIS_.html',
+    ]:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+
+def _tennis_live_items():
+    """Today's tennis matches that are live or still to play, from the tennis DB (its own database)."""
+    import sqlite3
+    _tennis_sync_in_background()
+    today = datetime.now(_ET).date().isoformat()
+    try:
+        con = sqlite3.connect(f'file:{_TENNIS_DB}?mode=ro', uri=True, timeout=2)
+        rows = con.execute(
+            "SELECT m.player_a, m.player_b, m.status, p.win_prob_a FROM matches m "
+            "LEFT JOIN predictions p ON p.match_id = m.match_id "
+            "WHERE m.status IN ('live', 'scheduled') AND substr(m.match_date, 1, 10) = ? "
+            "AND p.win_prob_a IS NOT NULL ORDER BY m.match_date",
+            (today,),
+        ).fetchall()
+        con.close()
+    except Exception as exc:
+        logging.getLogger(__name__).debug('[web] tennis live rows failed: %s', exc)
+        return []
+    return [{
+        'sport': 'Tennis', 'away': a, 'home': b,
+        'awayPct': round(float(prob) * 100, 1), 'homePct': round((1 - float(prob)) * 100, 1),
+        'href': '/tennis-predictions', 'live': status == 'live',
+    } for a, b, status, prob in rows]
+
+
+_ET = ZoneInfo('America/New_York')
+_LIVE_FOR = timedelta(hours=4)
+_CARD_TIME = re.compile(r'\b(\d{1,2}):(\d{2})\s*([AP]M)\s*ET\b')
+
+
+def _team_key(name):
+    return re.sub(r'[^a-z0-9]', '', (name or '').lower())
+
+
+def _card_start_times():
+    """Today's start time (Eastern) per team, read from the saved sport cards; the games table has dates only."""
+    today = datetime.now(_ET).date().isoformat()
+    starts = {}
+    try:
+        for path in _CARDS_DIR.glob('*.v2.json.gz'):
+            slug, tier = path.name.split('.')[:2]
+            _saved_cards(slug, tier)
+    except OSError:
+        pass
+    for (_slug, _tier), (_saved_at, payload) in list(_CARDS.items()):
+        for card in payload.get('cards') or []:
+            if card.get('date') != today:
+                continue
+            m = _CARD_TIME.search(card.get('html') or '')
+            if not m:
+                continue
+            hour = int(m.group(1)) % 12 + (12 if m.group(3) == 'PM' else 0)
+            start = datetime.fromisoformat(today).replace(hour=hour, minute=int(m.group(2)), tzinfo=_ET)
+            for team in (card.get('home'), card.get('away')):
+                if team:
+                    starts.setdefault(_team_key(team), start)
+    return starts
 
 
 @api.route('/api/web/chrome')

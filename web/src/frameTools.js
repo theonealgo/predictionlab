@@ -16,7 +16,7 @@ export function trimFrame(node) {
 }
 
 const RESULTS_PAGE = /-results\/?$/;
-const PICKS_PAGE = /-(picks|projections)\/?$/;
+const PICKS_PAGE = /-(picks|projections|predictions)\/?$/;
 
 // Links inside a frame: another results page stays in the frame. The sport's predictions link calls
 // onPredictions (the cards in the middle column). Any other link opens its page in the main window, so a

@@ -9,7 +9,7 @@ import AllSportsPage from './pages/AllSportsPage.jsx';
 import { SPORT_SLUGS } from './data/sportSlugs.js';
 
 // Sports pages live at /<sport>-picks and /<sport>-projections; both show the same page.
-const SPORT_PATH = new RegExp(`^/(${SPORT_SLUGS.join('|')})-(picks|projections)$`);
+const SPORT_PATH = new RegExp(`^/(${SPORT_SLUGS.join('|')})-(picks|projections|predictions)$`);
 
 function routeFromPath(pathname) {
   const clean = pathname.replace(/\/+$/, '') || '/';
@@ -20,7 +20,7 @@ function routeFromPath(pathname) {
   if (clean === '/player-props') {
     return { page: 'props', slug: null };
   }
-  if (clean === '/all-sports-picks' || clean === '/all-sports-projections') {
+  if (['/all-sports-picks', '/all-sports-projections', '/all-sports-predictions'].includes(clean)) {
     return { page: 'all', slug: null };
   }
   return { page: 'home', slug: null };
