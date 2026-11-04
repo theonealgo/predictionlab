@@ -10,6 +10,9 @@ from html import escape
 
 _CACHE: dict[str, tuple[float, str, str]] = {}
 _TTL = 180.0
+# Shared across Render instances so a cold worker does not rebuild NFL tallies
+# (~7s card/DB pass) on every picks hit.
+_DISK_TTL = 900.0
 
 _MODELS = (
     ("glicko2", "Grinder2"),
@@ -105,8 +108,15 @@ def _spread_total_stats(N, daily: dict, start, end, tally: dict | None) -> dict:
     return st
 
 
+_NFL_EFF_MARKS: tuple[float, dict[str, bool]] | None = None
+
+
 def _nfl_card_efficiency(N) -> dict[str, bool]:
     """Efficiency correct/wrong already printed on the results cards."""
+    global _NFL_EFF_MARKS
+    now = time.time()
+    if _NFL_EFF_MARKS and now - _NFL_EFF_MARKS[0] < _TTL:
+        return _NFL_EFF_MARKS[1]
     html = ""
     if hasattr(N, "_nfl_results_cards_html_for_chart"):
         try:
@@ -128,6 +138,7 @@ def _nfl_card_efficiency(N) -> dict[str, bool]:
         correct = eff.get("correct") if isinstance(eff, dict) else None
         if gid and correct is not None:
             marks[gid] = bool(correct)
+    _NFL_EFF_MARKS = (now, marks)
     return marks
 
 
@@ -359,16 +370,69 @@ def _build_block(sport: str) -> tuple[str, str]:
     return block, chart
 
 
+def _recent_disk_path(sport_u: str):
+    try:
+        import os
+        from pathlib import Path
+
+        # Prefer Render persistent disk so instances share one warm block.
+        root = Path("/data/.cache") if os.path.isdir("/data") else (
+            Path(__file__).resolve().parent / ".cache"
+        )
+        root.mkdir(parents=True, exist_ok=True)
+        return root / f"picks_recent_{sport_u}.html"
+    except Exception:
+        return None
+
+
+def _read_recent_disk(sport_u: str) -> tuple[str, str] | None:
+    path = _recent_disk_path(sport_u)
+    if path is None or not path.is_file():
+        return None
+    try:
+        age = time.time() - path.stat().st_mtime
+        if age > _DISK_TTL:
+            return None
+        text = path.read_text(encoding="utf-8")
+        if 'id="picks-recent-results"' not in text:
+            return None
+        chart = ""
+        if "<!-- pl-recent-chart -->" in text:
+            block, _, chart = text.partition("<!-- pl-recent-chart -->")
+        else:
+            block = text
+        if len(block) < 200:
+            return None
+        return block, chart
+    except Exception:
+        return None
+
+
+def _write_recent_disk(sport_u: str, block: str, chart: str) -> None:
+    path = _recent_disk_path(sport_u)
+    if path is None or not block:
+        return
+    try:
+        path.write_text(block + "<!-- pl-recent-chart -->" + (chart or ""), encoding="utf-8")
+    except Exception:
+        pass
+
+
 def _cached_recent(sport_u: str) -> tuple[str, str] | None:
     now = time.time()
     hit = _CACHE.get(sport_u)
     if hit and now - hit[0] < _TTL and len(hit) >= 3:
         return hit[1], hit[2]
+    disk = _read_recent_disk(sport_u)
+    if disk:
+        _CACHE[sport_u] = (now, disk[0], disk[1])
+        return disk
     try:
         block, chart = _build_block(sport_u)
     except Exception:
         return None
     _CACHE[sport_u] = (now, block, chart)
+    _write_recent_disk(sport_u, block, chart)
     return block, chart
 
 
@@ -384,13 +448,17 @@ def inject_picks_recent_results(html: str, sport: str) -> str:
     sport_u = (sport or "").strip().upper()
     if not sport_u:
         return html
-    cached = _cached_recent(sport_u)
-    if not cached:
-        return html
-    block = cached[0]
     import re
 
+    # Served picks already carry Recent results. Rebuilding that block on every
+    # visit (NFL card/DB pass ~7s) made /nfl-picks hang Chrome navigations on
+    # the single worker. Only cold-build when the section is missing; a warm
+    # cache may refresh an existing section cheaply.
     if has_section:
+        hit = _CACHE.get(sport_u)
+        if not (hit and time.time() - hit[0] < _TTL and len(hit) >= 3):
+            return html
+        block = hit[1]
         html2, n = re.subn(
             r'<section\b[^>]*\bid="picks-recent-results"[\s\S]*?</section>',
             lambda _match: block,
@@ -398,8 +466,12 @@ def inject_picks_recent_results(html: str, sport: str) -> str:
             count=1,
             flags=re.I,
         )
-        if n:
-            return html2
+        return html2 if n else html
+
+    cached = _cached_recent(sport_u)
+    if not cached:
+        return html
+    block = cached[0]
 
     html2, n = re.subn(
         r'(<div class="seo-picks-footer"[^>]*>)',
