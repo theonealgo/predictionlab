@@ -18,9 +18,19 @@ if lsof -tiTCP:$PORT -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 echo "Starting fresh local server ($(date '+%a %b %-d %-I:%M %p')) ..."
-PORT=$PORT .venv/bin/python NHL77FINAL.py > /tmp/pl_local.log 2>&1 &
+PORT=$PORT PL_AUTOREFRESH_FIRST_DELAY=60 .venv/bin/python NHL77FINAL.py > /tmp/pl_local.log 2>&1 &
 pid=$!
-trap 'kill $pid 2>/dev/null; echo; echo "Server stopped."; exit 0' INT TERM
+(
+  until grep -q "autorefresh\] cycle done" /tmp/pl_local.log 2>/dev/null \
+     && grep -q "autorefresh\] warmed" /tmp/pl_local.log 2>/dev/null; do
+    kill -0 $pid 2>/dev/null || exit 0
+    sleep 10
+  done
+  echo
+  echo "PAGES REBUILT ($(date '+%-I:%M %p')) - run the checker now."
+) &
+watcher=$!
+trap 'kill $pid $watcher 2>/dev/null; echo; echo "Server stopped."; exit 0' INT TERM
 
 for _ in $(seq 1 180); do
   if ! kill -0 $pid 2>/dev/null; then
@@ -32,6 +42,7 @@ for _ in $(seq 1 180); do
     echo
     echo "READY: http://127.0.0.1:$PORT   (started $(date '+%-I:%M %p'), latest code)"
     echo "Leave this window open. Press Ctrl+C to stop. Log: /tmp/pl_local.log"
+    echo "Wait for 'PAGES REBUILT' before running the checker (about 10-15 minutes)."
     wait $pid
     exit 0
   fi

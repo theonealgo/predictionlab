@@ -920,6 +920,7 @@ def _inject_chrome_into_page(html: str, *, extra_css: list[str] | None = None) -
         '<link rel="stylesheet" href="/static/css/research-theme.css">',
         '<link rel="stylesheet" href="/static/css/picks-nav-overrides.css">',
         '<link rel="stylesheet" href="/static/css/sports-chrome.css" media="print" onload="this.media=&quot;all&quot;">',
+        '<link rel="stylesheet" href="/static/css/pl-chrome.css">',
     ]
     for href in extra_css or []:
         tag = f'<link rel="stylesheet" href="{href}">'
@@ -931,10 +932,10 @@ def _inject_chrome_into_page(html: str, *, extra_css: list[str] | None = None) -
         if href_m and href_m.group(1) in html:
             css_tags.remove(tag)
     css_html = "\n".join(css_tags)
-    if css_html:
+    if 'pl-header-logo.js' not in html:
         css_html += '<script src="/static/js/pl-header-logo.js" defer></script>'
-    elif 'pl-header-logo.js' not in html:
-        css_html = '<script src="/static/js/pl-header-logo.js" defer></script>'
+    if 'pl-chrome.js' not in html:
+        css_html += '<script src="/static/js/pl-chrome.js" defer></script>'
     if css_html:
         if re.search(r"</head\s*>", html, flags=re.I):
             html = re.sub(r"</head\s*>", css_html + "</head>", html, count=1, flags=re.I)

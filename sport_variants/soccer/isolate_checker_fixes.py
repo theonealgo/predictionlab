@@ -12,7 +12,11 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-_CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
+try:
+    from served_cache import cache_dir as _cache_dir
+    _CARDS_CACHE_DIR = _cache_dir()
+except Exception:
+    _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
 def _app_db_path():
@@ -1604,6 +1608,8 @@ def refresh_predictions_share_image(html: str, sport: str) -> str:
             continue
         if date and card_date and card_date != date and len(cards) >= 2:
             break
+        if any(t in (c["away_team"], c["home_team"]) for c in cards for t in (away, home)):
+            continue
         pick = _attr("data-pick")
         pick_l = pick.lower()
         if pick_l and pick_l in home.lower():
@@ -2433,8 +2439,7 @@ def fix_efficiency_na_side(html: str) -> str:
                 except ValueError:
                     pct = None
             if pct is None:
-                pct = donor
-            if pct is None:
+                # Efficiency comes from the PL spread only; never another model's %.
                 return box
             side = (side_m.group(1) if side_m else "").strip()
             if val_m and side.upper() not in {"N/A", "NA", "—", "–", "-", ""}:

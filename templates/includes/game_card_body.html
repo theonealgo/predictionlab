@@ -17,6 +17,8 @@
 {% set _xs_ah = card.xs_proj_away_pts if card.xs_proj_away_pts is defined else none %}
 {% set _xs_hh = card.xs_proj_home_pts if card.xs_proj_home_pts is defined else none %}
 {% set _show_odds_tbl = _disp_bs is not none or _disp_ps is not none or _disp_xs is not none or _disp_bt is not none or _disp_pt is not none or _disp_xt is not none or _pl_ah is not none or _xs_ah is not none %}
+{# Paywall on picks cards: logged-out visitors get the ML pick, win %, and Books only. Set by the picks page; other pages leave it unset. #}
+{% set _paywall = (card_paywall|default(false)) and not (is_premium|default(false)) %}
 
 {% if false %}
 {# Results now use the shared pick-card face below (scores + checkmarks). #}
@@ -255,13 +257,13 @@
 {% endif %}
 
 <div class="lines-strip">
-    {% if sport == 'SOCCER' or sport == 'NHL' or (is_results and sport == 'NFL') %}
+    {% if (sport == 'SOCCER' or sport == 'NHL' or (is_results and sport == 'NFL')) and not _paywall %}
     <div class="line-chip h2h-face-chip">
         <div class="line-chip-label">H2H Last 10</div>
         <div class="line-chip-val">{% if card.h2h_last10_total is defined and card.h2h_last10_total is not none %}{{ fmt_half(card.h2h_last10_total) }}{% if card.h2h_last10_games is defined and card.h2h_last10_games %} ({{ card.h2h_last10_games }} game{% if card.h2h_last10_games != 1 %}s{% endif %}){% endif %}{% elif card.h2h_last10_record is defined and card.h2h_last10_record %}{{ card.h2h_last10_record }}{% elif card.h2h_missing_reason is defined and card.h2h_missing_reason %}First meeting{% else %}—{% endif %}</div>
     </div>
     {% endif %}
-    {% if sport != 'TENNIS' and sport != 'MLB' and sport != 'NFL' and sport != 'NHL' %}
+    {% if sport != 'TENNIS' and sport != 'MLB' and sport != 'NFL' and sport != 'NHL' and not _paywall %}
     <div class="line-chip">
         <div class="line-chip-label">{{ _book_spread_lbl }}</div>
         <div class="line-chip-val">{% if _disp_bs is not none %}{{ fmt_spread_line(_disp_bs, home_id, away_id, force_rl) }}{% elif _books_later %}N/A <button type="button" class="h2h-info-btn" title="{{ _books_na_tip }}" aria-label="{{ _books_na_tip }}">i</button>{% else %}—{% endif %}</div>
@@ -403,6 +405,10 @@
         {% endif %}
     </div>
     {% else %}
+    {% set _ev_ml_pub = card.ml_ev if (card.ml_ev is defined and card.ml_ev is not none and bk_home is not none) else none %}
+    {% if _paywall and _ev_ml_pub is not none %}
+    <div class="odds-extras-footer"><div class="sf-item"><span class="sf-label">Moneyline EV</span><span class="sf-val" style="color:{% if _ev_ml_pub > 0 %}#15803d{% else %}#b91c1c{% endif %};font-weight:700;">{% if _ev_ml_pub > 0 %}+{% endif %}{{ "%.1f"|format(_ev_ml_pub) }}%</span></div></div>
+    {% endif %}
     <div class="odds-pricing-locked" style="padding:14px;font-size:0.84em;text-align:center;">🔒 Lines &amp; projections locked. <a href="/login">Log in</a> or <a href="/plans">unlock premium</a>.</div>
     {% endif %}
 </div>

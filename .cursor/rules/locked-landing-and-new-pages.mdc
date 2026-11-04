@@ -1,0 +1,30 @@
+---
+description: Landing page wording and owner-built pages are locked
+alwaysApply: true
+---
+
+# LANDING PAGE + NEW PAGES LOCKED
+
+Owner 2026-11-03: the homepage (`/`) is a prediction / analytics site, not a
+gambling site (Google Ads). Its words were changed only — no layout change:
+`templates/homepage_preview.html`, `templates/partials/research_knowledge.html`,
+and the homepage-only footer words in `landing_copy.py` (the shared footer
+partial is unchanged; other pages keep their footer). Do not put betting words
+back on the homepage (picks, plays, moneyline, spread betting, props, units,
+sportsbook, book lines, bettors, value bets). Season boxes show accuracy from
+the real record, never units.
+
+Homepage links use `/<sport>-projections` (and `/ai-sports-projections-today`,
+`/how-our-models-work`, `/our-model-vs-market`, `/all-sports-projections`,
+`/ladder`). `landing_copy.ProjectionsAliasMiddleware` serves each as the
+existing `-picks` page; the `-picks` addresses keep working. Do not remove
+either.
+
+Also locked (owner-built): The Ladder (`ladder_picks/`), All Sports Picks,
+All Sports Results, Historic Results, Model Performance paywall gate
+(`premium_page_lock.html`), app picks feed (`app_api.py`), college ratings,
+and every sport page.
+
+Edit any of these only when the owner names it in the same message.
+
+Do not put lock text on user-facing HTML.

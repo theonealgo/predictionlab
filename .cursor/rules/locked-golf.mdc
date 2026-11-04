@@ -18,4 +18,7 @@ Owner 2026-10-17: picks page shows the shared Last Night / Last 7 / Last 30 stri
 
 Owner 2026-10-17: results graded picks sit in `#ssr-finals` (the checker's graded-games marker; no visual change); chart bars carry `role="img" aria-label="…"` (a `<title>` per bar trips the one-title-per-page check). Golf / tennis picks strips grade Moneyline only — the app's `qa/chart_shape.py` copy now matches. Miss closed — locked.
 
+
+Owner 2026-11-02: checker had no fails for GOLF. Miss closed — locked. Do not edit GOLF while fixing other sports.
+
 Do not put lock text on user-facing HTML.

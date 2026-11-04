@@ -240,7 +240,13 @@ def picks_placeholder_issues(html: str) -> list[str]:
         name = re.sub(r"[^A-Za-z0-9 ]+", "", name).strip()
         if name:
             by_model.setdefault(name, []).append(val.strip())
-    for model in ("Edge", "XSharp", "Sharp Consensus"):
+    # College basketball opening weeks: Edge is a real 50% with no rating history.
+    college = re.search(
+        r"<link[^>]*canonical[^>]*ncaa[bw]-picks|<link[^>]*ncaa[bw]-picks[^>]*canonical",
+        html,
+    )
+    stuck_models = ("XSharp", "Sharp Consensus") if college else ("Edge", "XSharp", "Sharp Consensus")
+    for model in stuck_models:
         vals = by_model.get(model) or []
         if len(vals) < 8:
             continue
@@ -253,7 +259,11 @@ def picks_placeholder_issues(html: str) -> list[str]:
         flags=re.I,
     )
     if len(books) >= 6:
-        blank = sum(1 for v in books if _is_dash(v) or "—" in v)
+        blank = sum(
+            1 for v in books
+            if (_is_dash(v) or "—" in v) and "n/a" not in (v or "").lower()
+            and re.sub(r"\s+", "", v or "").lower() not in {"n/a", "na"}
+        )
         if blank / len(books) >= 0.9:
             issues.append(f"Books ML blank on {blank}/{len(books)} face lines (—)")
     return issues
@@ -308,7 +318,7 @@ def _logo_src_missing(src: str) -> bool:
     if not s or s in {"#", "/", "about:blank"}:
         return True
     low = s.lower()
-    if "pl-logo" in low or "placeholder" in low or "missing" in low:
+    if "placeholder" in low or "missing" in low:
         return True
     if re.search(r"/500/?(?:\.png)?$", low):
         return True
@@ -1226,7 +1236,11 @@ def six_model_consensus_from_cards_issues(
                 f"{label} consensus last night {pretty} is {got_s}; "
                 f"cards grade {want_w}-{want_l}"
             )
-    shown_n = sum(v[2] for v in shown.values() if v[0] + v[1] > 0 or v[2] > 0)
+    count_splits = (sport or "").strip().upper() in ("NFL", "CFL")
+    shown_n = sum(
+        v[2] for k, v in shown.items()
+        if (v[0] + v[1] > 0 or v[2] > 0) and (count_splits or "split" not in k)
+    )
     if shown_n and shown_n != len(ln_games):
         issues.append(
             f"{label} consensus last-night buckets cover {shown_n} game(s); "
@@ -1645,6 +1659,14 @@ def card_missing_model_value_issues(html: str, sport: str = "") -> list[str]:
                 missing_box += 1
                 break
         need = {n.lower() for n in required}
+        # Owner rule: Efficiency comes from the PL spread; a card with no PL and
+        # no book line keeps Efficiency N/A (not an error).
+        no_line = all(
+            re.search(rf'\bdata-{a}="\s*"', card) or not re.search(rf'\bdata-{a}=', card)
+            for a in ("pl-spread", "books-spread")
+        )
+        if no_line:
+            need.discard("efficiency")
         fifty_flags = []
         for name, val_html in zip(names, vals):
             if name.lower() not in need:
@@ -2141,6 +2163,104 @@ def wnba_consensus_hist_face_issues(html: str) -> list[str]:
             "Historical pattern (must match this card's 4-model agreement)"
         )
     return issues
+
+
+_CHIP_PANEL_MODELS = ("Grinder2", "Takedown", "Edge", "XSharp", "Sharp Consensus", "Efficiency")
+_CHIP_PANEL_4 = ("Edge", "XSharp", "Sharp Consensus", "Efficiency")
+
+
+def _card_face_model_sides(card: str, models: tuple[str, ...]) -> dict[str, str]:
+    hm = re.search(r'data-home="([^"]*)"', card[:3000], flags=re.I)
+    am = re.search(r'data-away="([^"]*)"', card[:3000], flags=re.I)
+    home = re.sub(r"[^a-z0-9]+", "", html_lib.unescape(hm.group(1) if hm else "").lower())
+    away = re.sub(r"[^a-z0-9]+", "", html_lib.unescape(am.group(1) if am else "").lower())
+    sides: dict[str, str] = {}
+    for name in models:
+        m = re.search(
+            rf'<div class="pc-name">\s*{re.escape(name)}\s*</div>\s*'
+            r'<div class="pc-val"[^>]*>\s*([^<]*)</div>\s*'
+            r'<div class="pc-side([^"]*)"[^>]*>\s*([^<]*)',
+            card,
+            flags=re.I,
+        )
+        if not m:
+            continue
+        raw = (m.group(1) or "").strip().replace("%", "")
+        if raw.lower() in {"", "n/a", "na", "—", "–", "-"}:
+            continue
+        classes, side_txt = m.group(2) or "", (m.group(3) or "").strip()
+        sn = re.sub(r"[^a-z0-9]+", "", html_lib.unescape(side_txt).lower())
+        if re.search(r"\bhome\b", classes, flags=re.I):
+            sides[name] = "HOME"
+        elif re.search(r"\baway\b", classes, flags=re.I):
+            sides[name] = "AWAY"
+        elif sn and home and (sn in home or home.endswith(sn)):
+            sides[name] = "HOME"
+        elif sn and away and (sn in away or away.endswith(sn)):
+            sides[name] = "AWAY"
+    return sides
+
+
+def consensus_chip_vs_boxes_issues(html: str, sport: str = "") -> list[str]:
+    """MAJOR when the Consensus Historical Record pattern disagrees with the
+    Pick Confidence boxes on the same card (e.g. Unanimous while two models
+    pick the other team)."""
+    html = html or ""
+    if "data-pick-card" not in html or "Consensus Historical Record" not in html:
+        return []
+    sport_u = (sport or "").strip().upper()
+    models = _CHIP_PANEL_4 if sport_u == "WNBA" else _CHIP_PANEL_MODELS
+    cards = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)[1:]
+    bad: list[str] = []
+    checked = 0
+    for card in cards:
+        chip = re.search(
+            r"Consensus Historical Record</div>\s*"
+            r'<div class="line-chip-val">([^<]+)',
+            card,
+            flags=re.I,
+        )
+        chip_t = html_lib.unescape(chip.group(1)).strip() if chip else ""
+        if not chip_t or chip_t in {"—", "Consensus Record: —"}:
+            continue
+        shown = [n for n in models if re.search(
+            rf'<div class="pc-name">\s*{re.escape(n)}\s*</div>', card, flags=re.I)]
+        sides = _card_face_model_sides(card, tuple(shown))
+        if len(shown) < 2 or len(sides) < len(shown):
+            continue
+        checked += 1
+        from collections import Counter
+
+        counts = Counter(sides.values())
+        top_side, top_n = counts.most_common(1)[0]
+        even = len(counts) == 2 and top_n * 2 == len(sides)
+        dissent = {n for n, s in sides.items() if s != top_side}
+        low = chip_t.lower()
+        wrong = ""
+        if "unanimous" in low:
+            if dissent:
+                wrong = f"says Unanimous but {' and '.join(sorted(dissent))} {'picks' if len(dissent) == 1 else 'pick'} the other team"
+        elif "all but" in low:
+            named = re.split(r"\s+and\s+|,\s*", re.split(r"all but\s+", chip_t, flags=re.I)[1])
+            named = {re.split(r"[:(]", n)[0].strip() for n in named}
+            named = {n for n in named if n}
+            if even or named != dissent:
+                want = "Split" if even else ("Unanimous" if not dissent else "All but " + " and ".join(sorted(dissent)))
+                wrong = f"says '{chip_t.split(':')[0]}' but the boxes show {want}"
+        elif "split" in low:
+            if not even:
+                want = "Unanimous" if not dissent else "All but " + " and ".join(sorted(dissent))
+                wrong = f"says Split but the boxes show {want}"
+        if wrong:
+            gid = re.search(r'data-game-id="([^"]*)"', card[:3000], flags=re.I)
+            bad.append(f"{gid.group(1) if gid else '?'} {wrong}")
+    if not bad:
+        return []
+    label = sport_u or "PICKS"
+    return [
+        f"{label}: {len(bad)}/{checked} cards — Consensus Historical Record pattern "
+        f"does not match the card's Pick Confidence boxes (e.g. {'; '.join(bad[:3])})"
+    ]
 
 
 def ufc_consensus_hist_face_issues(html: str) -> list[str]:
@@ -2696,13 +2816,12 @@ def efficiency_copied_na_issues(html: str) -> list[str]:
     html = html or ""
     n = 0
     for box in re.findall(
-        r'<div class="pc-box[^"]*">[\s\S]*?<div class="pc-name">\s*Efficiency\s*</div>'
-        r'[\s\S]*?</div>\s*</div>',
+        r'<div class="pc-name">\s*Efficiency\s*</div>[\s\S]*?</div>\s*</div>',
         html,
         flags=re.I,
     ):
         val_m = re.search(r'class="pc-val"[^>]*>\s*([^<]+)', box, flags=re.I)
-        side_m = re.search(r'class="pc-side"[^>]*>\s*([^<]+)', box, flags=re.I)
+        side_m = re.search(r'class="pc-side[^"]*"[^>]*>\s*([^<]+)', box, flags=re.I)
         val = (val_m.group(1) if val_m else "").strip()
         side = (side_m.group(1) if side_m else "").strip()
         if re.fullmatch(r"\d+(?:\.\d+)?%", val) and side.upper() == "N/A":

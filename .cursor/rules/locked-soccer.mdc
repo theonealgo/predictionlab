@@ -26,4 +26,6 @@ Owner 2026-10-29: Predictions Image pick box sits 24px from the team name (the c
 
 Owner 2026-10-29: plain /soccer-picks opens one league (`_soccer_default_league_slug`: first league in site order with an upcoming game, else EPL) instead of the 2.7 MB all-leagues page; All Leagues stays one click away. Miss closed — locked.
 
+Owner 2026-11-02: checker had no fails for SOCCER. Miss closed — locked. Do not edit SOCCER while fixing other sports.
+
 Do not put lock text on user-facing HTML.

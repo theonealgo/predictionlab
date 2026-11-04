@@ -194,7 +194,7 @@ def _ncaaw_offseason_anchor(yest: datetime):
     latest = N.parse_date(str(row[0]))
     if latest is None:
         return None
-    if (yest.date() - latest.date()).days <= 4:
+    if 0 <= (yest.date() - latest.date()).days <= 4:
         return None
     return latest.replace(hour=12, minute=0, second=0, microsecond=0)
 
@@ -213,13 +213,16 @@ def _build_block(sport: str) -> str:
     daily = N._banner_daily_results_for_range(
         sport_u, start, anchor, prefer_weekly=False,
     ) or {}
-    offseason = sport_u == "NCAAW" and anchor.date() != yest.date()
+    offseason = sport_u == "NCAAW" and anchor.date() < yest.date()
     if not offseason:
         _fill_efficiency_and_grades(sport_u, daily)
     if daily and hasattr(N, "_compute_spread_total_for_daily"):
         try:
+            N._attach_h2h_projection_to_daily_results(sport_u, daily, n=10)
+            N._attach_published_lines(sport_u, daily)
             N._compute_spread_total_for_daily(
                 sport_u, daily, skip_efficiency=not offseason,
+                skip_h2h=True,
             )
         except Exception:
             pass

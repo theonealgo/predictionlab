@@ -319,6 +319,20 @@ class PredictionSource:
                 # Short table: one row per game, the first line stored is kept.
                 for b in conn.execute(f"SELECT game_id, spread, total, {ml} FROM betting_lines ORDER BY id"):
                     books.setdefault(b["game_id"], b)
+            # betting_lines keeps one row per game, rewritten on every fetch, so most
+            # rows are stamped after the game and dropped above. price_snapshots only
+            # saves rows before the start: its last row is the closing pre-game line.
+            if {"captured_at", "spread_price_home", "over_price"} <= _table_cols(conn, "price_snapshots"):
+                for s in conn.execute(
+                    f"""SELECT sport, game_id, spread, total, spread_price_home, spread_price_away,
+                               over_price, under_price, ml_estimated,
+                               home_ml AS home_moneyline, away_ml AS away_moneyline
+                        FROM price_snapshots
+                        WHERE sport IN ({marks}) AND date(game_date) >= ? AND date(game_date) < ?
+                        ORDER BY captured_at""",
+                    (*SUPPORTED_SPORTS, since, until),
+                ):
+                    books[(s["sport"], s["game_id"])] = s
             locks = _lock_cols(conn, "p.")
             rows = conn.execute(
                 f"""SELECT p.sport, p.game_id, p.game_date, p.win_probability, p.lock_card_json,
@@ -345,8 +359,14 @@ class PredictionSource:
                 card = {}
             if not isinstance(card, dict):
                 card = {}
-            book = {"home_ml": b["home_moneyline"], "away_ml": b["away_moneyline"],
+            keys = b.keys()
+            estimated = "ml_estimated" in keys and b["ml_estimated"]
+            book = {"home_ml": None if estimated else b["home_moneyline"],
+                    "away_ml": None if estimated else b["away_moneyline"],
                     "spread": b["spread"], "total": b["total"]}
+            for k in ("spread_price_home", "spread_price_away", "over_price", "under_price"):
+                if k in keys:
+                    book[k] = b[k]
             hs, aw = int(row["home_score"]), int(row["away_score"])
             for o in markets.options(row["sport"], _model_values(row, card), book):
                 result = markets.grade(o["market"], o["side"], o["line"], hs, aw)

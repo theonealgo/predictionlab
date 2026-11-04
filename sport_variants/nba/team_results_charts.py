@@ -4749,10 +4749,14 @@ def _wnba_nba_consensus_finals(sport: str) -> list[dict]:
             rows = []
         if not rows:
             continue
-        if any(
-            isinstance((g.get("models") or {}).get("Efficiency"), dict) for g in rows
-        ):
-            return rows
+        graded = [
+            g for g in rows
+            if isinstance((g.get("models") or {}).get("Efficiency"), dict)
+        ]
+        if graded:
+            # Games without an Efficiency grade (no stored PL spread) would make
+            # the panel look like 3 models and empty the 4/4 Unanimous record.
+            return graded
         if not fallback:
             fallback = rows
     try:
@@ -4816,7 +4820,9 @@ def _consensus_d7_combo_lookup(
         return {}
     if not finals:
         return {}
-    data = _consensus_combo_period_data(finals, sport=sport_u.lower())
+    # NBA cards show six models; the chip pattern must count all six.
+    hub_sport = "nba_cards" if sport_u == "NBA" else sport_u.lower()
+    data = _consensus_combo_period_data(finals, sport=hub_sport)
     if not data:
         return {}
     out: dict[tuple[int, tuple[str, ...]], tuple[int, int, float | None, int]] = {}
@@ -4830,7 +4836,7 @@ def _consensus_d7_combo_lookup(
 
         season_items = season_rows(
             _consensus_agreements_from_finals(
-                _dedupe_finals_by_game(finals), sport=sport_u.lower()
+                _dedupe_finals_by_game(finals), sport=hub_sport
             ),
             sport_u,
         )
@@ -5542,7 +5548,7 @@ def _inject_nhl_consensus_hist_chips(html: str) -> str:
 
 def _inject_nba_consensus_hist_chips(html: str) -> str:
     html = _inject_consensus_hist_chips(
-        html, sport="NBA", models=_WNBA_CONSENSUS_MODELS
+        html, sport="NBA", models=_NCAAF_CONSENSUS_MODELS
     )
     return _inject_nhl_pl_vs_books_chips(html, sport="NBA")
 

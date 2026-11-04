@@ -2502,19 +2502,21 @@ def build_pl_xs_records_html(
         {
             str(g.get("game_date") or "")[:10]
             for g in finals or []
-            if str(g.get("game_date") or "")[:10] < today
+            if str(g.get("game_date") or "")[:10] <= today
         }
     )
     ln_key = last_night_key or (past_dates[-1] if past_dates else yesterday)
     cut7 = (now.date() - timedelta(days=7)).strftime("%Y-%m-%d")
     cut30 = (now.date() - timedelta(days=30)).strftime("%Y-%m-%d")
+    # Finals graded earlier today count, the same night the results boards show.
+    end_key = (now.date() + timedelta(days=1)).strftime("%Y-%m-%d") if ln_key == today else today
 
     def period(pred) -> list[dict[str, Any]]:
         return [a for a in items if pred(str(a.get("game_date") or "")[:10])]
 
     ln = period(lambda d: d == ln_key)
-    d7 = period(lambda d: cut7 <= d < today)
-    d30 = period(lambda d: cut30 <= d < today)
+    d7 = period(lambda d: cut7 <= d < end_key)
+    d30 = period(lambda d: cut30 <= d < end_key)
 
     def by_model(rows: list[dict[str, Any]]) -> dict[str, list]:
         buckets = {"Prediction Lab": [], "XSharp": []}

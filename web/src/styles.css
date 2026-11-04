@@ -1,0 +1,1481 @@
+/* Prediction Lab front end: white, full width, one column of cards in the middle. */
+:root {
+  --ink: #000;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --soft: #f3f4f6;
+  --green: #16a34a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+}
+
+/* The header stays at the top of the screen while the page scrolls. */
+.pl-header-pin {
+  position: sticky;
+  top: 0;
+  z-index: 900;
+  background: #fff;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+}
+
+/* Live predictions row under the header, aligned with the page's 40px edge. */
+.pl-live {
+  padding: 18px 40px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pl-live-title {
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pl-live-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.pl-live-head .pl-live-title {
+  margin-bottom: 0;
+}
+
+.pl-live-arrows {
+  display: flex;
+  gap: 6px;
+}
+
+.pl-live-arrows button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pl-live-row {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 14px;
+  cursor: grab;
+  user-select: none;
+  scrollbar-width: none;
+}
+
+.pl-live-row::-webkit-scrollbar {
+  display: none;
+}
+
+.pl-live-row:active {
+  cursor: grabbing;
+}
+
+.pl-live-box {
+  min-width: 270px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.pl-live-meta {
+  margin-bottom: 10px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pl-live-team {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 15px;
+}
+
+.pl-live-team span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pl-live-team b {
+  flex: none;
+  font-weight: 700;
+}
+
+/* Two columns: the sports list, then the centre of the page (games and results side by side). */
+.pl-body {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+  padding: 24px 40px 96px;
+}
+
+/* The centre of the page: the games column and the results column sit side by side, centred. */
+.pl-stage {
+  display: flex;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 40px;
+  min-width: 0;
+}
+
+.pl-left {
+  position: sticky;
+  top: calc(var(--pl-header-h, 72px) + 16px);
+}
+
+.pl-left-title,
+.pl-right-title {
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pl-left-title {
+  font-size: 16px;
+}
+
+.pl-sport-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 10px;
+  border-radius: 10px;
+  font-size: 22px;
+}
+
+.pl-sport-link:hover {
+  background: var(--soft);
+}
+
+.pl-sport-link.is-active {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.pl-sport-status {
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.pl-sport-status.today {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.pl-center {
+  min-width: 0;
+}
+
+.pl-title {
+  margin: 0 0 16px;
+  font-size: 34px;
+  font-weight: 800;
+}
+
+.pl-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pl-tabs button {
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: #9ca3af;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.pl-tabs button.is-active {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+.pl-conf-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-bottom: 14px;
+}
+
+.pl-conf-row.is-long button {
+  font-size: 18px;
+}
+
+.pl-conf-row button:disabled {
+  color: #d1d5db;
+  cursor: default;
+}
+
+.pl-conf-row button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #9ca3af;
+  font-size: 28px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pl-conf-row button.is-active {
+  color: var(--ink);
+}
+
+/* Team and league bubbles: two rows that drag sideways. */
+.pl-team-strip {
+  overflow-x: auto;
+  margin-bottom: 22px;
+  cursor: grab;
+  user-select: none;
+  scrollbar-width: none;
+}
+
+.pl-team-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.pl-team-strip:active {
+  cursor: grabbing;
+}
+
+.pl-team-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: max-content;
+}
+
+.pl-team-row {
+  display: flex;
+  gap: 10px;
+}
+
+.pl-team-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pl-team-pill img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.pl-team-pill.is-active {
+  border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+
+/* Games grouped by day, with a button to show the rest. */
+.pl-day {
+  margin-bottom: 8px;
+}
+
+.pl-day-title {
+  margin: 18px 0 10px;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.pl-show-more {
+  margin: 8px 0 16px;
+  padding: 10px 18px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* One card per row in the middle. */
+.pl-card-row {
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.pl-card-row > * {
+  max-width: 100%;
+}
+
+.pl-empty {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.pl-props-frame {
+  display: block;
+  width: 100%;
+  height: 900px;
+  border: 0;
+  background: #fff;
+}
+
+.pl-login-prompt {
+  margin-top: 24px;
+  padding: 36px 24px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  text-align: center;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.pl-login-prompt a {
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.pl-season-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+}
+
+.pl-season-row b {
+  font-weight: 700;
+}
+
+/* Games and results side by side: the results column (the sport's full results page) sits beside the games. */
+.pl-stage > .pl-center {
+  flex: 0 1 640px;
+  min-width: 420px;
+}
+
+.pl-stage > .pl-right {
+  flex: 1 1 520px;
+  max-width: 720px;
+  min-width: 360px;
+  position: sticky;
+  top: calc(var(--pl-header-h, 72px) + 16px);
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+@media (max-width: 1100px) {
+  .pl-body {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+  .pl-stage {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .pl-stage > .pl-center,
+  .pl-stage > .pl-right {
+    flex: none;
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .pl-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pl-left {
+    position: static;
+  }
+  .pl-stage > .pl-center,
+  .pl-stage > .pl-right {
+    min-width: 0;
+  }
+}
+
+/* Soccer leagues: two rows that drag sideways, like the team logos. */
+.pl-league-pill {
+  flex: none;
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pl-league-pill:disabled {
+  color: #d1d5db;
+  border-color: #e5e7eb;
+  cursor: default;
+}
+
+.pl-league-pill.is-active {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+/* Recent results: the last two days of finished games, after the upcoming days. */
+.pl-recent {
+  margin-top: 8px;
+}
+
+.pl-recent-title {
+  margin: 22px 0 0;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+/* The main page's header row: the title with the Cards/Chart switch. */
+.pl-home-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.pl-home-head .pl-results-views {
+  margin-bottom: 0;
+}
+
+/* Chart view on the main page: one sport's results chart, sized to the page. */
+.pl-chart-frame {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  border: 0;
+}
+
+/* Golf: the tournament picker, our picks and the field. */
+.pl-golf-group {
+  margin-bottom: 16px;
+}
+
+.pl-golf-title {
+  margin: 26px 0 12px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.pl-golf-title span {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pl-golf-picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px;
+  margin-bottom: 8px;
+}
+
+.pl-golf-pick {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.pl-golf-pick h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.pl-golf-pick p {
+  margin: 2px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pl-golf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.pl-golf-table th,
+.pl-golf-table td {
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.pl-golf-table th {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pl-golf-table .num {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.pl-golf-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pl-golf-name img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+/* Cards and Chart: the two views of the results column. */
+.pl-results-views {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.pl-results-views button {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pl-results-views button.is-active {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+/* The sport's full results page inside the results column, with its own header and footer hidden. */
+.pl-results-frame {
+  display: block;
+  width: 100%;
+  height: calc(100vh - 240px);
+  min-height: 480px;
+  border: 0;
+  background: #fff;
+}
+
+/* AP Top 25 on the Polls tab. */
+.pl-poll {
+  margin: 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.pl-poll li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.pl-poll li > span {
+  width: 28px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.pl-poll img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+/* League bubbles (soccer): pick one league to filter the games. */
+.pl-conf-row.is-bubbles {
+  gap: 8px;
+}
+
+.pl-conf-row.is-bubbles button {
+  padding: 8px 14px;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pl-conf-row.is-bubbles button.is-active {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+/* Player props (React): the Players tab on each sport page and the /player-props page. */
+.pp {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.pp-page {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 1200px;
+}
+
+.pp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pp-tab {
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pp-tab.is-active {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.pp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pp-chip {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pp-chip.is-active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+.pp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pp-input,
+.pp-select {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.pp-input {
+  min-width: 200px;
+}
+
+.pp-input-small {
+  width: 120px;
+  min-width: 0;
+}
+
+.pp-meta,
+.pp-muted {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pp-banner {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pp-banner.warn {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+}
+
+.pp-banner.upgrade {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #1e3a8a;
+}
+
+.pp-banner a {
+  font-weight: 800;
+  text-decoration: underline;
+}
+
+.pp-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.pp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.pp-table th {
+  padding: 10px 12px;
+  background: #111827;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.pp-table td {
+  padding: 10px 12px;
+  border-top: 1px solid #f1f5f9;
+  white-space: nowrap;
+  color: var(--ink);
+}
+
+.pp-table tbody tr:hover td {
+  background: #f8fafc;
+}
+
+.pp-player {
+  display: block;
+  font-weight: 800;
+}
+
+.pp-team {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pp-pick-over,
+.pp-ev-pos,
+.pp-rate.great,
+.pp-stat-pct.great {
+  color: #15803d;
+  font-weight: 800;
+}
+
+.pp-pick-under,
+.pp-ev-neg,
+.pp-rate.poor,
+.pp-stat-pct.poor {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.pp-rate.ok,
+.pp-stat-pct.ok {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.pp-row-locked td {
+  color: var(--muted);
+}
+
+.pp-lock-note {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.pp-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+}
+
+.pp-stat {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.pp-stat-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.pp-stat-pct,
+.pp-stat-value {
+  margin-top: 4px;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.pp-pill {
+  display: inline-block;
+  min-width: 22px;
+  margin-right: 3px;
+  padding: 2px 4px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.pp-pill.hit {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.pp-pill.miss {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.pp-streak.hot {
+  color: #b45309;
+  font-weight: 800;
+}
+
+.pp-streak.cold {
+  color: #1d4ed8;
+  font-weight: 800;
+}
+
+.pp-result.hit,
+.pp-result.win {
+  color: #15803d;
+  font-weight: 800;
+}
+
+.pp-result.miss,
+.pp-result.loss {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.pp-rate {
+  font-weight: 800;
+}
+
+/* The home page: one section per sport. */
+.pl-home-sport {
+  margin-bottom: 28px;
+}
+
+.pl-home-sport-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.pl-home-sport-title a {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Header search results under the search box. */
+.pl-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  min-width: 280px;
+  max-height: 380px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
+  z-index: 1000;
+  padding: 4px;
+}
+
+.pl-search-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: #0f172a;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.pl-search-item:hover {
+  background: #f1f5f9;
+}
+
+.pl-search-sport {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pl-search-empty {
+  padding: 10px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+/* The prediction chart in the middle column: the classic picks page in its Chart view. */
+.pl-picks-chart-frame {
+  display: block;
+  width: 100%;
+  min-height: 400px;
+  border: 0;
+  background: #fff;
+}
+
+/* All Sports Picks. */
+.pl-asp-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.pl-asp-sub {
+  margin: 4px 0 0;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.pl-asp-btn {
+  display: inline-block;
+  padding: 9px 16px;
+  border: 1px solid #111827;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  font: 700 13px/1 inherit;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pl-asp-btn.primary {
+  background: #111827;
+  color: #fff;
+}
+
+.pl-asp-count {
+  margin-left: 4px;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.pl-league-pill.is-active .pl-asp-count {
+  color: inherit;
+  opacity: 0.75;
+}
+
+.pl-asp-hero {
+  margin: 14px 0 6px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #0f172a, #1e3a8a);
+  color: #fff;
+}
+
+.pl-asp-hero-tag {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.pl-asp-hero-pick {
+  margin: 6px 0 8px;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.pl-asp-hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.pl-asp-hero-link {
+  display: inline-block;
+  margin-top: 12px;
+  color: #bfdbfe;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pl-asp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.pl-asp-game {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.pl-asp-game-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.pl-asp-sport {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #111827;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pl-asp-league {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pl-asp-teams {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.pl-asp-at {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.pl-asp-picks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pl-asp-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.pl-asp-pick.is-ladder {
+  background: #ecfdf5;
+  box-shadow: inset 0 0 0 1px #86efac;
+}
+
+.pl-asp-pick-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pl-asp-market {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pl-asp-model {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pl-asp-label {
+  font-size: 14px;
+}
+
+.pl-asp-pick-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.pl-asp-pct {
+  font-weight: 800;
+}
+
+.pl-asp-price {
+  color: #374151;
+  font-weight: 700;
+}
+
+.pl-asp-record {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #4b5563;
+  white-space: nowrap;
+}
+
+.pl-asp-bar {
+  position: relative;
+  width: 44px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.pl-asp-bar span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: #16a34a;
+}
+
+.pl-asp-ladder-tag {
+  padding: 1px 7px;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pl-asp-win {
+  color: #15803d;
+  font-weight: 800;
+}
+
+.pl-asp-loss {
+  color: #b91c1c;
+  font-weight: 800;
+}
+
+.pl-asp-muted {
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.pl-asp-note {
+  margin-top: 18px;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pl-asp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.pl-asp-table th,
+.pl-asp-table td {
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.pl-asp-table th {
+  color: #6b7280;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pl-asp-gap {
+  margin-top: 20px;
+}
+
+.pl-asp-lock {
+  margin-top: 16px;
+  padding: 28px 20px;
+  border: 1px dashed #94a3b8;
+  border-radius: 16px;
+  background: #f8fafc;
+  text-align: center;
+}
+
+.pl-asp-lock h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.pl-asp-lock p {
+  margin: 0 0 16px;
+  color: #374151;
+}
+
+.pl-asp-lock .pl-asp-btn {
+  margin: 4px;
+}
+
+.pl-chip-locked {
+  color: #475569;
+  font-weight: 600;
+}
+
+.pl-chip-locked a {
+  color: #00529b;
+  font-weight: 700;
+}
+
+/* Left menu: sport groups that open into lists. */
+.pl-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pl-nav-group-link,
+.pl-nav-group-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 19px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pl-nav-group-link:hover,
+.pl-nav-group-head:hover,
+.pl-nav-item:hover {
+  background: var(--soft);
+}
+
+.pl-nav-group-link.is-active,
+.pl-nav-group-head.is-active {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.pl-nav-count {
+  margin-left: 4px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.pl-nav-status {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pl-nav-chevron {
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg) translate(-2px, -2px);
+  transition: transform 0.15s;
+}
+
+.pl-nav-group.is-open .pl-nav-chevron {
+  transform: rotate(-135deg) translate(-2px, -2px);
+}
+
+.pl-nav-items {
+  display: flex;
+  flex-direction: column;
+  padding: 2px 0 8px 14px;
+}
+
+.pl-nav-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.pl-nav-item.is-active {
+  color: var(--green);
+  font-weight: 700;
+}
+
+.pl-nav-divider {
+  margin: 14px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
+.pl-nav-status.today {
+  color: var(--green);
+  font-weight: 700;
+}
+
+/* Soccer's leagues: plain text names (like East / West) in two rows that drag sideways. */
+.pl-league-strip.is-text .pl-team-row {
+  gap: 22px;
+}
+
+.pl-league-strip.is-text .pl-league-pill {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: #9ca3af;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.pl-league-strip.is-text .pl-league-pill.is-active {
+  color: var(--ink);
+}
+
+.pl-league-strip.is-text .pl-league-pill:disabled {
+  color: #d1d5db;
+}
+
+/* The left list scrolls on its own when it is taller than the screen. */
+.pl-left {
+  max-height: calc(100vh - var(--pl-header-h, 72px) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-width: 760px) {
+  .pl-left {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* Live predictions: the first box's top-left corner and the last box's bottom-right corner in the
+   Sign up blue, framing the row. */
+.pl-live-box {
+  position: relative;
+}
+
+.pl-live-box:first-child::before,
+.pl-live-box:last-child::after {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 0 solid #38bdf8;
+  pointer-events: none;
+}
+
+.pl-live-box:first-child::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 3px;
+  border-left-width: 3px;
+  border-top-left-radius: 16px;
+}
+
+.pl-live-box:last-child::after {
+  right: -1px;
+  bottom: -1px;
+  border-right-width: 3px;
+  border-bottom-width: 3px;
+  border-bottom-right-radius: 16px;
+}

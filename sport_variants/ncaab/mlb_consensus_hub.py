@@ -2502,13 +2502,14 @@ def build_pl_xs_records_html(
         {
             str(g.get("game_date") or "")[:10]
             for g in finals or []
-            if str(g.get("game_date") or "")[:10] < today
+            if str(g.get("game_date") or "")[:10] <= today
         }
     )
     ln_key = last_night_key or (past_dates[-1] if past_dates else yesterday)
     cut7 = (now.date() - timedelta(days=7)).strftime("%Y-%m-%d")
     cut30 = (now.date() - timedelta(days=30)).strftime("%Y-%m-%d")
-    end_key = today
+    # Finals graded earlier today count, the same night the results boards show.
+    end_key = (now.date() + timedelta(days=1)).strftime("%Y-%m-%d") if ln_key == today else today
     if ln_key and ln_key < cut7:
         # Off-season: the calendar week is empty, so Past 7 / Past 30 end on the
         # last graded night, the same windows as the totals chart.

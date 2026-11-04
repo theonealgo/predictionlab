@@ -81,17 +81,25 @@ def ensure_schema(conn) -> None:
         logger.warning("[live-patch] betting_lines columns added %s, old rows tagged %s", added, tagged)
 
 
-def _insert_missing_games(conn, rows: list) -> int:
-    """Finished games the live database never stored (models train on them)."""
+def _insert_missing_games(conn, rows: list) -> tuple[int, int]:
+    """Finished games the live database never stored or never scored (models and the
+    ladder's graded record read them). A score live already has is never changed."""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(games)")}
     if not cols or not rows:
-        return 0
-    added = 0
+        return 0, 0
+    added = scored = 0
     for r in rows:
-        if conn.execute(
-            "SELECT 1 FROM games WHERE sport = ? AND game_id = ? LIMIT 1",
+        have = conn.execute(
+            "SELECT home_score FROM games WHERE sport = ? AND game_id = ? LIMIT 1",
             (r["sport"], r["game_id"]),
-        ).fetchone():
+        ).fetchone()
+        if have:
+            if have[0] is None and r.get("home_score") is not None and r.get("away_score") is not None:
+                scored += conn.execute(
+                    "UPDATE games SET home_score = ?, away_score = ?, status = ? "
+                    "WHERE sport = ? AND game_id = ? AND home_score IS NULL",
+                    (r["home_score"], r["away_score"], r.get("status") or "final", r["sport"], r["game_id"]),
+                ).rowcount
             continue
         keys = [k for k in r if k in cols and k != "id"]
         conn.execute(
@@ -99,7 +107,7 @@ def _insert_missing_games(conn, rows: list) -> int:
             tuple(r[k] for k in keys),
         )
         added += 1
-    return added
+    return added, scored
 
 
 def _apply(conn, patch: dict) -> tuple[int, int, int]:
@@ -109,8 +117,10 @@ def _apply(conn, patch: dict) -> tuple[int, int, int]:
         sets = [c for c in (*LOCK_COLS, *MODEL_COLS) if r.get(c) is not None and c in pcols]
         if not sets:
             continue
+        # Fill-only: a lock or model value live already saved is never replaced
+        # (published / graded lines must stay what customers saw before the game).
         cur = conn.execute(
-            f"UPDATE predictions SET {', '.join(f'{c} = ?' for c in sets)} "
+            f"UPDATE predictions SET {', '.join(f'{c} = COALESCE({c}, ?)' for c in sets)} "
             "WHERE sport = ? AND game_id = ? AND home_team_id = ?",
             (*(r[c] for c in sets), r["sport"], r["game_id"], r["home_team_id"]),
         )
@@ -123,9 +133,9 @@ def _apply(conn, patch: dict) -> tuple[int, int, int]:
         ).fetchone()
         if last is not None:
             conn.execute(
-                "UPDATE betting_lines SET spread = COALESCE(?, spread), total = COALESCE(?, total), "
-                "home_moneyline = COALESCE(?, home_moneyline), "
-                "away_moneyline = COALESCE(?, away_moneyline) WHERE id = ?",
+                "UPDATE betting_lines SET spread = COALESCE(spread, ?), total = COALESCE(total, ?), "
+                "home_moneyline = COALESCE(home_moneyline, ?), "
+                "away_moneyline = COALESCE(away_moneyline, ?) WHERE id = ?",
                 (*(r.get(c) for c in LINE_COLS), last[0]),
             )
             lines_upd += 1
@@ -144,7 +154,67 @@ def _apply(conn, patch: dict) -> tuple[int, int, int]:
     return preds, lines_upd, lines_new
 
 
+# ESPN renamed these schools; stored games under the old name are the same team,
+# so the models read one history.
+TEAM_RENAMES_PATCH = "team_renames_2026-11-03"
+TEAM_RENAMES = (
+    ("NCAAB", "New Orleans Privateers", "LSU New Orleans Privateers"),
+    ("NCAAB", "St. Thomas-Minnesota Tommies", "St. Thomas Tommies"),
+)
+_TEAM_NAME_COLS = (
+    ("games", ("home_team_id", "away_team_id")),
+    ("predictions", ("home_team_id", "away_team_id", "predicted_winner", "actual_winner")),
+    ("betting_lines", ("home_team", "away_team")),
+)
+
+
+def apply_team_renames(db_path: str) -> None:
+    if os.environ.get("PL_LIVE_PATCH") == "0":
+        return
+    try:
+        conn = sqlite3.connect(db_path, timeout=30, isolation_level=None)
+        conn.execute("PRAGMA busy_timeout=30000")
+    except Exception as exc:
+        logger.warning("[live-patch] cannot open database: %s", exc)
+        return
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS data_patches (name TEXT PRIMARY KEY, applied_at TEXT, summary TEXT)"
+        )
+        if conn.execute("SELECT 1 FROM data_patches WHERE name = ?", (TEAM_RENAMES_PATCH,)).fetchone():
+            return
+        conn.execute("BEGIN IMMEDIATE")
+        changed = 0
+        for table, cols in _TEAM_NAME_COLS:
+            have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+            if "sport" not in have:
+                continue
+            for col in cols:
+                if col not in have:
+                    continue
+                for sport, old, new in TEAM_RENAMES:
+                    changed += conn.execute(
+                        f"UPDATE {table} SET {col} = ? WHERE sport = ? AND {col} = ?",
+                        (new, sport, old),
+                    ).rowcount
+        conn.execute(
+            "INSERT INTO data_patches (name, applied_at, summary) VALUES (?, ?, ?)",
+            (TEAM_RENAMES_PATCH, datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), f"cells={changed}"),
+        )
+        conn.execute("COMMIT")
+        logger.warning("[live-patch] applied %s: cells=%s", TEAM_RENAMES_PATCH, changed)
+    except Exception as exc:
+        try:
+            conn.execute("ROLLBACK")
+        except Exception:
+            pass
+        logger.warning("[live-patch] %s failed, nothing written: %s", TEAM_RENAMES_PATCH, exc)
+    finally:
+        conn.close()
+
+
 def apply_pending(db_path: str) -> None:
+    apply_team_renames(db_path)
     if os.environ.get("PL_LIVE_PATCH") == "0":
         return
     files = sorted(PATCH_DIR.glob("*.json.gz")) if PATCH_DIR.is_dir() else []
@@ -171,10 +241,10 @@ def apply_pending(db_path: str) -> None:
                 with gzip.open(path, "rt", encoding="utf-8") as fh:
                     patch = json.load(fh)
                 conn.execute("BEGIN IMMEDIATE")
-                games_new = _insert_missing_games(conn, patch.get("games") or [])
+                games_new, games_scored = _insert_missing_games(conn, patch.get("games") or [])
                 preds, lines_upd, lines_new = _apply(conn, patch)
                 summary = (
-                    f"games_added={games_new} predictions={preds} "
+                    f"games_added={games_new} games_scored={games_scored} predictions={preds} "
                     f"lines_updated={lines_upd} lines_added={lines_new}"
                 )
                 conn.execute(

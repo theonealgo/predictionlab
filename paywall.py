@@ -74,6 +74,13 @@ def lock_free_picks_html(html: str) -> str:
     return out
 
 
+def lock_card_data_attrs(html: str) -> str:
+    """Clear the paid values kept in card data attributes. Used on pages with no lock panels."""
+    if not html:
+        return html
+    return _DATA_ATTR_RE.sub(lambda m: m.group(1) + '=""', html)
+
+
 def _drop_div(html: str, opener: str) -> str:
     """Remove every <div ...opener...> element, nested divs included."""
     while True:

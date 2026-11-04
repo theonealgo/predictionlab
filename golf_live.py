@@ -80,7 +80,9 @@ def _inject_chrome_into_page(html: str) -> str:
         '<link rel="stylesheet" href="/static/css/picks-nav-overrides.css">'
         '<link rel="stylesheet" href="/static/css/sports-chrome.css">'
         '<link rel="stylesheet" href="/static/css/golf-board.css">'
+        '<link rel="stylesheet" href="/static/css/pl-chrome.css">'
         '<script src="/static/js/pl-header-logo.js" defer></script>'
+        '<script src="/static/js/pl-chrome.js" defer></script>'
     )
     if re.search(r"</head\s*>", html, flags=re.I):
         html = re.sub(r"</head\s*>", css_html + "</head>", html, count=1, flags=re.I)

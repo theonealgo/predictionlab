@@ -32,4 +32,6 @@ Owner 2026-10-29: consensus table Past 30 now holds the card-graded Past 7 (buil
 
 Owner 2026-10-30: results cards view Prediction Lab · XSharp — Totals table (id on the wrapper div) now gets the picks Recent results totals grades like the chart view (`served_layout_fixes._sync_totals_chart`). Miss closed — locked.
 
+Owner 2026-11-02: checker had no fails for NHL. Miss closed — locked. Do not edit NHL while fixing other sports.
+
 Do not put lock text on user-facing HTML.

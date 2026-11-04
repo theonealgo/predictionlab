@@ -24,4 +24,7 @@ Owner 2026-10-18: picks follow the shared window (upcoming cards, not only yeste
 
 Owner 2026-10-28: picks Recent results were blank — the UFC copy of `picks_recent_results.py` looked for `ufc_pipeline` two folders up from the root path the app loads it under. It now looks next to the file first, and a busy fight store builds no strip (never a saved all-blank one). Miss closed — locked.
 
+
+Owner 2026-11-02: checker had no fails for UFC. Miss closed — locked. Do not edit UFC while fixing other sports.
+
 Do not put lock text on user-facing HTML.

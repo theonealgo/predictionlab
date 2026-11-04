@@ -1,0 +1,28 @@
+---
+description: Google tag on every page is locked
+alwaysApply: true
+---
+
+# GOOGLE TAG LOCKED (owner 2026-11-03)
+
+Every HTML page must carry Google's tag snippet as a plain script at the top of
+`<head>`, exactly once:
+
+```html
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=AW-18345189026"></script>
+<script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','AW-18345189026');gtag('config','G-R4XM0WKTGG');</script>
+```
+
+- Written by `_ensure_site_gtags` / `_GTAG_CANONICAL` / `_SITE_GTAG_IDS` in
+  `NHL77FINAL.py` (the last after-request step). Do not edit, remove, delay,
+  lazy-load, defer, move to the body, or "speed up" it — not for PageSpeed,
+  Lighthouse, checker fails, chrome, cache, or saved-page work.
+- No page fix, saved-page rewrite, template, or after-request hook may strip
+  `googletagmanager.com/gtag/js` or `gtag('config', ...)` scripts.
+- A Render environment variable does not put the tag on pages; the tag must stay
+  in the HTML.
+- `qa/prepush_gate.py` fails a push when any HTML page lacks the tag.
+- Only the owner can change this, by naming the Google tag in the same message.
+
+Do not put lock text on user-facing HTML.

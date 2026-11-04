@@ -384,6 +384,40 @@ def _elo_probs(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+def _saved_predictions(con: sqlite3.Connection) -> dict[str, tuple[str, float, str]]:
+    """Published chances by match: (player_a, win_prob_a, created_at)."""
+    try:
+        rows = con.execute(
+            "SELECT p.match_id, m.player_a, p.win_prob_a, p.created_at "
+            "FROM predictions p JOIN matches m ON m.match_id = p.match_id "
+            "WHERE p.win_prob_a IS NOT NULL"
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    return {mid: (pa, float(prob), created) for mid, pa, prob, created in rows}
+
+
+def _keep_saved_prob(rec: dict[str, Any], saved: tuple[str, float, str] | None) -> dict[str, Any]:
+    """A match keeps the chance it was first published with; later syncs only add new matches.
+    Customers compare the pick they saw before the match with the graded result."""
+    if not saved:
+        return rec
+    player_a, prob, created = saved
+    if player_a == rec["player_a"]:
+        p_a = prob
+    elif player_a == rec["player_b"]:
+        p_a = 1.0 - prob
+    else:
+        return rec
+    rec = dict(rec)
+    rec["win_prob_a"] = round(p_a, 4)
+    rec["pick"] = rec["player_a"] if p_a >= 0.5 else rec["player_b"]
+    if rec.get("winner"):
+        rec["correct"] = 1 if rec["pick"] == rec["winner"] else 0
+    rec["saved_at"] = created
+    return rec
+
+
 def _ensure_schema(con: sqlite3.Connection) -> None:
     con.executescript(Path(SCHEMA_PATH).read_text(encoding="utf-8"))
 
@@ -402,6 +436,8 @@ def write_db(
     con = sqlite3.connect(str(path))
     try:
         _ensure_schema(con)
+        saved = _saved_predictions(con)
+        graded = [_keep_saved_prob(r, saved.get(r["match_id"])) for r in graded]
         for t in ("grades", "predictions", "matches", "players", "model_runs"):
             con.execute(f"DELETE FROM {t}")
         players: dict[str, None] = {}
@@ -440,7 +476,7 @@ def write_db(
                 (
                     pid,
                     mid,
-                    now,
+                    r.get("saved_at") or now,
                     "ensemble",
                     r["win_prob_a"],
                     None,

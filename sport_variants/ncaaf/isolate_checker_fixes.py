@@ -14,7 +14,11 @@ from html import escape, unescape
 from pathlib import Path
 from typing import Any
 
-_CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
+try:
+    from served_cache import cache_dir as _cache_dir
+    _CARDS_CACHE_DIR = _cache_dir()
+except Exception:
+    _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
 def _app_db_path():
@@ -3673,6 +3677,8 @@ def _ncaaf_unique_shown_percent(face: float, taken: list[float]) -> float:
 
 def _ncaaf_card_is_current(stack: str) -> bool:
     """Today and later only. A card from yesterday or earlier is left as posted."""
+    if re.search(r'data-time="\s*final', stack or "", flags=re.I):
+        return False
     match = re.search(r"card-details-(20\d\d-\d\d-\d\d)", stack or "")
     if not match:
         return True
@@ -4504,7 +4510,13 @@ def fill_ncaaf_edge_from_spread(html: str) -> str:
         away_m = re.search(r'data-away="([^"]*)"', stack, flags=re.I)
         home = unescape(home_m.group(1) if home_m else "").strip()
         away = unescape(away_m.group(1) if away_m else "").strip()
-        live = ncaaf_live_elo_home_pct(home, away) if home and away else None
+        day_m = re.search(r"card-details-(20\d\d-\d\d-\d\d)", stack)
+        if day_m and home and away:
+            from team_results_charts import ncaaf_pregame_elo_home_pct
+
+            live = ncaaf_pregame_elo_home_pct(home, away, day_m.group(1))[0]
+        else:
+            live = ncaaf_live_elo_home_pct(home, away) if home and away else None
         if live is None or ncaaf_elo_is_placeholder(live):
             out.append(stack)
             continue

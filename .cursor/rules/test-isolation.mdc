@@ -1,0 +1,16 @@
+---
+description: Backups and test-copy isolation for the local site
+alwaysApply: true
+---
+# Local site safety (owner 2026-11-01)
+
+- The local site on **5122** (`./run_local.sh`) is the owner's. Never restart, kill, or
+  write to it from a test. Never start any other server in the project folder.
+- Every test server runs on its own copy: `.venv/bin/python qa/test_copy.py start [--port N]`,
+  stopped with `qa/test_copy.py stop --port N`. gunicorn / `python NHL77FINAL.py` refuse to
+  serve test ports from the project folder, and refuse port 5122 from a copy.
+- Backups: `backups/pl_cursor_<date>_<time>/` (databases + saved pages, last 10 kept, git-ignored).
+  Taken automatically before every push (pre-push hook), the push gate, the checkers against
+  a local URL, and every test copy. By hand: `.venv/bin/python tools/pl_backup.py`.
+- Restore: stop 5122, then `.venv/bin/python tools/pl_backup.py --restore latest`
+  (or a name from `--list`), then `./run_local.sh`.

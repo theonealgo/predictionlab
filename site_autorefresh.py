@@ -26,14 +26,19 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 CYCLE_S = 600
-# A fresh deploy has no saved pages; visitors' first builds go before score syncs.
+# Saved pages live on /data (see served_cache). First cycle still waits so
+# visitors get the persisted HTML before score syncs take the worker.
 FIRST_DELAY_S = int(os.environ.get("PL_AUTOREFRESH_FIRST_DELAY", "900"))
 SYNC_EVERY_UNSCORED_S = 1800
 SYNC_EVERY_QUIET_S = 6 * 3600
 PAGE_PAUSE_S = 2.0
 
 _ROOT = Path(__file__).resolve().parent
-_CACHE = _ROOT / ".cache"
+try:
+    from served_cache import cache_dir as _cache_dir
+    _CACHE = _cache_dir()
+except Exception:
+    _CACHE = _ROOT / ".cache"
 _STATE_PATH = _CACHE / "autorefresh_state.json"
 
 SLUGS = {
@@ -52,6 +57,7 @@ _PICKS_SPORTS = ("MLB", "NHL", "NBA", "NFL", "NCAAF", "NCAAB", "NCAAW", "WNBA", 
 
 _started = False
 _last_sync: dict[str, float] = {}
+ORIENTATION_EVERY_S = 2 * 3600
 _tried_pages: set[tuple[str, str]] = set()
 _warmed: set[str] = set()
 
@@ -185,6 +191,56 @@ def _page_missing_night(sport: str, view: str, market: str, night: str) -> bool:
     return night not in text
 
 
+def _code_stamp() -> str:
+    """Newest code / template change. Saved pages persist across restarts and
+    deploys, so a new stamp means every saved page was built by older code."""
+    newest, count = 0.0, 0
+    for base, pattern in ((_ROOT, "*.py"), (_ROOT / "sport_variants", "**/*.py"),
+                          (_ROOT / "ladder_picks", "*.py"), (_ROOT / "templates", "**/*.html")):
+        try:
+            for p in base.glob(pattern):
+                count += 1
+                newest = max(newest, p.stat().st_mtime)
+        except OSError:
+            continue
+    return f"{int(newest)}:{count}"
+
+
+_RUNNING_CODE: str | None = None
+
+
+def _rebuild_for_new_code(app, db: str, state: dict) -> None:
+    # The code this process loaded; editing files mid-run does not change what serves.
+    global _RUNNING_CODE
+    if _RUNNING_CODE is None:
+        _RUNNING_CODE = _code_stamp()
+    code = _RUNNING_CODE
+    if state.get("code") == code:
+        return
+    started = time.time()
+    try:
+        stamps = _finals_stamp(db)
+    except Exception:
+        stamps = {}
+    done = total = 0
+    for sport in list(SLUGS) + ["CFL"]:
+        for view, market in _saved_pages(sport):
+            total += 1
+            if _rebuild_page(app, sport, view, market):
+                done += 1
+            time.sleep(PAGE_PAUSE_S)
+        if sport in stamps:
+            state.setdefault("rebuilt", {})[sport] = stamps[sport]
+    for sport in _PICKS_SPORTS:
+        _refresh_sport_picks(sport)
+    state["code"] = code
+    _save_state(state)
+    logger.info(
+        f"[autorefresh] new code: rebuilt {done}/{total} saved results pages and "
+        f"refreshed picks pages in {time.time() - started:.0f}s"
+    )
+
+
 def _refresh_results(app, db: str, state: dict) -> None:
     stamps = _finals_stamp(db)
     rebuilt = state.setdefault("rebuilt", {})
@@ -207,19 +263,21 @@ def _refresh_results(app, db: str, state: dict) -> None:
         if not todo:
             continue
         done = 0
+        cards_rebuilt = False
         for view, market in todo:
             _tried_pages.add((sport, f"{view}|{market}|{night}"))
             if _rebuild_page(app, sport, view, market):
                 done += 1
+                cards_rebuilt = cards_rebuilt or (view, market) == ("", "")
             if _page_missing_night(sport, view, market, night):
                 logger.warning(
                     f"[autorefresh] {sport} results view={view or 'cards'} market={market or '-'} "
                     f"still has no {night} after a rebuild"
                 )
             time.sleep(PAGE_PAUSE_S)
-        if changed:
+        if changed or cards_rebuilt:
             # Picks cards carry season records (consensus chip, PL vs Books)
-            # counted from the same finals.
+            # and Recent results copy the results page tiles.
             _refresh_sport_picks(sport)
         rebuilt[sport] = stamp
         _save_state(state)
@@ -325,12 +383,31 @@ def _sync_cfl(app, state: dict) -> None:
     logger.info(f"[autorefresh] CFL finals/picks {stamp}: rebuilt {done}/{len(pages)} saved results pages")
 
 
+COLLEGE_RATINGS_EVERY_S = 3 * 3600
+
+
+def _sync_college_ratings() -> None:
+    """NCAAB / NCAAW ratings behind the Prediction Lab line for teams with few games."""
+    if time.time() - _last_sync.get("college_ratings", 0.0) < COLLEGE_RATINGS_EVERY_S:
+        return
+    _last_sync["college_ratings"] = time.time()
+    import college_ratings
+
+    for sport in ("NCAAB", "NCAAW"):
+        if college_ratings.refresh(sport):
+            _refresh_sport_picks(sport)
+
+
 def _cycle(app, db: str, sync_fns: dict, state: dict) -> None:
     now = time.time()
     try:
         _sync_cfl(app, state)
     except Exception as exc:
         logger.warning(f"[autorefresh] CFL step failed: {exc}")
+    try:
+        _sync_college_ratings()
+    except Exception as exc:
+        logger.warning(f"[autorefresh] college ratings step failed: {exc}")
     try:
         candidates = _sync_candidates(db)
     except Exception as exc:
@@ -342,6 +419,18 @@ def _cycle(app, db: str, sync_fns: dict, state: dict) -> None:
             continue
         _last_sync[sport] = now
         _run_sync(sport, sync_fns)
+    if now - _last_sync.get("_orientation", 0.0) >= ORIENTATION_EVERY_S:
+        _last_sync["_orientation"] = now
+        try:
+            import orientation_guard
+
+            orientation_guard.repair(db)
+        except Exception as exc:
+            logger.warning(f"[autorefresh] home/away check failed: {exc}")
+    try:
+        _rebuild_for_new_code(app, db, state)
+    except Exception as exc:
+        logger.warning(f"[autorefresh] new-code rebuild failed: {exc}")
     try:
         _refresh_results(app, db, state)
     except Exception as exc:
@@ -437,12 +526,55 @@ def _warm_pages(app) -> None:
     logger.info(f"[autorefresh] warmed {done} pages in {time.time() - started:.0f}s · memory {_memory_text()}")
 
 
+DATED_WARM_S = int(os.environ.get("PL_DATED_WARM_S", "900"))
+
+
+def _dated_picks_urls() -> list[str]:
+    urls: list[str] = []
+    for sport in _PICKS_SPORTS:
+        try:
+            text = (_CACHE / f"served_picks_{sport}.html").read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        urls += sorted(set(re.findall(rf'href="(/{sport.lower()}-picks-[a-z]+-\d{{1,2}}-\d{{4}})"', text)))
+    return urls
+
+
+def _rebuild_dated_picks(app) -> None:
+    """Dated picks pages live in memory for 20 minutes; rebuild them before they
+    expire so a visitor never waits on a cold build."""
+    started = time.time()
+    done = 0
+    client = app.test_client()
+    import sys
+
+    flag = getattr(sys.modules.get(app.import_name), "_PAGE_REBUILD_LOCAL", None)
+    if flag is None:
+        return
+    for url in _dated_picks_urls()[:60]:
+        flag.force = True
+        try:
+            client.get(url, base_url="http://localhost")
+            done += 1
+        except Exception as exc:
+            logger.warning(f"[autorefresh] dated rebuild {url} failed: {exc}")
+        finally:
+            flag.force = False
+    logger.info(f"[autorefresh] rebuilt {done} dated picks pages in {time.time() - started:.0f}s")
+
+
 def _warm_loop(app) -> None:
     time.sleep(WARM_DELAY_S)
     try:
         _warm_pages(app)
     except Exception as exc:
         logger.warning(f"[autorefresh] warm pass failed: {exc}")
+    while DATED_WARM_S > 0:
+        time.sleep(DATED_WARM_S)
+        try:
+            _rebuild_dated_picks(app)
+        except Exception as exc:
+            logger.warning(f"[autorefresh] dated rebuild pass failed: {exc}")
 
 
 def _loop(app, db: str, sync_fns: dict) -> None:

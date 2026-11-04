@@ -18,15 +18,15 @@ Pick rule
 - Candidates are our moneyline, spread and total picks for today's games in
   every sport with two-way picks (sources.SUPPORTED_SPORTS); the best one
   across all sports is taken.
-- A pick qualifies only if its pick type (see markets.py) has, over the last
-  21 days against pre-game book lines: at least 20 graded picks and a 60%+
-  hit rate, and the low end of that record (80% confidence) beats the win rate
-  the pick's own price needs to break even. Tennis and UFC store no past book price, so their record counts
-  picks we gave 60% or less (sources.UNPRICED_MAX_PROB).
-- NHL puck-line underdog picks and every soccer goal-line pick are never used
-  (Config.excluded_types).
+- A pick qualifies only if its pick type (see markets.py) has, over our whole
+  graded history against pre-game book lines (LADDER_HISTORY_DAYS): at least
+  100 graded picks, a positive return at the prices it was graded at, and a hit
+  rate above the win rate the pick's own price needs to break even. A short hot
+  streak is not a record. Tennis and UFC store no past book price, so their
+  record counts picks we gave 60% or less (sources.UNPRICED_MAX_PROB).
+- Pick types that lose over the long run are never used (Config.excluded_types).
 - The posted price at pick time must be -150 to +150.
-- The biggest margin of that low end over the break-even rate wins, then the
+- The biggest margin of that hit rate over the break-even rate wins, then the
   larger sample, then return, then earliest start.
 """
 from __future__ import annotations
@@ -71,26 +71,34 @@ class Config:
     # -150 to +150
     min_decimal: float = field(default_factory=lambda: _env_float("LADDER_MIN_DECIMAL_ODDS", 1.6666))
     max_decimal: float = field(default_factory=lambda: _env_float("LADDER_MAX_DECIMAL_ODDS", 2.50))
-    min_type_games: int = field(default_factory=lambda: _env_int("LADDER_MIN_TYPE_GAMES", 20))
-    min_type_rate: float = field(default_factory=lambda: _env_float("LADDER_MIN_TYPE_HIT_RATE", 0.60))
+    min_type_games: int = field(default_factory=lambda: _env_int("LADDER_MIN_TYPE_GAMES", 100))
+    min_type_rate: float = field(default_factory=lambda: _env_float("LADDER_MIN_TYPE_HIT_RATE", 0.0))
+    min_type_roi: float = field(default_factory=lambda: _env_float("LADDER_MIN_TYPE_ROI", 0.0))
     min_half_rate: float = field(default_factory=lambda: _env_float("LADDER_MIN_HALF_HIT_RATE", 0.0))
     void_after_hours: int = field(default_factory=lambda: _env_int("LADDER_VOID_AFTER_HOURS", 72))
-    history_days: int = field(default_factory=lambda: _env_int("LADDER_HISTORY_DAYS", 21))
-    # One-sided 80%: a 10-20 game streak at 60% is mostly luck; the low end of the
-    # record has to clear the price's break-even rate.
-    price_z: float = field(default_factory=lambda: _env_float("LADDER_PRICE_CONFIDENCE_Z", 0.8416))
+    # A 21-day window picked whichever type was hot and went 13-18 when replayed
+    # (tools/ladder_backtest.py); the whole history held up better.
+    history_days: int = field(default_factory=lambda: _env_int("LADDER_HISTORY_DAYS", 400))
+    price_z: float = field(default_factory=lambda: _env_float("LADDER_PRICE_CONFIDENCE_Z", 0.0))
     type_prior: int = field(default_factory=lambda: _env_int("LADDER_TYPE_PRIOR", 20))
     # Off: a pick type's record covers all its picks. Splitting by edge size made
     # many small records whose best 14-day hit rate did not hold up the next day.
     gap_buckets: bool = field(default_factory=lambda: _env_int("LADDER_GAP_BUCKETS", 0) == 1)
-    # (sport, market, side) never used: the model takes the underdog on nearly
-    # every NHL puck line / soccer goal line, its record equals the plain underdog
-    # cover rate, and those lines are priced well above -110 (no stored price to
-    # grade the real return). A soccer -0.5 favourite also loses on a draw, a
-    # three-way result priced as two-way.
-    excluded_types: tuple = (("NHL", "spread", "dog"), ("SOCCER", "spread", "dog"),
-                             ("SOCCER", "spread", "fav"))
+    # (sport, market, side) never used; None matches any. The model takes the
+    # underdog on nearly every NHL puck line / soccer goal line, its record equals
+    # the plain underdog cover rate, and those lines are priced well above -110. A
+    # soccer -0.5 favourite also loses on a draw, a three-way result priced as
+    # two-way. The rest lose over the long run on pre-game lines.
+    excluded_types: tuple = (("NHL", "spread", "dog"), ("SOCCER", "spread", None),
+                             ("NCAAF", "total", None), ("NBA", "total", "OVER"),
+                             ("NHL", "total", "UNDER"), ("WNBA", None, None),
+                             ("MLB", "moneyline", None), ("MLB", "spread", None))
     max_priced: int = 150
+
+
+# Puck line / run line prices run far from -110; with no stored price the record
+# cannot be priced, so it is left out.
+UNPRICED_SPREAD = {"NHL", "MLB"}
 
 
 def _wilson_lower(wins: int, n: int, z: float) -> float:
@@ -254,6 +262,10 @@ class LadderEngine:
             return False
         return self.cfg.min_decimal - 1e-9 <= float(money.american_to_decimal(american)) <= self.cfg.max_decimal + 1e-9
 
+    def excluded(self, sport: str, market: str, side: str) -> bool:
+        return any(s == sport and m in (None, market) and d in (None, side)
+                   for s, m, d in self.cfg.excluded_types)
+
     def type_stats(self, today: date) -> dict:
         """{pick type: record} from our graded history, rebuilt at most hourly."""
         key = today.isoformat()
@@ -264,13 +276,14 @@ class LadderEngine:
         for rec in self.predictions.graded_history(since, until):
             if rec.get("unpriced"):
                 dec = 1.909
-            elif rec["market"] == "moneyline":
+            else:
                 price = money.parse_american(rec["price"])
+                if price is None and rec["market"] != "moneyline" and not (
+                        rec["market"] == "spread" and rec["sport"] in UNPRICED_SPREAD):
+                    price = -110  # no stored price: standard -110
                 if not self._price_ok(price):
                     continue
                 dec = float(money.american_to_decimal(price))
-            else:
-                dec = 1.909  # spread / total prices are not stored; standard -110
             edges = markets.gap_edges(rec["sport"], rec["market"])
             for edge in (edges if self.cfg.gap_buckets else edges[:1]):
                 if rec["gap"] >= edge - 1e-9:
@@ -285,8 +298,9 @@ class LadderEngine:
             second = sum(1 for w, _ in picks[half:] if w) / (n - half) if n - half else 0.0
             roi = sum((d - 1) if w else -1 for w, d in picks) / n
             qualifies = (n >= self.cfg.min_type_games and wins / n >= self.cfg.min_type_rate
+                         and roi > self.cfg.min_type_roi
                          and first >= self.cfg.min_half_rate and second >= self.cfg.min_half_rate
-                         and (k[0], k[1], k[3]) not in self.cfg.excluded_types)
+                         and not self.excluded(k[0], k[1], k[3]))
             stats[k] = {"wins": wins, "n": n, "rate": wins / n, "lower": _wilson_lower(wins, n, self.cfg.price_z),
                         "first_half": first,
                         "second_half": second, "roi": roi, "qualifies": qualifies,

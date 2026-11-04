@@ -1,6 +1,6 @@
 :root {
     --pl-ink: #0b0b0a;
-    --pl-paper: #fbfbf8;
+    --pl-paper: #ffffff;
     --pl-soft: #f2f2ed;
     --pl-line: rgba(11, 11, 10, 0.14);
     --pl-muted: #656762;
@@ -200,15 +200,10 @@
 }
 .pl2-cta:hover { border-color: var(--pl-ink); }
 
-html { background: var(--pl-paper); }
+html { background: #ffffff; }
 body.research-site {
     color: var(--pl-ink);
-    background-color: var(--pl-paper);
-    background-image:
-        linear-gradient(rgba(11,11,10,.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(11,11,10,.035) 1px, transparent 1px);
-    background-size: 72px 72px, 72px 72px;
-    background-position: center top;
+    background-color: #ffffff;
     font-family: Arial, Helvetica, sans-serif;
 }
 

@@ -2960,6 +2960,15 @@ def _ncaaf_short(name: str) -> str:
     return parts[-1] if parts else name
 
 
+def _ncaaf_today_et() -> str:
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
 def _fill_ncaaf_card_gaps(html: str) -> str:
     """Fill blank Odds & Lines and placeholder Edge 50% from published proj / Elo."""
     if not html or "data-pick-card" not in html:
@@ -3057,8 +3066,16 @@ def _fill_ncaaf_card_gaps(html: str) -> str:
         attr_m = re.search(r'data-m-edge="([^"]*)"', open_tag, flags=re.I)
         if attr_m and not edge_raw:
             edge_raw = attr_m.group(1)
+        day_m = re.search(r"card-details-(20\d\d-\d\d-\d\d)", stack)
+        past = bool(day_m) and day_m.group(1) < _ncaaf_today_et()
+        if past or re.search(r'data-time="\s*final', stack, flags=re.I):
+            out.append(open_tag + rest)
+            continue
         if ncaaf_elo_is_placeholder(edge_raw) and home and away:
-            live = ncaaf_live_elo_home_pct(home, away)
+            if day_m:
+                live = ncaaf_pregame_elo_home_pct(home, away, day_m.group(1))[0]
+            else:
+                live = ncaaf_live_elo_home_pct(home, away)
             if live is not None and not ncaaf_elo_is_placeholder(live):
                 if live >= 50:
                     face, side, cls, title = live, _ncaaf_short(home), "home", home
@@ -4452,6 +4469,12 @@ def _fill_placeholder_edge(html: str, sport: str) -> str:
         if attr_m and not edge_raw:
             edge_raw = attr_m.group(1)
         if not ncaaf_elo_is_placeholder(edge_raw):
+            out.append(open_tag + rest)
+            continue
+        day_m = re.search(r"card-details-(20\d\d-\d\d-\d\d)", rest)
+        if re.search(r'data-time="\s*final', open_tag, flags=re.I) or (
+            day_m and day_m.group(1) < _ncaaf_today_et()
+        ):
             out.append(open_tag + rest)
             continue
         home_m = re.search(r'data-home="([^"]*)"', open_tag, flags=re.I)

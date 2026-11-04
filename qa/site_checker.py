@@ -3465,6 +3465,10 @@ def main():
     if args.url:
         import audit_config
         audit_config.BASE_URL = args.url
+    if "127.0.0.1" in target_url or "localhost" in target_url:
+        import subprocess
+        subprocess.call([sys.executable, str(Path(__file__).resolve().parents[1] / "tools" / "pl_backup.py"),
+                         "--reason", "before site_checker"])
 
     if args.preflight:
         session = _make_session()

@@ -22,4 +22,7 @@ Owner 2026-10-29: picks date picker had one date (only one upcoming slate; playo
 
 Owner 2026-10-30: a finished game on the picks page shows its date and FINAL score instead of the start time (`engines/cfl/engine/render.py`). Miss closed — locked.
 
+
+Owner 2026-11-02: checker had no fails for CFL. Miss closed — locked. Do not edit CFL while fixing other sports.
+
 Do not put lock text on user-facing HTML.

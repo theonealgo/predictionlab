@@ -49,6 +49,15 @@ def apply_served_layout(html: str, sport: str = "", path: str = "", view: str = 
             html = _fill_efficiency_na(html, "NHL")
         except Exception:
             pass
+    if (sport or "").upper() == "TENNIS" and low.endswith("-results"):
+        try:
+            from tennis_live import _unique_game_ids
+
+            html = _unique_game_ids(html)
+        except Exception:
+            pass
+    if (sport or "").upper() in ("NCAAB", "NCAAW") and low.endswith("-results"):
+        html = _drop_ungraded_line_rows(html)
     if low.endswith("-results"):
         html = _ensure_date_picker(html)
         if (view or "").strip().lower() == "chart" and sport:
@@ -70,7 +79,54 @@ def apply_served_layout(html: str, sport: str = "", path: str = "", view: str = 
             html = normalize_card_faces(html, sport, path)
         except Exception:
             pass
+    if (sport or "").upper() in ("NCAAB", "NCAAW") and low.endswith("-picks"):
+        html = _college_books_na_tip(html)
     return _single_all_dates(html)
+
+
+_COLLEGE_BOOKS_NA_TIP = (
+    "No sportsbook odds for this game. Books post lines the day before or the day of "
+    "the game, and often post none for games against non-Division I schools."
+)
+_OLD_BOOKS_NA_TIP_RE = re.compile(
+    r"Odds are posted the day before or the day of the contest\.(?: Check back on game date\.)?"
+    r"|Odds will be here on the same day as the game\."
+)
+
+
+def _college_books_na_tip(html: str) -> str:
+    return _OLD_BOOKS_NA_TIP_RE.sub(_COLLEGE_BOOKS_NA_TIP, html)
+
+
+_LINE_TABLE_RE = re.compile(
+    r'(<h2 class="sec-title">(?:Spread games|Totals records) <span class="tag">\()(\d+)(\)</span></h2>)'
+    r'([\s\S]*?</table>)'
+)
+_FINAL_ROW_RE = re.compile(r"<tr><td>\d{4}-\d{2}-\d{2}</td>(?:(?!</tr>)[\s\S])*?</tr>")
+
+
+def _drop_ungraded_line_rows(html: str) -> str:
+    """Spread / totals lists hold only games that had a line to grade: a final
+    whose Result is a dash had no saved pre-game line for that market."""
+
+    def _table(m: re.Match) -> str:
+        body = m.group(4)
+        kept = 0
+        out = []
+        pos = 0
+        for row in _FINAL_ROW_RE.finditer(body):
+            cells = re.findall(r"<td>([\s\S]*?)</td>", row.group(0))
+            scored = len(cells) > 2 and re.search(r"\d+\s*[–-]\s*\d+", cells[2])
+            out.append(body[pos:row.start()])
+            pos = row.end()
+            if scored and cells[-1].strip() in ("—", "-", ""):
+                continue
+            out.append(row.group(0))
+            kept += 1
+        out.append(body[pos:])
+        return m.group(1) + str(kept) + m.group(3) + "".join(out)
+
+    return _LINE_TABLE_RE.sub(_table, html)
 
 
 _HUB_RE = re.compile(r'<nav class="mlb-preview-hub sport-preview-hub"[\s\S]*?</nav>', re.I)

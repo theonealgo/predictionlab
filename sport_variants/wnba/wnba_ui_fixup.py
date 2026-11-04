@@ -2337,7 +2337,27 @@ def apply_wnba_picks_fixups(html: str) -> str:
         html = _inject_wnba_pl_vs_books_chips(html)
     except Exception:
         pass
+    html = pick_boxes_show_picked_side_pct(html)
     return html
+
+
+def pick_boxes_show_picked_side_pct(html: str) -> str:
+    """A Pick Confidence box names one team, so its percent is that team's chance (never under 50)."""
+
+    def _box(m: re.Match[str]) -> str:
+        try:
+            v = float(m.group(2))
+        except ValueError:
+            return m.group(0)
+        if v >= 50.0:
+            return m.group(0)
+        return f"{m.group(1)}{_fmt_pct(100.0 - v)}%{m.group(3)}"
+
+    return re.sub(
+        r'(<div class="pc-val"[^>]*>\s*)([\d.]+)%(\s*</div>\s*<div class="pc-side (?:home|away)")',
+        _box,
+        html,
+    )
 
 
 def strip_wnba_g2_td_tiles(html: str) -> str:

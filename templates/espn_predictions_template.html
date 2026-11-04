@@ -870,13 +870,13 @@
                     data-time="{% if is_final %}FINAL{% elif pred.game_time is defined and pred.game_time %}{{ pred.game_time }}{% else %}Upcoming{% endif %}"
                     data-pick="{{ _chart_pick }}"
                     data-conf="{% if _chart_conf is not none %}{{ '%.1f'|format(_chart_conf) }}{% endif %}"
-                    data-h2h="{{ _h2h_txt }}"{% if _l3_mode %} data-h2h-l3="{{ _h2h_txt }}"{% endif %}{% if _h2h_reason %} data-h2h-reason="{{ _h2h_reason }}"{% endif %}{% if sport == 'SOCCER' %} data-plxg="{{ _plxg_txt }}"{% if _plxg_reason %} data-plxg-reason="{{ _plxg_reason }}"{% endif %}{% endif %}
+                    {% if is_premium|default(false) %}data-h2h="{{ _h2h_txt }}"{% if _l3_mode %} data-h2h-l3="{{ _h2h_txt }}"{% endif %}{% if _h2h_reason %} data-h2h-reason="{{ _h2h_reason }}"{% endif %}{% if sport == 'SOCCER' %} data-plxg="{{ _plxg_txt }}"{% if _plxg_reason %} data-plxg-reason="{{ _plxg_reason }}"{% endif %}{% endif %}{% endif %}
                     data-edge="{% if _chart_edge is not none %}{{ '%.1f'|format(_chart_edge) }}{% endif %}"
-                    data-books-spread="{% if sport != 'TENNIS' and pred.disp_book_spread is defined and pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
-                    data-books-total="{% if sport != 'TENNIS' and pred.disp_book_total is defined and pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"
-                    data-pl-spread="{% if sport != 'TENNIS' and pred.disp_pl_spread is defined and pred.disp_pl_spread is not none %}{{ fmt_spread_line(pred.disp_pl_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
-                    data-xs-spread="{% if sport != 'TENNIS' and pred.disp_xs_spread is defined and pred.disp_xs_spread is not none %}{{ fmt_spread_line(pred.disp_xs_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"
-                    data-total-ev="{% if sport != 'TENNIS' and sport != 'SOCCER' and pred.total_ev is defined and pred.total_ev is not none %}{{ '%.1f'|format(pred.total_ev) }}{% endif %}"
+                    {% if is_premium|default(false) %}data-books-spread="{% if sport != 'TENNIS' and pred.disp_book_spread is defined and pred.disp_book_spread is not none %}{{ fmt_spread_line(pred.disp_book_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"{% endif %}
+                    {% if is_premium|default(false) %}data-books-total="{% if sport != 'TENNIS' and pred.disp_book_total is defined and pred.disp_book_total is not none %}{{ fmt_half(pred.disp_book_total) }}{% endif %}"{% endif %}
+                    {% if is_premium|default(false) %}data-pl-spread="{% if sport != 'TENNIS' and pred.disp_pl_spread is defined and pred.disp_pl_spread is not none %}{{ fmt_spread_line(pred.disp_pl_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"{% endif %}
+                    {% if is_premium|default(false) %}data-xs-spread="{% if sport != 'TENNIS' and pred.disp_xs_spread is defined and pred.disp_xs_spread is not none %}{{ fmt_spread_line(pred.disp_xs_spread, pred.home_team_id, pred.away_team_id, (sport == 'MLB')) }}{% endif %}"{% endif %}
+                    {% if is_premium|default(false) %}data-total-ev="{% if sport != 'TENNIS' and sport != 'SOCCER' and pred.total_ev is defined and pred.total_ev is not none %}{{ '%.1f'|format(pred.total_ev) }}{% endif %}"{% endif %}
                     {% if is_premium|default(false) %}
                     data-m-grinder2="{% if pred.glicko2_prob is defined and pred.glicko2_prob is not none %}{{ pred.glicko2_prob }}{% endif %}"
                     data-m-takedown="{% if pred.trueskill_prob is defined and pred.trueskill_prob is not none %}{{ pred.trueskill_prob }}{% endif %}"
@@ -926,18 +926,19 @@
                         {'name': label_ensemble, 'prob': pred.ensemble_prob, 'key': 'consensus'}
                     ] %}
                     {% endif %}
+                    {% set card_paywall = true %}
                     {% include 'includes/game_card_body.html' %}
                     {% set analysis_id = 'analysis-' ~ date ~ '-' ~ loop.index0 %}
                     <div class="analysis-toggle" onclick="toggleAnalysis('{{ analysis_id }}', this)">Analysis ▾</div>
                     <div id="{{ analysis_id }}" class="analysis-panel">
-                        {% if pred.our_method == 'efficiency' and pred.our_home_eff and pred.our_away_eff %}
+                        {% if is_premium|default(false) and pred.our_method == 'efficiency' and pred.our_home_eff and pred.our_away_eff %}
                         <div class="analysis-title">Efficiency-based projection (last 5 games)</div>
                         <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
                             <div>{{ pred.home_team_id }}: ORtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['ortg'] }}{% else %}{{ pred.our_home_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['drtg'] }}{% else %}{{ pred.our_home_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_home_eff is mapping %}{{ pred.our_home_eff['pace'] }}{% else %}{{ pred.our_home_eff.pace }}{% endif %}</strong></div>
                             <div>{{ pred.away_team_id }}: ORtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['ortg'] }}{% else %}{{ pred.our_away_eff.ortg }}{% endif %}</strong> · DRtg <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['drtg'] }}{% else %}{{ pred.our_away_eff.drtg }}{% endif %}</strong> · Pace <strong>{% if pred.our_away_eff is mapping %}{{ pred.our_away_eff['pace'] }}{% else %}{{ pred.our_away_eff.pace }}{% endif %}</strong></div>
                             <div style="margin-top:4px;">Projected score: <strong>{{ (pred.home_team_id|string).split()[-1] }} {{ pred.our_home_pts }} &mdash; {{ pred.our_away_pts }} {{ (pred.away_team_id|string).split()[-1] }}</strong> &nbsp;·&nbsp; Game pace ~{{ pred.our_pace }}</div>
                         </div>
-                        {% elif pred.total_trend_record is defined or pred.spread_trend_record is defined %}
+                        {% elif is_premium|default(false) and (pred.total_trend_record is defined or pred.spread_trend_record is defined) %}
                         <div class="analysis-title">Last 3-Game Trend (vs current XSharp lines)</div>
                         <div style="font-size:0.82em;color:#334155;line-height:1.6;margin-bottom:10px;">
                             {% if pred.our_home_avg is defined and pred.our_away_avg is defined %}

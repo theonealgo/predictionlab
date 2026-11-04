@@ -12,7 +12,11 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-_CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
+try:
+    from served_cache import cache_dir as _cache_dir
+    _CARDS_CACHE_DIR = _cache_dir()
+except Exception:
+    _CARDS_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 
 
 def _app_db_path():
@@ -176,9 +180,9 @@ def _picks_recent_is_stale(sport: str, text: str) -> bool:
     from datetime import datetime, timedelta
     try:
         from zoneinfo import ZoneInfo
-        yesterday = (datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
+        today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
     except Exception:
-        yesterday = (datetime.now().date() - timedelta(days=1)).isoformat()
+        today = datetime.now().date().isoformat()
     path = _app_db_path()
     if not path.is_file():
         return False
@@ -188,7 +192,7 @@ def _picks_recent_is_stale(sport: str, text: str) -> bool:
         row = conn.execute(
             "SELECT date(game_date) FROM games WHERE upper(sport)=? AND home_score IS NOT NULL "
             "AND date(game_date) <= ? ORDER BY date(game_date) DESC LIMIT 1",
-            (sport, yesterday),
+            (sport, today),
         ).fetchone()
         conn.close()
     except Exception:
@@ -430,9 +434,9 @@ def _served_results_are_stale(key: str, html: str) -> bool:
         from datetime import datetime as _dt, timedelta as _td
         try:
             from zoneinfo import ZoneInfo as _Z
-            _y = (_dt.now(_Z("America/New_York")).date() - _td(days=1)).isoformat()
+            _y_today = _dt.now(_Z("America/New_York")).date().isoformat()
         except Exception:
-            _y = (_dt.now().date() - _td(days=1)).isoformat()
+            _y_today = _dt.now().date().isoformat()
         _db = _app_db_path()
         if not _db.is_file():
             return False
@@ -441,7 +445,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
             _c = _sq.connect(f"file:{_db}?mode=ro", uri=True, timeout=2)
             _r = _c.execute(
                 "SELECT MAX(date(game_date)) FROM games WHERE upper(sport)=? AND home_score IS NOT NULL "
-                "AND date(game_date) <= ?", (sport, _y)).fetchone()
+                "AND date(game_date) <= ?", (sport, _y_today)).fetchone()
             _c.close()
         except Exception:
             return False
@@ -480,7 +484,7 @@ def _served_results_are_stale(key: str, html: str) -> bool:
             WHERE upper(sport) = ? AND home_score IS NOT NULL
               AND date(game_date) <= ?
             """,
-            (sport, yesterday.isoformat()),
+            (sport, today.isoformat()),
         ).fetchone()
         conn.close()
     except Exception:
@@ -1964,6 +1968,10 @@ def repair_picks_html(html: str, sport: str) -> str:
     if sport_u == "WNBA":
         html = ensure_wnba_model_boxes(html)
     html = fix_efficiency_na_side(html)
+    if sport_u in ("NCAAB", "NCAAW"):
+        html = drop_duplicate_game_cards(html)
+        html = add_missing_odds_section(html)
+        html = mark_missing_model_lines_na(html)
     if sport_u == "NCAAF":
         html = fill_ncaaf_edge_from_spread(html)
     html = unwrap_pc_name_sides(html)
@@ -2213,6 +2221,89 @@ def _request_results_key(sport: str) -> str:
     return results_serve_key(sport, view, market, league, region, week)
 
 
+
+_DASH_CELL = r"\s*(?:—|&mdash;|–|&ndash;|-)?\s*"
+
+
+_NO_ODDS_NOTE = (
+    'N/A <button type="button" class="h2h-info-btn" title="Odds are posted the day before or the day '
+    'of the contest. Check back on game date." aria-label="Odds are posted the day before or the day '
+    'of the contest. Check back on game date.">i</button>'
+)
+
+
+def add_missing_odds_section(html: str) -> str:
+    """Every card carries Odds & Lines and Projected Score; no line anywhere reads N/A."""
+    if not html or "data-pick-card" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    out = [parts[0]]
+    for part in parts[1:]:
+        if "odds-pricing-section" not in part:
+            m = re.search(r'<div class="card-details" id="card-details-[^"]*">', part)
+            if m:
+                rows = "".join(
+                    f'<tr><td class="market-k">{k}</td><td class="val-books">{_NO_ODDS_NOTE}</td>'
+                    '<td class="val-pl">N/A</td><td class="val-xs">N/A</td></tr>'
+                    for k in ("Spread", "Total")
+                )
+                block = (
+                    '<div class="odds-pricing-section"><div class="odds-pricing-title">Odds &amp; Lines</div>'
+                    '<table class="odds-pricing-table"><thead><tr><th>Market</th>'
+                    '<th class="col-books">Books</th><th class="col-pl">Prediction Lab</th>'
+                    f'<th class="col-xs">XSharp</th></tr></thead><tbody>{rows}</tbody></table>'
+                    '<div class="proj-score-box"><div class="proj-score-title">Projected Score</div>'
+                    '<div class="proj-row"><span class="proj-model pl">Prediction Lab</span>'
+                    '<span class="proj-val">N/A</span></div>'
+                    '<div class="proj-row"><span class="proj-model xs">XSharp</span>'
+                    '<span class="proj-val">N/A</span></div></div></div>'
+                )
+                part = part[: m.end()] + block + part[m.end():]
+        out.append(part)
+    return "".join(out)
+
+
+def mark_missing_model_lines_na(html: str) -> str:
+    """A model with no line for this matchup shows N/A, like Books with no posted line."""
+    if not html or "data-pick-card" not in html:
+        return html
+    html = re.sub(
+        rf'(<td class="val-(?:pl|xs)">){_DASH_CELL}(</td>)',
+        r"\1N/A\2",
+        html,
+    )
+    return re.sub(
+        rf'(<span class="proj-model (?:pl|xs)">[^<]*</span>\s*<span class="proj-val">){_DASH_CELL}(</span>)',
+        r"\1N/A\2",
+        html,
+    )
+
+
+def drop_duplicate_game_cards(html: str) -> str:
+    """Keep the first pick card for each game id; later copies (a reversed home/away row) go."""
+    if not html or "data-pick-card" not in html:
+        return html
+    open_re = re.compile(r'<div\b(?=[^>]*\bdata-pick-card\b)[^>]*\bdata-game-id="([^"]+)"[^>]*>', re.I)
+    tag_re = re.compile(r"<div\b|</div>", re.I)
+    seen: set[str] = set()
+    cuts: list[tuple[int, int]] = []
+    for m in open_re.finditer(html):
+        gid = m.group(1)
+        if gid not in seen:
+            seen.add(gid)
+            continue
+        depth, end = 1, None
+        for t in tag_re.finditer(html, m.end()):
+            depth += 1 if t.group(0).lower().startswith("<div") else -1
+            if depth == 0:
+                end = t.end()
+                break
+        if end is not None:
+            cuts.append((m.start(), end))
+    for start, end in reversed(cuts):
+        html = html[:start] + html[end:]
+    return html
+
 def hide_blank_books_ml(html: str) -> str:
     """Omit Books ML face rows that have no posted number (NHL offseason / no books)."""
     if not html:
@@ -2269,8 +2360,7 @@ def fix_efficiency_na_side(html: str) -> str:
                 except ValueError:
                     pct = None
             if pct is None:
-                pct = donor
-            if pct is None:
+                # Efficiency comes from the PL spread only; never another model's %.
                 return box
             side = (side_m.group(1) if side_m else "").strip()
             if val_m and side.upper() not in {"N/A", "NA", "—", "–", "-", ""}:

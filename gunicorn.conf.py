@@ -5,6 +5,13 @@ Prefer `bash render_start.sh` on Render so /data DB seeding and 8 threads apply.
 """
 import os
 
+# Local only: the project folder (it holds .pushgit) serves just the 5122 site via
+# ./run_local.sh. Test servers run from a copy (qa/test_copy.py) and never take 5122.
+if os.path.isdir(os.path.join(os.path.realpath(os.getcwd()), ".pushgit")):
+    raise SystemExit("gunicorn refused: start test servers from a copy (qa/test_copy.py), not the project folder")
+if os.environ.get("PORT") == "5122":
+    raise SystemExit("gunicorn refused: port 5122 is the local site (./run_local.sh)")
+
 # Render gives this service 1 CPU and 2 GB, but the host shows every core.
 # numpy / OpenBLAS / OpenMP start one thread (and buffer) per visible core, and
 # glibc opens up to 8 malloc arenas per core; together they took a 1-worker app
@@ -41,6 +48,8 @@ timeout = 120
 # Boot contract (NHL77FINAL): disk-seed prediction slates at import; defer
 # preds/odds/props/soccer heavy work ≥60–120s so /healthz + homepage stay
 # responsive on this single worker. Never force-rebuild seeded slates on boot.
+# Served picks/results HTML lives on /data/.cache (served_cache.py) so a
+# redeploy does not wipe every page and stampede this one worker.
 preload_app = False
 accesslog = "-"
 errorlog = "-"

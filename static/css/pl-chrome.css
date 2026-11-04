@@ -1,0 +1,440 @@
+/* Shared site chrome: the header and footer every page shows. Flask pages load this file through
+   base.html and the picks chrome; the React front end loads it too. Selectors start at
+   header.pl2-header and footer.site-directory-footer so they win over research-theme.css. */
+
+header.pl2-header {
+  position: static;
+  z-index: auto;
+  display: block;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  box-sizing: border-box;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+  backdrop-filter: none;
+  color: #111827;
+}
+
+header.pl2-header [hidden] {
+  display: none !important;
+}
+
+header.pl2-header a {
+  text-decoration: none;
+}
+
+header.pl2-header button {
+  font: inherit;
+}
+
+/* Top row: logo, the main links, then search, account and the menu button on the right. */
+header.pl2-header .pl-top {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  padding: 14px 28px 8px;
+}
+
+header.pl2-header .pl-logo {
+  color: #000;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+header.pl2-header .pl-logo:hover,
+header.pl2-header .pl-logo:focus-visible {
+  text-decoration: underline;
+}
+
+header.pl2-header .pl-primary {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  flex: 1;
+  min-width: 0;
+}
+
+header.pl2-header .pl-primary > a,
+header.pl2-header .pl-menu > button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+header.pl2-header .pl-menu {
+  position: relative;
+}
+
+header.pl2-header .pl-menu-list {
+  position: absolute;
+  top: 28px;
+  left: 0;
+  z-index: 70;
+  min-width: 240px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+header.pl2-header .pl-menu-list a {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #000;
+  font-size: 14px;
+}
+
+header.pl2-header .pl-menu-list a:hover {
+  background: #f3f4f6;
+}
+
+header.pl2-header .pl-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
+header.pl2-header .pl-search-form {
+  margin: 0;
+}
+
+header.pl2-header .pl-search {
+  width: 220px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: #000;
+  font-size: 14px;
+  outline: none;
+}
+
+header.pl2-header .pl2-account {
+  position: relative;
+  display: flex;
+}
+
+header.pl2-header .pl2-account-button {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+}
+
+header.pl2-header .pl2-account-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 70;
+  min-width: 220px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+header.pl2-header .pl2-account-menu a,
+header.pl2-header .pl2-account-menu .pl2-account-menu-action {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+header.pl2-header .pl2-account-menu a:hover,
+header.pl2-header .pl2-account-menu .pl2-account-menu-action:hover {
+  background: #f3f4f6;
+}
+
+header.pl2-header .pl2-account-portal-form {
+  margin: 0;
+}
+
+header.pl2-header .pl-btn {
+  padding: 9px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+header.pl2-header .pl-btn.primary {
+  background: #38bdf8;
+  color: #082f49;
+}
+
+header.pl2-header .pl-btn.primary:hover {
+  background: #0ea5e9;
+}
+
+header.pl2-header .pl-hamburger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+header.pl2-header .pl-hamburger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  margin: 0 auto;
+  background: #111827;
+}
+
+/* Second row: quick links. */
+header.pl2-header .pl-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+  padding: 0 28px 12px;
+}
+
+header.pl2-header .pl-secondary a {
+  color: #111827;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+header.pl2-header .pl-secondary a:hover {
+  text-decoration: underline;
+}
+
+/* The all-links drawer, opened by the menu button. */
+header.pl2-header .pl-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  width: min(380px, 92vw);
+  overflow-y: auto;
+  padding: 18px 22px 40px;
+  background: #fff;
+  border-left: 1px solid #e5e7eb;
+  box-shadow: -12px 0 30px rgba(0, 0, 0, 0.08);
+}
+
+header.pl2-header .pl-drawer-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+header.pl2-header .pl-drawer-head button {
+  border: 0;
+  background: none;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+header.pl2-header .pl-drawer-title {
+  margin: 18px 0 8px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+header.pl2-header .pl-drawer a {
+  display: block;
+  padding: 7px 0;
+  color: #111827;
+  font-size: 15px;
+}
+
+/* Drawer sections are folders that open on tap. */
+header.pl2-header .pl-drawer-folder {
+  border-bottom: 1px solid #e5e7eb;
+}
+
+header.pl2-header .pl-drawer-folder summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  color: #111827;
+  font-size: 16px;
+  font-weight: 700;
+  list-style: none;
+  cursor: pointer;
+}
+
+header.pl2-header .pl-drawer-folder summary::-webkit-details-marker {
+  display: none;
+}
+
+header.pl2-header .pl-drawer-folder summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-right: 2px solid #6b7280;
+  border-bottom: 2px solid #6b7280;
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+
+header.pl2-header .pl-drawer-folder[open] summary::after {
+  transform: rotate(-135deg);
+}
+
+header.pl2-header .pl-drawer-folder a {
+  padding-left: 12px;
+}
+
+header.pl2-header .pl-drawer-folder[open] {
+  padding-bottom: 8px;
+}
+
+/* Footer: the Sign up blue with black text, links in four columns, then the legal line. */
+footer.site-directory-footer {
+  position: static;
+  z-index: auto;
+  margin-top: 48px;
+  padding: 40px 40px 32px;
+  background: #38bdf8;
+  color: #000;
+  border-top: 1px solid #0ea5e9;
+  isolation: auto;
+  content-visibility: visible;
+  font-size: 14px;
+}
+
+footer.site-directory-footer .pl-footer-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 32px;
+}
+
+footer.site-directory-footer h4 {
+  margin: 0 0 12px;
+  color: #000;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+footer.site-directory-footer a {
+  display: block;
+  padding: 4px 0;
+  color: #000;
+  font-family: inherit;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+footer.site-directory-footer a:hover {
+  text-decoration: underline;
+}
+
+footer.site-directory-footer .pl-footer-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 16px 28px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(0, 0, 0, 0.18);
+  color: #000;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+footer.site-directory-footer .pl-footer-bottom a {
+  display: inline;
+  padding: 0;
+}
+
+/* Narrow screens: the main links wrap under the logo, and the footer columns stack. */
+@media (max-width: 900px) {
+  header.pl2-header .pl-top {
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    padding: 12px 16px 8px;
+  }
+
+  header.pl2-header .pl-primary {
+    order: 3;
+    width: 100%;
+    gap: 18px;
+    overflow-x: auto;
+  }
+
+  header.pl2-header .pl-search {
+    width: 160px;
+  }
+
+  header.pl2-header .pl-secondary {
+    flex-wrap: nowrap;
+    gap: 14px;
+    padding: 0 16px 10px;
+    overflow-x: auto;
+  }
+
+  footer.site-directory-footer {
+    padding: 32px 18px 24px;
+  }
+
+  footer.site-directory-footer .pl-footer-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  header.pl2-header .pl-search-form {
+    display: none;
+  }
+
+  footer.site-directory-footer .pl-footer-grid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}

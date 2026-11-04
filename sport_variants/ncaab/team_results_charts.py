@@ -3816,6 +3816,9 @@ def _apply_h2h_faces(html: str, sport: str, *, results: bool = False) -> str:
         html = _inject_nhl_consensus_hist_chips(html)
     elif sport_u == "WNBA":
         html = _inject_wnba_consensus_hist_chips(html)
+    elif sport_u in ("NCAAB", "NCAAW"):
+        html = _inject_consensus_hist_chips(html, sport=sport_u, models=_NCAAF_CONSENSUS_MODELS)
+        html = _inject_nhl_pl_vs_books_chips(html, sport=sport_u)
     else:
         html = _inject_face_h2h_chips(html)
         html = _sync_h2h_face_chips(html)
@@ -3846,7 +3849,7 @@ def apply_team_picks_h2h(html: str, sport: str) -> str:
         html = _hide_empty_books_spread_total(html)
     if sport_u == "NFL":
         html = _strip_nfl_duplicate_h2h(html)
-    if sport_u in ("NCAAF", "WNBA", "CFL", "NFL", "NHL"):
+    if sport_u in ("NCAAF", "WNBA", "CFL", "NFL", "NHL", "NCAAB", "NCAAW"):
         # Face shows Consensus Historical Record; keep one H2H in details only.
         html = re.sub(
             r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
@@ -4792,7 +4795,7 @@ def _consensus_d7_combo_lookup(
         )
     except Exception:
         return {}
-    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER", "NHL"):
+    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER", "NHL", "NCAAB", "NCAAW"):
         finals = _season_consensus_finals(sport_u)
     elif sport_u in ("WNBA", "NBA"):
         finals = _wnba_nba_consensus_finals(sport_u)

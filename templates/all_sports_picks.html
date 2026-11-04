@@ -41,7 +41,7 @@
 {% block content %}
 <div class="asp-wrap">
   <h1>All Sports Picks</h1>
-  <p class="asp-lead">Every pick our models make today across all sports, with each pick type's record over the last {{ board.rules.days if board else 14 }} days and last night's results at the bottom.</p>
+  <p class="asp-lead">Every pick our models make today across all sports, with each pick type's graded record and last night's results at the bottom.</p>
 
   {% if not is_premium %}
   <section class="asp-card">
@@ -77,7 +77,7 @@
 
   <section class="asp-card">
     <h2>Picks</h2>
-    <p class="asp-muted"><span class="asp-q">Ladder qualifier</span> = this pick type has {{ board.rules.games }}+ graded picks and a {{ board.rules.rate }}+ hit rate over the last {{ board.rules.days }} days, at a price from -150 to +150.</p>
+    <p class="asp-muted"><span class="asp-q">Ladder qualifier</span> = this pick type has {{ board.rules.games }}+ graded picks, has made money at the prices it was graded at, and hits more often than its price needs to break even, at a price from -150 to +150. Past records do not guarantee future results.</p>
     {% if board.games %}
       {% set ns = namespace(day='') %}
       {% for g in board.games %}
@@ -112,13 +112,13 @@
 
   {% if board.types %}
   <section class="asp-card">
-    <h2>Pick type records — last {{ board.rules.days }} days</h2>
+    <h2>Pick type records</h2>
     <div class="asp-scroll">
       <table class="asp-table">
-        <thead><tr><th>Pick type</th><th>Gap</th><th>Record</th><th></th></tr></thead>
+        <thead><tr><th>Pick type</th><th>Gap</th><th>Record</th><th>Return</th><th></th></tr></thead>
         <tbody>
         {% for t in board.types %}
-          <tr><td>{{ t.type }}</td><td>{{ t.gap }}</td><td>{{ t.record.text }}</td><td>{% if t.qualifies %}<span class="asp-q">Ladder qualifier</span>{% endif %}</td></tr>
+          <tr><td>{{ t.type }}</td><td>{{ t.gap }}</td><td>{{ t.record.text }}</td><td>{{ t.roi }}</td><td>{% if t.qualifies %}<span class="asp-q">Ladder qualifier</span>{% endif %}</td></tr>
         {% endfor %}
         </tbody>
       </table>

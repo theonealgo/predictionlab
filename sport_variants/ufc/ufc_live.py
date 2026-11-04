@@ -405,6 +405,12 @@ def _rewrite_hub_paths(html: str) -> str:
     if not html:
         return html
     html = html.replace("/ufc/results", "/ufc-results")
+    html = re.sub(
+        r'(<link\b[^>]*rel=["\']canonical["\'][^>]*href=["\'])/(?=[^/])',
+        r"\1https://predictionlab.io/",
+        html,
+    )
+    html = html.replace('href="https://predictionlab.io/ufc/"', 'href="https://predictionlab.io/ufc-picks"')
     html = html.replace('href="/ufc/"', 'href="/ufc-picks"')
     html = html.replace("href='/ufc/'", "href='/ufc-picks'")
     html = re.sub(r'href=(["\'])/ufc/\1', r"href=\1/ufc-picks\1", html)

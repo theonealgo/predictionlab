@@ -31,7 +31,8 @@ _SPORT_ORDER = ("NFL", "NBA", "MLB", "NHL", "NCAAF", "NCAAB", "NCAAW", "WNBA", "
 _SPORT_NAME = {"SOCCER": "Soccer", "TENNIS": "Tennis"}
 _FINAL = ("final", "complete", "completed", "closed", "post")
 
-_state: dict = {"data": None, "at": 0.0, "building": False}
+_state: dict = {"data": None, "at": 0.0, "building": False, "build_started": 0.0}
+BUILD_STUCK_SECONDS = 15 * 60
 _lock = threading.Lock()
 
 
@@ -253,7 +254,8 @@ def _type_table(stats: dict) -> list[dict]:
         gap = ("our win chance " if market == "moneyline" else "edge ") + (
             f"{edge * 100:.0f}%+" if market == "moneyline" else f"{edge:g}+")
         rows.append({"type": markets.type_label(sport, o), "gap": gap, "record": _rec(s),
-                     "rate": s["rate"], "n": s["n"], "qualifies": bool(s["qualifies"])})
+                     "rate": s["rate"], "n": s["n"], "roi": f"{s['roi'] * 100:+.1f}%",
+                     "qualifies": bool(s["qualifies"])})
     rows.sort(key=lambda r: (not r["qualifies"], -r["rate"], -r["n"]))
     return rows[:60]
 
@@ -377,6 +379,10 @@ def current() -> dict | None:
     """Last built board; starts a background rebuild when it is stale."""
     with _lock:
         data, at, building = _state["data"], _state["at"], _state["building"]
+        if building and time.time() - _state["build_started"] > BUILD_STUCK_SECONDS:
+            # A build that never returned must not freeze the board on an old day.
+            logger.warning("all-sports picks: build running %.0fs, starting a new one", time.time() - _state["build_started"])
+            building = _state["building"] = False
     if data is None:
         try:
             saved = json.loads(_CACHE_FILE.read_text())
@@ -392,6 +398,7 @@ def current() -> dict | None:
         with _lock:
             if not _state["building"]:
                 _state["building"] = True
+                _state["build_started"] = time.time()
                 threading.Thread(target=_build_bg, name="all-sports-picks", daemon=True).start()
     if data is not None and data.get("today") != today:
         # Yesterday's board while the rebuild runs: never show yesterday's ladder pick as today's.

@@ -220,26 +220,16 @@ def ensure_predictions(*, refresh: bool = False) -> dict[str, Any]:
             sources[pred["prob_source"]] = sources.get(pred["prob_source"], 0) + 1
 
             if existing and not refresh:
+                # A published pick keeps its chances; the sportsbook prices that arrived later are added.
                 conn.execute(
                     """
-                    UPDATE ufc_predictions SET
-                      created_at=?, model_name=?,
-                      home_win_prob=?, away_win_prob=?, pick_ml=?, confidence=?,
-                      prob_source=?, home_ml=?, away_ml=?, books_count=?, explanation=?
+                    UPDATE ufc_predictions SET home_ml=?, away_ml=?, books_count=?
                     WHERE pred_id=?
                     """,
                     (
-                        now,
-                        "UFC Isolation",
-                        pred["home_win_prob"],
-                        pred["away_win_prob"],
-                        pred["pick_ml"],
-                        pred["confidence"],
-                        pred["prob_source"],
                         pred.get("home_ml"),
                         pred.get("away_ml"),
                         pred.get("books_count") or 0,
-                        pred.get("explanation"),
                         existing["pred_id"],
                     ),
                 )

@@ -48,6 +48,9 @@ SIGN_OUT = 'href="/logout"'
 SLOW_S = 10.0
 TIMEOUT_S = 60
 WORKERS = 6
+LIVE_WORKERS = 2  # do not stampede the public gunicorn pool
+_HTML_PAGE = re.compile(r"(?i)<(!DOCTYPE|html|head|body|div|main|section)\b")
+_TEMPLATE_START = re.compile(r"^\s*\{[%{]")
 SPORTS = ("mlb", "nhl", "nba", "nfl", "ncaaf", "ncaab", "ncaaw", "wnba", "cfl",
           "soccer", "tennis", "ufc", "golf")
 START_PAGES = ["/", "/plans", "/account", "/blog", "/performance", "/all-sports-results"] + [
@@ -120,7 +123,7 @@ class Visitor:
                     return r.status_code, r.headers["Location"], path, time.time() - t0
                 path = (loc.path or "/") + (("?" + loc.query) if loc.query else "")
                 continue
-            return r.status_code, r.text, path, time.time() - t0
+            return r.status_code, _response_text(r), path, time.time() - t0
         return 0, "", path, time.time() - t0
 
     def login(self, email: str, password: str) -> bool:
@@ -179,8 +182,27 @@ _BROKEN_MARKERS = ("Traceback (most recent call last)", "Internal Server Error",
                    "UndefinedError", "{% ", "{{ st.", "{{ g.")
 
 
+def _response_text(resp: requests.Response) -> str:
+    """HTML/text body, or a short placeholder so JPEG/CSV bytes are not scanned as a page."""
+    ctype = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if ctype.startswith("text/") or "html" in ctype or ctype in (
+        "application/json", "application/xml", "application/javascript", "application/xhtml+xml",
+    ):
+        return resp.text
+    return f"[{ctype or 'binary'} {len(resp.content)} bytes]"
+
+
 def _page_broken(where: str, body: str) -> list[str]:
     """A page that opens but shows a server error or raw template code."""
+    if not body:
+        return []
+    # JPEG/PNG bytes (and the placeholder from _response_text) can contain '{% ' by chance.
+    if body.startswith("[") and " bytes]" in body[:80]:
+        return []
+    if body[:3] == "\xff\xd8\xff" or body.startswith(("\x89PNG", "GIF8")):
+        return []
+    if not _TEMPLATE_START.search(body) and not _HTML_PAGE.search(body[:8000]):
+        return []
     text = re.sub(r"<script\b.*?</script>", "", body, flags=re.S | re.I)
     for marker in _BROKEN_MARKERS:
         if marker in text:
@@ -396,12 +418,20 @@ def run(base: str) -> tuple[list[str], dict]:
         fails += _paywall_at_own_address(base)
         fails += _daily_report_issues(base)
         viewers: dict[str, Visitor] = {"logged-out visitor": Visitor(base)}
+        paid = logins.get("paid")
         for who, key in (("paid account", "paid"), ("free account", "free")):
-            f, v = _login_logout(base, who, *logins[key])
+            creds = logins.get(key)
+            if not creds:
+                print(f"NOTE: no saved {who} for {base}; skipped", flush=True)
+                continue
+            f, v = _login_logout(base, who, *creds)
             fails += f
-            if v is not None and v.login(*logins[key]):
+            if v is not None and v.login(*creds):
                 viewers[who] = v
-        fails += _logout_during_slow_page(base, *logins["paid"])
+        if paid:
+            fails += _logout_during_slow_page(base, *paid)
+        else:
+            print(f"NOTE: no saved paid account for {base}; skipped logout-during-load", flush=True)
 
         site_links: dict[str, tuple[str, str]] = {}
         outside_links: dict[str, str] = {}
@@ -426,7 +456,11 @@ def run(base: str) -> tuple[list[str], dict]:
                 for url in outside:
                     outside_links.setdefault(url, page)
         stats["links"], stats["outside"] = len(site_links), len(outside_links)
-        with ThreadPoolExecutor(WORKERS) as pool:
+        workers = LIVE_WORKERS if _test_accounts().is_live(base) else WORKERS
+        if workers != WORKERS:
+            print(f"NOTE: live check uses {workers} workers so the checker does not stall the site",
+                  flush=True)
+        with ThreadPoolExecutor(workers) as pool:
             jobs = [pool.submit(_check_site_link, viewers[who], who, path, page)
                     for path, (who, page) in sorted(site_links.items())]
             for job in jobs:
@@ -436,6 +470,10 @@ def run(base: str) -> tuple[list[str], dict]:
 
 def main() -> int:
     base = (sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:5122").rstrip("/")
+    if "127.0.0.1" in base or "localhost" in base:
+        import subprocess
+        subprocess.call([sys.executable, str(Path(__file__).resolve().parents[1] / "tools" / "pl_backup.py"),
+                         "--reason", "before site_links_check"])
     t0 = time.time()
     fails, stats = run(base)
     print(f"opened {stats['pages']} pages and {stats['links']} site links in {time.time() - t0:.0f}s")

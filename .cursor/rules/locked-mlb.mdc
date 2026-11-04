@@ -20,4 +20,6 @@ Owner 2026-10-17 (evening): /api/picks/mlb latest-final rows carry the stored Gr
 
 Owner 2026-10-30: picks Predictions Image at the bottom serves the full 1080x1920 image (the ?w=640 copy is gone; `mlb_ui_fixup._share_preview_img`). Miss closed — locked.
 
+Owner 2026-11-02: checker had no fails for MLB. Miss closed — locked. Do not edit MLB while fixing other sports.
+
 Do not put lock text on user-facing HTML.

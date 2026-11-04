@@ -78,6 +78,7 @@
       <div class="f"><div class="k">Odds</div><div class="v">{{ today_pick.odds }} ({{ today_pick.decimal }})</div></div>
       <div class="f"><div class="k">Record on this pick type</div><div class="v">{{ today_pick.record }}</div></div>
       <div class="f"><div class="k">Needed to break even at these odds</div><div class="v">{{ today_pick.break_even }}</div></div>
+      <div class="f"><div class="k">Expected return per $1 at this record</div><div class="v">{{ today_pick.expected }}</div></div>
       <div class="f"><div class="k">Wager</div><div class="v">{{ today_pick.stake }}</div></div>
     </div>
     <p class="ld-muted" style="margin-top:8px;">{% if today_pick.start %}Starts {{ today_pick.start }} · {% endif %}{{ today_pick.market }}{% if today_pick.pick_type %} · {{ today_pick.pick_type }}{% endif %} · Odds locked when the pick was published</p>
@@ -164,7 +165,7 @@
     <h2>How the ladder works</h2>
     <ul class="ld-rules">
       <li>Day 1 starts with a $10 wager on one moneyline, spread or total pick from our published predictions, priced between -150 and +150.</li>
-      <li>Every sport is checked each day. The pick comes from the kind of pick our models do best in over the last 21 days against sportsbook lines (at least 60% across 20 or more graded games), and only when that record, allowing for a short sample, still beats the win rate the pick's odds need to break even.</li>
+      <li>Every sport is checked each day. A pick qualifies only when its kind of pick has at least 100 graded picks against pre-game sportsbook lines, has made money at the prices it was graded at, and hits more often than the pick's odds need to break even. The kind with the biggest margin is taken. Past records do not guarantee future results.</li>
       <li>A win adds the profit, at the odds recorded when the pick was published, to the next day's wager.</li>
       <li>A loss ends the ladder. A push or void is not a loss: the wager carries to the next day unchanged.</li>
       <li>If no pick meets our requirements on a given date, no pick is forced: the ladder waits for the next qualifying pick. Ladder days count picks, not calendar days.</li>

@@ -835,7 +835,31 @@ def _write_tennis_results_cache(page: str) -> None:
         return
 
 
+def _unique_game_ids(page: str) -> str:
+    """Two matches between the same players share a name-built id; add the match date."""
+    if not page or "data-game-id=" not in page:
+        return page
+    seen: dict[str, int] = {}
+    parts = re.split(r"(?=<div class=\"game-card-stack\b)", page)
+    out = [parts[0]]
+    for card in parts[1:]:
+        gm = re.search(r'data-game-id="([^"]+)"', card[:3000])
+        if gm:
+            gid = gm.group(1)
+            seen[gid] = seen.get(gid, 0) + 1
+            if seen[gid] > 1:
+                dm = re.search(r'class="game-time">[^<]*?(20\d\d)-(\d\d)-(\d\d)', card)
+                tag = "".join(dm.groups()) if dm else str(seen[gid])
+                card = card.replace(f'data-game-id="{gid}"', f'data-game-id="{gid}_{tag}"', 1)
+        out.append(card)
+    return "".join(out)
+
+
 def render_tennis_results(*, view: str = "normal") -> str:
+    return _unique_game_ids(_render_tennis_results(view=view))
+
+
+def _render_tennis_results(*, view: str = "normal") -> str:
     view_l = (view or "normal").strip().lower()
     is_chart = view_l in ("chart", "tabs", "markets", "tabbed")
     if not is_chart:

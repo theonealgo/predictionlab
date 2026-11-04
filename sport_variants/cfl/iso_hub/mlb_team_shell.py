@@ -819,7 +819,10 @@ def _cfl_share_rows(
     dates: list[str],
     today: str,
 ) -> tuple[list[dict[str, Any]], str]:
-    slate = today if today in dates else (dates[0] if dates else "")
+    ahead = sorted(d for d in dates if d >= today)
+    if not ahead:
+        return [], ""
+    slate = ahead[0]
     rows: list[dict[str, Any]] = []
     for card in cards:
         day = render._date_key(card.get("game_date")) or ""

@@ -171,7 +171,7 @@ IN_SEASON_MUST = ("NFL", "MLB", "Soccer", "NCAAF", "CFL", "Tennis", "UFC", "Golf
 OFFSEASON_OK_EMPTY = frozenset({"NBA", "NHL", "NCAAB", "NCAAW"})
 
 # Signed-off face is Consensus Historical Record; H2H stays in details.
-_CONSENSUS_HIST_FACE_SPORTS = frozenset({"MLB", "NFL", "NCAAF", "CFL", "WNBA", "NHL", "NBA"})
+_CONSENSUS_HIST_FACE_SPORTS = frozenset({"MLB", "NFL", "NCAAF", "CFL", "WNBA", "NHL", "NBA", "NCAAB", "NCAAW"})
 
 # 302 is OK (login / plans / auth-gated tools). Everything else must 200.
 ALLOW_302 = {
@@ -489,6 +489,18 @@ def _header_block(html: str) -> str:
         flags=re.I,
     )
     return m.group(0) if m else (html or "")[:12000]
+
+
+
+def _no_upcoming_pick_cards(html: str) -> bool:
+    """Every pick card is final (off-season): the predictions image is hidden by design."""
+    times = re.findall(
+        r'<div\b[^>]*\bdata-pick-card\b[^>]*\bdata-time="([^"]*)"', html or "", flags=re.I
+    )
+    times += re.findall(
+        r'<div\b[^>]*\bdata-time="([^"]*)"[^>]*\bdata-pick-card\b', html or "", flags=re.I
+    )
+    return bool(times) and all("final" in t.lower() for t in times)
 
 
 class ChromeChecker:
@@ -877,9 +889,12 @@ class ChromeChecker:
         banner = _picks_no_predictions_banner(body, sport)
         has_cards = _has_pick_cards(body)
         has_today = f'id="date-{today}"' in (body or "")
+        # The site header greens a sport only while ESPN has it in season.
+        link = re.search(rf'<a href="{re.escape(picks)}"([^>]*)>', body or "")
+        off_season = bool(link) and "in-season" not in link.group(1)
         # Explicit empty banner is always a fail for in-season sports — even if
         # leftover script markup or previews make the page look non-empty.
-        if banner and sport not in OFFSEASON_OK_EMPTY:
+        if banner and sport not in OFFSEASON_OK_EMPTY and not off_season:
             self.add(
                 f"{sport} picks slate",
                 FAIL,
@@ -959,7 +974,8 @@ class ChromeChecker:
                     "Efficiency is not a copied % with an N/A side",
                     url=url,
                 )
-            share = share_ad_card_issues(body)
+            no_upcoming = _no_upcoming_pick_cards(body)
+            share = [] if no_upcoming else share_ad_card_issues(body)
             if share:
                 self.add(
                     f"{sport} share card",
@@ -1006,7 +1022,7 @@ class ChromeChecker:
                     img_bytes = img_resp.content or b""
                 except Exception:
                     img_status = 0
-            image_issues = predictions_share_image_issues(
+            image_issues = [] if no_upcoming and not img_src else predictions_share_image_issues(
                 body, img_bytes, img_status, img_type
             )
             if image_issues:
@@ -1024,7 +1040,7 @@ class ChromeChecker:
                     url=url,
                 )
             return
-        if sport in OFFSEASON_OK_EMPTY or "is in the off-season" in (body or ""):
+        if sport in OFFSEASON_OK_EMPTY or off_season or "is in the off-season" in (body or ""):
             return
         self.add(
             f"{sport} picks slate",
@@ -1962,6 +1978,32 @@ class ChromeChecker:
                             "Pick cards are not 2 per row (or still 3-up / full-bleed)",
                             url=purl,
                         )
+            if (sport in _CONSENSUS_HIST_FACE_SPORTS or sport == "UFC") and _has_pick_cards(phtml):
+                from qa.chart_shape import consensus_chip_vs_boxes_issues
+
+                chip_miss = consensus_chip_vs_boxes_issues(phtml, sport)
+                self.add(
+                    f"{sport} Consensus Historical Record vs model boxes",
+                    FAIL if chip_miss else PASS,
+                    "; ".join(chip_miss) if chip_miss
+                    else "Every card's consensus pattern matches its model boxes",
+                    url=purl,
+                )
+            # Soccer is three-way: a pick can lead at under 50%.
+            if sport != "Soccer" and _has_pick_cards(phtml):
+                low = [
+                    v for v in re.findall(
+                        r'pc-val"[^>]*>\s*([\d.]+)%\s*</div>\s*<div class="pc-side', phtml
+                    )
+                    if float(v) < 50.0
+                ]
+                self.add(
+                    f"{sport} Pick Confidence box percent vs named team",
+                    FAIL if low else PASS,
+                    f"{len(low)} box(es) name a team at under 50% (the other team's chance): {', '.join(low[:5])}"
+                    if low else "Every box shows the named team's own chance",
+                    url=purl,
+                )
             if sport in ("MLB", "NFL", "NCAAF", "CFL") and _has_pick_cards(phtml):
                 hist = compact_consensus_hist_face_issues(phtml, sport)
                 if hist:

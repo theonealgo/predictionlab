@@ -79,7 +79,7 @@ def _last3(conn, sport: str, team: str, before: str) -> list[tuple[float, float]
 
 
 def _numbers(gid: str):
-    """(home, away, home avg, away avg, six game totals) or None when either team has < 3 finals."""
+    """(home, away, home avg, away avg, game totals) or None when either team has no finals."""
     hit = _MEMO.get(gid)
     if hit and time.time() - hit[0] < _MEMO_TTL:
         return hit[1]
@@ -95,12 +95,13 @@ def _numbers(gid: str):
                 sport, home, away, day = row
                 hg = _last3(conn, sport, home, day)
                 ag = _last3(conn, sport, away, day)
-                if len(hg) == 3 and len(ag) == 3:
+                # Early season: use the finals a team has (up to 3).
+                if hg and ag:
                     out = (
                         home,
                         away,
-                        sum(s for s, _ in hg) / 3,
-                        sum(s for s, _ in ag) / 3,
+                        sum(s for s, _ in hg) / len(hg),
+                        sum(s for s, _ in ag) / len(ag),
                         [s + o for s, o in hg + ag],
                     )
         finally:
@@ -121,7 +122,7 @@ def _short(full: str, shown: list[str], idx: int) -> str:
 
 
 def h2h_text(gid: str, card: str) -> str | None:
-    """The H2H Last 10 line for one card, or None without a 3-game sample for both teams."""
+    """The H2H Last 10 line for one card, or None when either team has no finals."""
     nums = _numbers(gid)
     if not nums:
         return None

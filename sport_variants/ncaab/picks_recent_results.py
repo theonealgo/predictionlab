@@ -232,9 +232,14 @@ def _num_cell(cell: str):
 
 
 def _card_xsharp_result(card: str):
-    """(spread grade, total grade) for XSharp on one final card: True, False, or None.
+    return _card_line_result(card, "val-xs")
 
-    Uses only the lines printed on the card: XSharp versus the books spread
+
+def _card_line_result(card: str, col: str):
+    """(spread grade, total grade) for one model column (val-pl / val-xs) on one
+    final card: True, False, or None.
+
+    Uses only the lines printed on the card: the model versus the books spread
     and total, graded on the final score. A push or no lean is None.
     """
     import re
@@ -250,11 +255,13 @@ def _card_xsharp_result(card: str):
         m = re.search(
             rf'<td class="market-k">{market}</td>\s*'
             r'<td class="val-books">([\s\S]*?)</td>\s*'
-            r'<td class="val-pl">[\s\S]*?</td>\s*'
+            r'<td class="val-pl">([\s\S]*?)</td>\s*'
             r'<td class="val-xs">([\s\S]*?)</td>',
             card,
         )
-        return (m.group(1), m.group(2)) if m else (None, None)
+        if not m:
+            return None, None
+        return m.group(1), (m.group(2) if col == "val-pl" else m.group(3))
 
     def _home_margin(parsed):
         team, num = parsed
@@ -335,8 +342,8 @@ def _ncaab_saved_results_html() -> str:
     return ""
 
 
-def xsharp_card_grades(start, end) -> tuple[int, int, int, int]:
-    """XSharp (spread wins, spread graded, total wins, total graded) on saved NCAAB finals."""
+def xsharp_card_grades(start, end, col: str = "val-xs") -> tuple[int, int, int, int]:
+    """(spread wins, spread graded, total wins, total graded) on saved NCAAB finals."""
     import re
     from pathlib import Path
 
@@ -352,7 +359,7 @@ def xsharp_card_grades(start, end) -> tuple[int, int, int, int]:
         if dt < start or dt > end:
             continue
         for card in re.split(r'<div class="game-card pick-card"', content)[1:]:
-            sg, tg = _card_xsharp_result(card)
+            sg, tg = _card_line_result(card, col)
             if sg is not None:
                 sn += 1
                 sw += int(sg)
@@ -362,8 +369,8 @@ def xsharp_card_grades(start, end) -> tuple[int, int, int, int]:
     return sw, sn, tw, tn
 
 
-def xsharp_card_windows() -> dict[str, tuple[int, int, int, int]] | None:
-    """XSharp grades for Last Night / Last 7 / Last 30 ending on the latest saved final."""
+def xsharp_card_windows(col: str = "val-xs") -> dict[str, tuple[int, int, int, int]] | None:
+    """Model grades for Last Night / Last 7 / Last 30 ending on the latest saved final."""
     latest = _ncaab_db_latest_final()
     if not latest:
         return None
@@ -372,9 +379,9 @@ def xsharp_card_windows() -> dict[str, tuple[int, int, int, int]] | None:
     except ValueError:
         return None
     return {
-        "ln": xsharp_card_grades(latest_dt, latest_dt),
-        "d7": xsharp_card_grades(latest_dt - timedelta(days=6), latest_dt),
-        "d30": xsharp_card_grades(latest_dt - timedelta(days=29), latest_dt),
+        "ln": xsharp_card_grades(latest_dt, latest_dt, col),
+        "d7": xsharp_card_grades(latest_dt - timedelta(days=6), latest_dt, col),
+        "d30": xsharp_card_grades(latest_dt - timedelta(days=29), latest_dt, col),
     }
 
 
@@ -553,6 +560,49 @@ def refresh_ncaab_offseason_strip(html: str) -> str:
     return html2 if n else html
 
 
+def _results_page_totals(ln_label: str) -> list[dict] | None:
+    """Prediction Lab / XSharp totals (Last Night, Last 7, Last 30) as the saved
+    results page prints them (graded on the published lines), when that page's
+    Last Night is the same night."""
+    import re
+
+    html = _ncaab_saved_results_html()
+    if not html or f"Results — {ln_label}" not in html:
+        return None
+    m = re.search(r'id="pl-totals-(?:three-way|records)"[\s\S]*?</table>', html)
+    if not m:
+        return None
+    out = [{}, {}, {}]
+    for name, keys in (
+        ("Prediction Lab", ("pl_total_correct", "pl_total_graded", "pl_total_pct")),
+        ("XSharp", ("total_correct", "total_graded", "total_pct")),
+    ):
+        row = re.search(
+            rf'<td class="bucket">\s*{name}\s*</td>([\s\S]*?)</tr>', m.group(0)
+        )
+        if not row:
+            continue
+        cells = re.findall(r"<td[^>]*>([\s\S]*?)</td>", row.group(1))[:3]
+        for i, cell in enumerate(cells):
+            wl = re.search(r"(\d+)\s*[-–]\s*(\d+)", re.sub(r"<[^>]+>", " ", cell))
+            if not wl:
+                continue
+            w, l = int(wl.group(1)), int(wl.group(2))
+            out[i][keys[0]], out[i][keys[1]] = w, w + l
+            out[i][keys[2]] = round(100.0 * w / (w + l), 1) if w + l else None
+    # Prediction Lab spread: the Last Night / Last 7 boards (a push is not a loss).
+    boards = re.findall(
+        r'class="daily-model">[^<]*Spread</div>\s*<div class="daily-acc"[^>]*>[^<]*</div>\s*'
+        r'<div class="daily-rec">\s*(\d+)\s*-\s*(\d+)',
+        html,
+    )[:2]
+    for i, (w, l) in enumerate(boards):
+        w, l = int(w), int(l)
+        out[i]["pl_spread_covered"], out[i]["pl_spread_graded"] = w, w + l
+        out[i]["pl_spread_pct"] = round(100.0 * w / (w + l), 1) if w + l else None
+    return out if any(out) else None
+
+
 def _build_block(sport: str) -> str:
     import NHL77FINAL as N
 
@@ -588,8 +638,11 @@ def _build_block(sport: str) -> str:
     _fill_efficiency_and_grades(sport_u, daily)
     if daily and hasattr(N, "_compute_spread_total_for_daily"):
         try:
+            N._attach_h2h_projection_to_daily_results(sport_u, daily, n=10)
+            N._attach_published_lines(sport_u, daily)
             N._compute_spread_total_for_daily(
                 sport_u, daily, skip_efficiency=True,
+                skip_h2h=True,
             )
         except Exception:
             pass
@@ -619,10 +672,13 @@ def _build_block(sport: str) -> str:
         ("Last 7 days", last7, yest - timedelta(days=6), yest),
         ("Last 30 days", last30, start, yest),
     )
+    page_totals = _results_page_totals(ln_label) if sport_u == "NCAAB" else None
     cols = []
-    for title, tally, w_start, w_end in windows:
+    for idx, (title, tally, w_start, w_end) in enumerate(windows):
         games = int((tally or {}).get("games") or 0)
         st = _spread_total_stats(N, daily, w_start, w_end, tally)
+        if page_totals and page_totals[idx]:
+            st = {**st, **page_totals[idx]}
         ml_pairs = [(label, _rec(tally, key)) for key, label in _MODELS]
         sp_pairs = [
             (label, _st_rec(st, wk, nk, pk))

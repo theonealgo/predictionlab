@@ -5032,7 +5032,10 @@ def plans_page():
                         <li>Projected Scores for Every Game</li>
                         <li>Full Odds Engine (ML, Spread, Total)</li>
                         <li>Player Props Picks &amp; Projections</li>
-                        <li>Model Performance Calculator Access</li>
+                        <li>The 10-Day Ladder</li>
+                        <li>All Sports Picks</li>
+                        <li>All Sports Results</li>
+                        <li>Model Performance</li>
                         <li>All Sports Covered</li>
                         <li>Cancel Anytime</li>
                     </ul>
@@ -5048,7 +5051,10 @@ def plans_page():
                         <li>Projected Scores for Every Game</li>
                         <li>Full Odds Engine (ML, Spread, Total)</li>
                         <li>Player Props Picks &amp; Projections</li>
-                        <li>Model Performance Calculator Access</li>
+                        <li>The 10-Day Ladder</li>
+                        <li>All Sports Picks</li>
+                        <li>All Sports Results</li>
+                        <li>Model Performance</li>
                         <li>All Sports Covered</li>
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>
@@ -5066,7 +5072,10 @@ def plans_page():
                         <li>Projected Scores for Every Game</li>
                         <li>Full Odds Engine (ML, Spread, Total)</li>
                         <li>Player Props Picks &amp; Projections</li>
-                        <li>Model Performance Calculator Access</li>
+                        <li>The 10-Day Ladder</li>
+                        <li>All Sports Picks</li>
+                        <li>All Sports Results</li>
+                        <li>Model Performance</li>
                         <li>All Sports Covered</li>
                         <li>Priority Support</li>
                         <li>Cancel Anytime</li>

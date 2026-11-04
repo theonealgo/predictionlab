@@ -15,6 +15,16 @@ if __name__ == "__main__":
     # ``import NHL77FINAL`` from helpers must get this running app (as under gunicorn),
     # not a second copy found elsewhere on sys.path.
     sys.modules.setdefault("NHL77FINAL", sys.modules[__name__])
+    # Local only: the project folder (it holds .pushgit) serves just the 5122 site;
+    # test servers run from a copy (qa/test_copy.py) and never take 5122.
+    import os as _guard_os
+    _guard_main = _guard_os.path.isdir(_guard_os.path.join(_guard_os.path.dirname(_guard_os.path.abspath(__file__)), ".pushgit"))
+    _guard_port = _guard_os.environ.get("PORT", "")
+    if _guard_main and _guard_port != "5122":
+        sys.exit("refused: the project folder serves only the 5122 site (./run_local.sh); "
+                 "start test servers from a copy (qa/test_copy.py)")
+    if not _guard_main and _guard_port == "5122":
+        sys.exit("refused: port 5122 is the local site (./run_local.sh)")
 import re
 import csv
 import io
@@ -227,11 +237,22 @@ _SPORT_PREDICTIONS_PAGE_STALE_MAX = {
     'NCAAF': 1800,
     'WNBA': 1200,
 }
+# Set only by the background warm thread (in-process), so a visitor can never force a rebuild.
+_PAGE_REBUILD_LOCAL = threading.local()
+
+
+def _pl_force_page_rebuild() -> bool:
+    if getattr(_PAGE_REBUILD_LOCAL, "force", False):
+        return True
+    # isolate_checker_fixes.schedule_picks_refresh: a refresh must not re-save the cached page.
+    return threading.current_thread().name.startswith("picks-refresh-")
+
+
 _MANUAL_BANNER_ITEMS = [
-    {'label': 'NHL ⭐ Grinder2', 'pct': '83.3%', 'record': '40-8'},
-    {'label': '🎲 NBA O/U (XSharp)', 'pct': '82.6%', 'record': '247/299'},
-    {'label': 'MLB 🎯 Moneyline (Sharp Consensus)', 'pct': '60.0%', 'record': '60-40'},
-    {'label': 'NHL 📊 Edge', 'pct': '56.5%', 'record': '113-87'},
+    {'label': 'NHL Grinder2', 'pct': '83.3%', 'record': '40-8'},
+    {'label': 'NBA O/U (XSharp)', 'pct': '82.6%', 'record': '247/299'},
+    {'label': 'MLB Moneyline (Sharp Consensus)', 'pct': '60.0%', 'record': '60-40'},
+    {'label': 'NHL Edge', 'pct': '56.5%', 'record': '113-87'},
 ]
 _SHARE_IMAGE_CACHE_DIR = _os_v2.path.join(_os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'share_images')
 _SHARE_TOKEN_RE = re.compile(r'^[a-f0-9]{32}$')
@@ -4710,13 +4731,14 @@ def _hydrate_book_lines_db_only__ncaaf(sport, predictions):
 
 
 def _hydrate_book_lines_db_only__nba(sport, predictions):
-    """Fill book_* from betting_lines only (no ESPN HTTP — safe inside get_upcoming)."""
+    """Fill book_* from betting_lines only (no ESPN HTTP — safe inside get_upcoming).
+
+    Finished cards on the picks page keep the sportsbook line stored before tip-off."""
     if not predictions:
         return
     upcoming = [
         p for p in predictions
         if isinstance(p, dict)
-        and p.get('home_score') is None
         and p.get('game_id')
     ]
     if not upcoming:
@@ -5705,7 +5727,9 @@ def _set_card_pl_spread__soccer(card: dict, sport: str = 'NBA') -> None:
         return
     sp = _round_to_half(float(sp))
     # MLB spread is faded at parameter level; do not re-align to ensemble ML.
-    if sport != 'MLB':
+    if sport != 'MLB' and not (
+        str(sport or '').upper() in ('NCAAB', 'NCAAW') and _college_line_is_rating(card)
+    ):
         hp = _pl_home_prob_for_spread_display(card)
         if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
             home_ml_fav = hp > 50.0
@@ -5757,7 +5781,9 @@ def _set_card_pl_spread(card: dict, sport: str = 'NBA') -> None:
         return
     sp = _round_to_half(float(sp))
     # MLB spread is faded at parameter level; do not re-align to ensemble ML.
-    if sport != 'MLB':
+    if sport != 'MLB' and not (
+        str(sport or '').upper() in ('NCAAB', 'NCAAW') and _college_line_is_rating(card)
+    ):
         hp = _pl_home_prob_for_spread_display(card)
         if hp is not None and sp != 0 and abs(hp - 50.0) >= 0.05:
             home_ml_fav = hp > 50.0
@@ -8008,6 +8034,51 @@ def _ncaaf_spread_copies_grinder2(card: dict, home_pct: float) -> bool:
     return abs(face - g2) < 0.05
 
 
+def _ncaaf_card_day(card: dict) -> str:
+    for key in ('game_date', 'date', 'game_datetime', 'start_time'):
+        m = re.match(r'(20\d\d-\d\d-\d\d)', str(card.get(key) or ''))
+        if m:
+            return m.group(1)
+    return ''
+
+
+def _ncaaf_card_started(card: dict) -> bool:
+    """Scored, final, or dated before today (ET): the published Edge stays."""
+    if card.get('home_score') is not None or card.get('away_score') is not None:
+        return True
+    status = str(card.get('status') or card.get('game_status') or '').lower()
+    if 'final' in status or 'progress' in status:
+        return True
+    day = _ncaaf_card_day(card)
+    if not day:
+        return False
+    try:
+        from zoneinfo import ZoneInfo
+        today = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+    except Exception:
+        return False
+    return day < today
+
+def _ncaaf_card_elo_pct(card: dict, home, away):
+    """Edge for a placeholder card from Elo as it stood before the card's game day.
+
+    A finished game must not read ratings that already include its own result.
+    """
+    day = _ncaaf_card_day(card)
+    if day:
+        try:
+            from team_results_charts import ncaaf_pregame_elo_home_pct
+            return ncaaf_pregame_elo_home_pct(home, away, day)[0]
+        except Exception:
+            pass
+    if card.get('home_score') is not None or _picks_are_frozen(card):
+        return None
+    try:
+        from team_results_charts import ncaaf_live_elo_home_pct
+        return ncaaf_live_elo_home_pct(home, away)
+    except Exception:
+        return None
+
 def _fill_ncaaf_display_gaps__ncaaf(card: dict) -> None:
     """NCAAF only. Fill blank PL/XSharp lines and placeholder Edge 50%."""
     if not isinstance(card, dict):
@@ -8047,14 +8118,11 @@ def _fill_ncaaf_display_gaps__ncaaf(card: dict) -> None:
         card['efficiency_pick'] = 'HOME' if ep >= 50.0 else 'AWAY'
     if not _ncaaf_elo_is_placeholder(card.get('elo_prob')):
         return
+    if _ncaaf_card_started(card):
+        return
     home = card.get('home_team_id') or card.get('home')
     away = card.get('away_team_id') or card.get('away')
-    live = None
-    try:
-        from team_results_charts import ncaaf_live_elo_home_pct
-        live = ncaaf_live_elo_home_pct(home, away)
-    except Exception:
-        live = None
+    live = _ncaaf_card_elo_pct(card, home, away)
     if live is not None and not _ncaaf_elo_is_placeholder(live):
         card['elo_prob'] = live
 
@@ -8086,14 +8154,11 @@ def _fill_ncaaf_display_gaps(card: dict) -> None:
         card['efficiency_pick'] = 'HOME' if ep >= 50.0 else 'AWAY'
     if not _ncaaf_elo_is_placeholder(card.get('elo_prob')):
         return
+    if _ncaaf_card_started(card):
+        return
     home = card.get('home_team_id') or card.get('home')
     away = card.get('away_team_id') or card.get('away')
-    live = None
-    try:
-        from team_results_charts import ncaaf_live_elo_home_pct
-        live = ncaaf_live_elo_home_pct(home, away)
-    except Exception:
-        live = None
+    live = _ncaaf_card_elo_pct(card, home, away)
     if live is not None and not _ncaaf_elo_is_placeholder(live):
         card['elo_prob'] = live
         return
@@ -9838,6 +9903,68 @@ def _apply_mlb_published_lines(daily_results) -> None:
                 g[key] = val
 
 
+def _attach_published_lines(sport, daily_results) -> None:
+    """Result cards grade the lines published before the game (lock_* columns),
+    not a head-to-head average that already includes the final."""
+    games = [
+        g for dd in (daily_results or {}).values()
+        for g in (dd.get('games') or [])
+        if isinstance(g, dict) and g.get('game_id')
+    ]
+    if not games:
+        return
+    by_id = {}
+    try:
+        conn = get_db_connection()
+        ids = sorted({str(g['game_id']) for g in games})
+        for i in range(0, len(ids), 400):
+            part = ids[i:i + 400]
+            rows = conn.execute(
+                "SELECT game_id, lock_pl_spread, lock_pl_total, lock_xs_spread, lock_xs_total "
+                f"FROM predictions WHERE sport = ? AND game_id IN ({','.join('?' * len(part))})",
+                [str(sport).upper(), *part],
+            ).fetchall()
+            for r in rows:
+                by_id[str(r['game_id'])] = r
+        rating_ids = (
+            _college_rating_lock_ids(conn, ids)
+            if str(sport).upper() in ('NCAAB', 'NCAAW') else set()
+        )
+        conn.close()
+    except Exception as _pub_e:
+        logger.debug(f"[{sport}] published lines lookup failed: {_pub_e}")
+        return
+    for g in games:
+        row = by_id.get(str(g['game_id']))
+        if row is None:
+            continue
+        for key, col in (
+            ('our_spread', 'lock_pl_spread'),
+            ('our_total', 'lock_pl_total'),
+            ('xgb_spread', 'lock_xs_spread'),
+            ('xgb_total', 'lock_xs_total'),
+        ):
+            val = _to_float_safe(row[col])
+            if val is not None:
+                g[key] = val
+                if key == 'our_spread' and str(g['game_id']) in rating_ids:
+                    g['our_method'] = 'college-ratings'
+                    g.pop('efficiency_spread', None)
+                    g.pop('disp_pl_spread', None)
+                elif key == 'our_spread':
+                    # Same side the picks card shows (_set_card_pl_spread), so
+                    # Efficiency grades the team the customer saw.
+                    try:
+                        hp = _pl_home_prob_for_spread_display(g)
+                        if hp is not None and val != 0 and abs(hp - 50.0) >= 0.05:
+                            if (hp > 50.0) != (val > 0):
+                                g[key] = -val
+                    except Exception:
+                        pass
+                    g.pop('efficiency_spread', None)
+                    g.pop('disp_pl_spread', None)
+
+
 def _attach_published_pl_totals(sport, daily_results) -> None:
     """Published pre-game PL total for games the head-to-head pass skipped."""
     games = [
@@ -11438,18 +11565,116 @@ def _set_nba_efficiency_from_pl_spread(pred: dict) -> None:
     pred['efficiency_prob'] = spread_to_home_prob_pct(_eff_sp, 'NBA')
 
 
+def _college_rating_lock_ids(conn, ids=None, add=None) -> set:
+    """Games whose locked Prediction Lab line came from the college ratings.
+
+    Those lines carry a known sign (positive = home favored), so they are not
+    turned toward the Sharp Consensus favorite like older locked lines.
+    """
+    conn.execute("CREATE TABLE IF NOT EXISTS college_rating_locks (game_id TEXT PRIMARY KEY)")
+    if add:
+        conn.execute("INSERT OR IGNORE INTO college_rating_locks (game_id) VALUES (?)", (add,))
+        return {add}
+    ids = [i for i in (ids or ()) if i]
+    if not ids:
+        return set()
+    out = set()
+    for k in range(0, len(ids), 500):
+        chunk = ids[k:k + 500]
+        rows = conn.execute(
+            f"SELECT game_id FROM college_rating_locks WHERE game_id IN ({','.join('?' * len(chunk))})",
+            chunk,
+        ).fetchall()
+        out.update(r[0] for r in rows)
+    return out
+
+
+def _college_line_is_rating(pred: dict) -> bool:
+    if pred.get('our_method') == 'college-ratings':
+        return True
+    gid = pred.get('game_id')
+    if not gid or str(pred.get('sport') or gid).upper()[:5] not in ('NCAAB', 'NCAAW'):
+        return False
+    try:
+        conn = get_db_connection()
+        hit = bool(_college_rating_lock_ids(conn, [gid]))
+        conn.close()
+    except Exception:
+        return False
+    if hit:
+        pred['our_method'] = 'college-ratings'
+    return hit
+
+
+def _college_pl_line(pred: dict, sport: str, lock: bool = False) -> None:
+    """NCAAB / NCAAW teams with few games this season: Prediction Lab line from
+    the college ratings (college_ratings.py) instead of a few games of form."""
+    try:
+        import college_ratings
+        proj = college_ratings.project(
+            sport, pred.get('home_team_id'), pred.get('away_team_id'),
+            bool(pred.get('neutral_site') or pred.get('neutral')),
+        )
+    except Exception:
+        return
+    if not proj:
+        return
+    sp = _round_to_half(proj[0] - proj[1])
+    tot = _round_to_half(proj[0] + proj[1])
+    pred['our_spread'] = sp
+    pred['our_total'] = tot
+    pred['our_home_pts'], pred['our_away_pts'] = _scores_from_spread_total(sp, tot)
+    pred['our_method'] = 'college-ratings'
+    pred['efficiency_spread'] = sp
+    pred['efficiency_prob'] = None
+    if lock and pred.get('game_id'):
+        try:
+            conn = get_db_connection()
+            cur = conn.execute(
+                "UPDATE predictions SET lock_pl_spread = ?, lock_pl_total = ? "
+                "WHERE game_id = ? AND sport = ? AND lock_pl_spread IS NULL",
+                (sp, tot, pred['game_id'], str(sport).upper()),
+            )
+            if cur.rowcount:
+                _college_rating_lock_ids(conn, add=pred['game_id'])
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            logger.debug(f"[college_ratings] lock {pred.get('game_id')} failed: {exc}")
+
+
 def _fill_college_card_gaps(pred: dict, sport: str) -> None:
     """NCAAB / NCAAW card gaps.
 
     Blank Efficiency: same PL-spread formula as NBA, college width. A Books
     moneyline equal to the PL one on both teams was minted from our own line
-    (no posted price), so Books shows N/A instead.
+    (no posted price), so Books shows N/A instead. Blank XSharp / PL totals
+    come from that model's own projected score when one is stored.
     """
     if pred.get('efficiency_prob') is None:
         _eff_sp = _safe_float(pred.get('disp_pl_spread'))
         if _eff_sp is not None:
             from sports.team_efficiency_attach import spread_to_home_prob_pct
             pred['efficiency_prob'] = spread_to_home_prob_pct(_eff_sp, sport)
+    # Lines from projected scores (same idea as soccer fill_soccer_model_lines).
+    pl_h = _safe_float(pred.get('our_home_pts') or pred.get('pl_proj_home_pts'))
+    pl_a = _safe_float(pred.get('our_away_pts') or pred.get('pl_proj_away_pts'))
+    if pl_h is not None and pl_a is not None:
+        if pred.get('disp_pl_total') is None and pred.get('our_total') is None:
+            pred['our_total'] = _round_to_half(pl_h + pl_a)
+            pred['disp_pl_total'] = pred['our_total']
+        if pred.get('disp_pl_spread') is None and pred.get('our_spread') is None:
+            pred['our_spread'] = _round_to_half(pl_h - pl_a)
+            pred['disp_pl_spread'] = pred['our_spread']
+    xs_h = _safe_float(pred.get('xgb_home_score') or pred.get('xs_proj_home_pts'))
+    xs_a = _safe_float(pred.get('xgb_away_score') or pred.get('xs_proj_away_pts'))
+    if xs_h is not None and xs_a is not None:
+        if pred.get('disp_xs_total') is None and pred.get('xgb_total') is None:
+            pred['xgb_total'] = _round_to_half(xs_h + xs_a)
+            pred['disp_xs_total'] = pred['xgb_total']
+        if pred.get('disp_xs_spread') is None and pred.get('xgb_spread') is None:
+            pred['xgb_spread'] = _round_to_half(xs_h - xs_a)
+            pred['disp_xs_spread'] = pred['xgb_spread']
     try:
         books = (int(float(pred.get('book_home_moneyline'))), int(float(pred.get('book_away_moneyline'))))
         ours = (int(float(pred.get('pl_model_home_ml'))), int(float(pred.get('pl_model_away_ml'))))
@@ -11594,6 +11819,7 @@ def _prepare_pred_card_display__ncaab(pred: dict, sport: str = 'NBA') -> None:
     if _card_is_published(pred):
         _format_published_card_face(pred, sport)
         return
+    _college_pl_line(pred, sport)
     if sport == 'SOCCER':
         _apply_soccer_model_market_lines(pred, only_if_missing=True)
         _alias_soccer_book_fields(pred)
@@ -11720,6 +11946,7 @@ def _prepare_pred_card_display__ncaaw(pred: dict, sport: str = 'NBA') -> None:
     if _card_is_published(pred):
         _format_published_card_face(pred, sport)
         return
+    _college_pl_line(pred, sport)
     if sport == 'SOCCER':
         _apply_soccer_model_market_lines(pred, only_if_missing=True)
         _alias_soccer_book_fields(pred)
@@ -15716,6 +15943,38 @@ def _fetch_live_market_line(
     return None
 
 app = Flask(__name__)
+
+
+class _ClassicPrefix:
+    """/classic/<page> serves the old page at /<page>, so the burger menu can keep the old sport pages."""
+
+    def __init__(self, wsgi_app):
+        self.wsgi_app = wsgi_app
+
+    def __call__(self, environ, start_response):
+        path = environ.get('PATH_INFO', '')
+        if path == '/classic' or path.startswith('/classic/'):
+            environ['PATH_INFO'] = path[len('/classic'):] or '/'
+            environ['pl.classic'] = True
+        return self.wsgi_app(environ, start_response)
+
+
+from react_shell import ReactShell as _ReactShell  # noqa: E402
+
+app.wsgi_app = _ClassicPrefix(_ReactShell(app.wsgi_app, lambda html: _ensure_site_gtags(html)))
+
+
+# Results pages carry no emoji (see results_clean.py). This hook is registered first, so it runs last.
+from results_clean import clean_results_html as _clean_results_html
+
+
+@app.after_request
+def _results_pages_without_emoji(response):
+    if request.path.endswith(('-results', '/historic-results')) and response.mimetype == 'text/html':
+        response.set_data(_clean_results_html(response.get_data(as_text=True)))
+    return response
+
+
 _sport_variant.install_app(app)
 
 _SITE_GTAG_IDS = ('G-R4XM0WKTGG', 'AW-18345189026')
@@ -15752,11 +16011,72 @@ def _free_visitor_paywall(response):
             return response
         html = response.get_data(as_text=True)
         if not _pw.has_locked_content(html):
+            if request.path.rstrip('/').endswith(('-picks', '-projections')):
+                response.set_data(_pw.lock_card_data_attrs(html))
+                response.headers['Cache-Control'] = 'private, no-store'
             return response
         response.set_data(_pw.lock_free_picks_html(html))
         response.headers['Cache-Control'] = 'private, no-store'
     except Exception as _pw_e:
         logger.warning(f"[paywall] free lock failed on {request.path}: {_pw_e}")
+    return response
+
+
+_SPORT_LAYOUT_PATH_RE = re.compile(r'^/([a-z0-9]+)-(?:picks|projections)$')
+
+
+def _sport_layout_sports():
+    """Sports list for the sports layout: same order and names as the homepage list."""
+    today = datetime.now()
+    out = []
+    for sport_key in _LANDING_SPORT_ORDER:
+        if sport_key in _LIVE_HIDDEN_SPORTS:
+            continue
+        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        info = SPORTS.get(sport_key)
+        if not info:
+            continue
+        _status_text, is_live = get_season_status(sport_key, today=today)
+        out.append({
+            'key': sport_key,
+            'slug': SPORT_SEO_SLUGS.get(sport_key, sport_key.lower() + '-picks'),
+            'short': _LANDING_SPORT_SHORT.get(sport_key, info['name']),
+            'icon': info['icon'],
+            'live': bool(is_live),
+        })
+    return out
+
+
+@app.after_request
+def _sport_page_layout(response):
+    """Sports pages: sports list left, cards middle, the sport's results right (sport_layout.py)."""
+    try:
+        if request.method != 'GET' or response.status_code != 200 or response.direct_passthrough:
+            return response
+        if 'text/html' not in (response.content_type or ''):
+            return response
+        m = _SPORT_LAYOUT_PATH_RE.match((request.path or '').rstrip('/'))
+        sport = _SEO_SLUG_TO_SPORT.get(m.group(1) + '-picks') if m else None
+        if not sport:
+            return response
+        import sport_layout as _sl
+        from picks_recent_results import _cached_recent
+        cached = _cached_recent(sport)
+        html = response.get_data(as_text=True)
+        out = _sl.apply(
+            html,
+            sport_key=sport,
+            sports=_sport_layout_sports(),
+            results_block=cached[0] if cached else '',
+            results_name=_LANDING_SPORT_SHORT.get(sport, sport),
+            results_slug=_SPORT_RESULTS_SLUGS.get(sport, sport.lower() + '-results'),
+            logged_in=bool(getattr(current_user, 'is_authenticated', False)),
+        )
+        if out != html:
+            response.set_data(out)
+    except Exception as _sl_e:
+        logger.warning(f"[sport-layout] {request.path}: {_sl_e}")
     return response
 
 
@@ -15815,6 +16135,37 @@ def _api_picks_paywall(response):
     except Exception as _api_e:
         logger.warning(f"[paywall] api picks lock failed on {request.path}: {_api_e}")
         return app.response_class(json.dumps({'picks': [], 'count': 0}), status=503, mimetype='application/json')
+
+
+# Owner 2026-11-03: these pages are premium. A free visitor gets the lock panel.
+_PREMIUM_ONLY_PAGES = {
+    '/ladder': ('10-Day Ladder Picks', 'One pick a day backed by our graded record, rolled into the next day\'s wager for up to 10 days.'),
+    '/ladder-picks': ('10-Day Ladder Picks', 'One pick a day backed by our graded record, rolled into the next day\'s wager for up to 10 days.'),
+    '/all-sports-results': ('All Sports Results', 'Every sport\'s model records on one page: last night, the last 7 days, and the season.'),
+    '/performance': ('Model Performance', 'How every model has done, by sport, pick type, and confidence.'),
+    '/all-sports-picks': ('All Sports Picks', 'Today\'s picks across every sport, with the full card detail.'),
+}
+
+
+@app.before_request
+def _premium_only_pages():
+    path = (request.path or '/').rstrip('/') or '/'
+    if path != '/api/performance-data' and path not in _PREMIUM_ONLY_PAGES:
+        return None
+    if is_premium_user():
+        return None
+    from flask import make_response
+    if path == '/api/performance-data':
+        resp = jsonify({'locked': True, 'rows': []})
+        resp.status_code = 403
+    else:
+        title, blurb = _PREMIUM_ONLY_PAGES[path]
+        resp = make_response(render_template(
+            'premium_page_lock.html', page_title=title, page_blurb=blurb, page_path=path,
+            is_logged_in=bool(getattr(current_user, 'is_authenticated', False)),
+        ))
+    resp.headers['Cache-Control'] = 'private, no-store'
+    return resp
 
 
 @app.before_request
@@ -15887,72 +16238,63 @@ _GTAG_DIRECT_RE = re.compile(
     r'<script\b[^>]*\bsrc=["\']https://www\.googletagmanager\.com/gtag/js\?id=[^"\']*["\'][^>]*>\s*</script>\s*',
     re.I,
 )
-# gtag.js starts on the first scroll / tap / click / key press, or 6 s after load:
-# Lighthouse counts blocking time until 5 quiet seconds after load.
-_GTAG_START_JS = (
-    "var ev=['scroll','pointerdown','keydown','touchstart'];"
-    "var went=0;function go(){if(went)return;went=1;ev.forEach(function(e){window.removeEventListener(e,go,true);});boot();}"
-    "ev.forEach(function(e){window.addEventListener(e,go,{capture:true,passive:true,once:true});});"
-    "function arm(){setTimeout(go,6000);}"
-    "if(document.readyState==='complete')arm();else window.addEventListener('load',arm,{once:true});"
+_GTAG_SCRIPT_RE = re.compile(r'<script\b[^>]*>(.*?)</script>\s*', re.I | re.S)
+_GTAG_LOADER_MARKS = ('__plAwBooted', '__plTagsBooted', '__plGtagLib', '__plTagsLoaded')
+# A script that only sets up dataLayer / gtag and runs gtag('js') / gtag('config').
+_GTAG_SETUP_ONLY_RE = re.compile(
+    r"^(?:\(function\(\)\{)?(?:"
+    r"window\.dataLayer=window\.dataLayer\|\|\[\];|dataLayer=window\.dataLayer\|\|\[\];|"
+    r"window\.gtag=window\.gtag\|\|function\(\)\{(?:window\.dataLayer=window\.dataLayer\|\|\[\];)?"
+    r"(?:window\.)?dataLayer\.push\(arguments\);\};|"
+    r"function gtag\(\)\{(?:window\.)?dataLayer\.push\(arguments\);\}|"
+    r"gtag\(['\"]js['\"],newDate\(\)\);|gtag\(['\"]config['\"],['\"][A-Z]+-[A-Z0-9]+['\"]\);"
+    r")+(?:\}\)\(\);)?$"
 )
-
-
-# Saved pages still carry the older idle-callback start.
-_GTAG_OLD_INCLUDE_START_RE = re.compile(
-    r"function schedule\(\)\s*\{\s*if\s*\('requestIdleCallback' in window\)\s*\{\s*"
-    r"requestIdleCallback\(bootGoogleAdsTag,\s*\{\s*timeout:\s*2500\s*\}\);\s*\}\s*else\s*\{\s*"
-    r"setTimeout\(bootGoogleAdsTag,\s*800\);\s*\}\s*\}"
-)
-_GTAG_NEW_INCLUDE_START = (
-    "var EVENTS=['scroll','pointerdown','keydown','touchstart'];"
-    "var went=0;function go(){if(went)return;went=1;EVENTS.forEach(function(e){window.removeEventListener(e,go,true);});bootGoogleAdsTag();}"
-    "EVENTS.forEach(function(e){window.addEventListener(e,go,{capture:true,passive:true,once:true});});"
-    "function schedule(){setTimeout(go,6000);}"
-)
-_GTAG_OLD_BOOT_START = (
-    "if('requestIdleCallback' in window)requestIdleCallback(boot,{timeout:2500});"
-    "else window.addEventListener('load',function(){setTimeout(boot,800);},{once:true});"
+# Owner-locked (.cursor/rules/locked-google-tag.mdc): Google's snippet, plain, every page.
+_GTAG_CANONICAL = (
+    '<!-- Google tag (gtag.js) -->'
+    f'<script async src="https://www.googletagmanager.com/gtag/js?id={_SITE_GTAG_IDS[1]}"></script>'
+    "<script>window.dataLayer=window.dataLayer||[];"
+    "function gtag(){dataLayer.push(arguments);}"
+    "gtag('js',new Date());"
+    + ''.join(f"gtag('config','{tid}');" for tid in (_SITE_GTAG_IDS[1], _SITE_GTAG_IDS[0]))
+    + "</script>"
 )
 
 
 def _ensure_site_gtags(html):
-    """Every page loads gtag.js (late) and configures both the GA4 and Ads tags."""
+    """Every page carries Google's tag snippet once, as a plain script in <head>
+    (Google Ads tag detection reads it from the HTML), configuring the Ads and GA4 ids."""
     if not re.search(r'</head\s*>', html, flags=re.I):
         return html
-    if '<!-- Google Ads tag (gtag.js)' in html:
-        html = re.sub(r'<!-- Google Ads tag \(gtag\.js\).*?-->\s*', '', html, flags=re.S)
-    if 'requestIdleCallback' in html:
-        html = _GTAG_OLD_INCLUDE_START_RE.sub(_GTAG_NEW_INCLUDE_START, html)
-        html = html.replace(_GTAG_OLD_BOOT_START, _GTAG_START_JS)
+    if html.count('googletagmanager.com/gtag/js') == 1 and _GTAG_CANONICAL in html:
+        return html
+
+    def _strip(m):
+        body = m.group(1)
+        if 'gtag' not in body and 'googletagmanager' not in body:
+            return m.group(0)
+        if any(k in body for k in _GTAG_LOADER_MARKS):
+            return ''
+        if _GTAG_SETUP_ONLY_RE.match(re.sub(r'\s+', '', body).replace(';;', ';')):
+            return ''
+        return m.group(0)
+
+    html = re.sub(r'<!-- Google (?:Ads )?tag \(gtag\.js\).*?-->\s*', '', html, flags=re.S)
     html = _GTAG_DIRECT_RE.sub('', html)
+    html = _GTAG_SCRIPT_RE.sub(_strip, html)
+    head_open = re.search(r'<head\b[^>]*>', html, flags=re.I)
+    if head_open:
+        at = head_open.end()
+        meta = re.compile(r'\s*<meta\b[^>]*(?:charset|http-equiv)[^>]*>', re.I)
+        while True:
+            m = meta.match(html, at)
+            if not m:
+                break
+            at = m.end()
+        return html[:at] + _GTAG_CANONICAL + html[at:]
     head_close = re.search(r'</head\s*>', html, flags=re.I)
-    if not head_close:
-        return html
-    missing = [
-        tid for tid in _SITE_GTAG_IDS
-        if not re.search(r"gtag\(\s*['\"]config['\"]\s*,\s*['\"]" + re.escape(tid), html)
-    ]
-    need_lib = 'googletagmanager.com/gtag/js' not in html
-    if not missing and not need_lib:
-        return html
-    js = '' if re.search(r"gtag\(\s*['\"]js['\"]", html) else "gtag('js',new Date());"
-    cfg = ''.join(f"gtag('config','{tid}');" for tid in missing)
-    lib = ''
-    if need_lib:
-        lib = (
-            "function boot(){if(window.__plGtagLib)return;window.__plGtagLib=true;"
-            "var s=document.createElement('script');s.async=true;"
-            f"s.src='https://www.googletagmanager.com/gtag/js?id={_SITE_GTAG_IDS[0]}';"
-            "document.head.appendChild(s);}"
-            + _GTAG_START_JS
-        )
-    tag = (
-        "<script>(function(){window.dataLayer=window.dataLayer||[];"
-        "window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};"
-        f"{js}{cfg}{lib}}})();</script>"
-    )
-    return html[:head_close.start()] + tag + html[head_close.start():]
+    return html[:head_close.start()] + _GTAG_CANONICAL + html[head_close.start():]
 
 
 @app.after_request
@@ -16635,6 +16977,11 @@ except Exception:
     pass
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 try:
+    from landing_copy import LandingCopyMiddleware
+    app.wsgi_app = LandingCopyMiddleware(app.wsgi_app)
+except Exception as _lc_err:
+    logger.warning("landing copy not installed: %s", _lc_err)
+try:
     from gzip_middleware import GzipMiddleware
     app.wsgi_app = GzipMiddleware(app.wsgi_app)
 except Exception as _gz_err:
@@ -16644,6 +16991,11 @@ try:
     app.wsgi_app = BuildGate(app.wsgi_app)
 except Exception as _bg_err:
     logger.warning("build gate not installed: %s", _bg_err)
+try:
+    from landing_copy import ProjectionsAliasMiddleware
+    app.wsgi_app = ProjectionsAliasMiddleware(app.wsgi_app)
+except Exception as _pa_err:
+    logger.warning("projections alias not installed: %s", _pa_err)
 CORS(app, origins=[
     'https://predictionlab.io',
     'https://predictionlab.io',
@@ -18646,6 +18998,12 @@ def _ncaaw_page_fixes(response):
                 _at = _at if _at > 0 else len(_head)
                 out = _head[:_at] + "".join(_moved) + _head[_at:] + _tail
         if path == "/ncaaw-picks":
+            try:
+                from isolate_checker_fixes import add_missing_odds_section as _ncaaw_add_odds
+
+                out = _ncaaw_add_odds(out)
+            except Exception:
+                pass
             _tip = "Odds are posted the day before or the day of the contest. Check back on game date."
             _btn = (
                 '<button type="button" class="h2h-info-btn" '
@@ -18661,6 +19019,16 @@ def _ncaaw_page_fixes(response):
             out = re.sub(
                 r'<td class="val-books">\s*(?:—|–|-)\s*</td>',
                 lambda m: '<td class="val-books">N/A ' + _btn + "</td>",
+                out,
+            )
+            out = re.sub(
+                r'(<td class="val-(?:pl|xs)">)\s*(?:—|–|-)\s*(</td>)',
+                r"\1N/A\2",
+                out,
+            )
+            out = re.sub(
+                r'(<span class="proj-model (?:pl|xs)">[^<]*</span>\s*<span class="proj-val">)\s*(?:—|–|-)\s*(</span>)',
+                r"\1N/A\2",
                 out,
             )
             out = re.sub(
@@ -26604,8 +26972,15 @@ def _soccer_results_week_arg():
         return ''
     try:
         from soccer_ui_fixup import soccer_week_monday
-        if raw[:10] == soccer_week_monday().isoformat():
-            return ''
+        monday = soccer_week_monday().isoformat()
+        if raw[:10] == monday:
+            yesterday = (
+                datetime.strptime(_soccer_et_today_str(), '%Y-%m-%d') - timedelta(days=1)
+            ).strftime('%Y-%m-%d')
+            # With no finals yet this week the unfiltered page falls back to last
+            # week, so this week's ?week= must stay its own (empty) week.
+            if yesterday >= monday and _soccer_span_has_finals(monday, yesterday):
+                return ''
     except Exception:
         pass
     return raw
@@ -29172,6 +29547,10 @@ def _format_published_card_face__ncaab(pred: dict, sport: str = 'NBA') -> None:
         if snap:
             pred['stored_lock_card'] = snap
             pred['_picks_locked'] = True
+    if (pred.get('home_score') is None and _safe_float(pred.get('lock_pl_spread')) is None
+            and _safe_float(snap.get('disp_pl_spread')) is None
+            and _safe_float(snap.get('our_spread')) is None and not _ncaaf_card_started(pred)):
+        _college_pl_line(pred, sport, lock=True)
     _fill_published_chrome_blanks(pred, sport=sport)
     if sport == 'MLB':
         _set_mlb_spread_pick_label(pred)
@@ -29265,6 +29644,17 @@ def _format_published_card_face__ncaab(pred: dict, sport: str = 'NBA') -> None:
         _set_card_book_lines(pred)
     if sport == 'NCAAB':
         _fill_college_card_gaps(pred, sport)
+    _ens_face = _normalize_home_win_prob_pct(pred.get('ensemble_prob'))
+    if (pred.get('face_home_prob') is None and _ens_face is not None
+            and abs(_ens_face - 50.0) >= 0.05):
+        # Snapshot saved without face numbers: paint the stored Sharp Consensus.
+        pred['face_home_prob'] = round(_ens_face, 1)
+        pred['face_away_prob'] = round(100.0 - _ens_face, 1)
+        pred['face_model_label'] = 'Sharp Consensus'
+        pred['face_pick_confidence'] = max(pred['face_home_prob'], pred['face_away_prob'])
+        pred['face_pick_team'] = (
+            pred.get('home_team_id') if _ens_face >= 50.0 else pred.get('away_team_id')
+        )
 
 
 def _format_published_card_face__ncaaw(pred: dict, sport: str = 'NBA') -> None:
@@ -29276,6 +29666,10 @@ def _format_published_card_face__ncaaw(pred: dict, sport: str = 'NBA') -> None:
         if snap:
             pred['stored_lock_card'] = snap
             pred['_picks_locked'] = True
+    if (pred.get('home_score') is None and _safe_float(pred.get('lock_pl_spread')) is None
+            and _safe_float(snap.get('disp_pl_spread')) is None
+            and _safe_float(snap.get('our_spread')) is None and not _ncaaf_card_started(pred)):
+        _college_pl_line(pred, sport, lock=True)
     _fill_published_chrome_blanks(pred, sport=sport)
     if sport == 'MLB':
         _set_mlb_spread_pick_label(pred)
@@ -29369,6 +29763,17 @@ def _format_published_card_face__ncaaw(pred: dict, sport: str = 'NBA') -> None:
         _set_card_book_lines(pred)
     if sport == 'NCAAW':
         _fill_college_card_gaps(pred, sport)
+    _ens_face = _normalize_home_win_prob_pct(pred.get('ensemble_prob'))
+    if (pred.get('face_home_prob') is None and _ens_face is not None
+            and abs(_ens_face - 50.0) >= 0.05):
+        # Snapshot saved without face numbers: paint the stored Sharp Consensus.
+        pred['face_home_prob'] = round(_ens_face, 1)
+        pred['face_away_prob'] = round(100.0 - _ens_face, 1)
+        pred['face_model_label'] = 'Sharp Consensus'
+        pred['face_pick_confidence'] = max(pred['face_home_prob'], pred['face_away_prob'])
+        pred['face_pick_team'] = (
+            pred.get('home_team_id') if _ens_face >= 50.0 else pred.get('away_team_id')
+        )
 
 
 def _format_published_card_face__wnba(pred: dict, sport: str = 'NBA') -> None:
@@ -30415,11 +30820,16 @@ def _backfill_prediction_markets(cursor, sport, pred) -> bool:
             ps = _to_float_safe(_best_pl_spread(pred))
         except Exception:
             ps = None
-    if ps is None:
-        ps = xs
     pt = _to_float_safe(pred.get('our_total'))
-    if pt is None:
-        pt = xt
+    # College Prediction Lab lines come from the ratings; an XSharp copy here
+    # would block that line from ever locking.
+    if str(sport).upper() not in ('NCAAB', 'NCAAW'):
+        if ps is None:
+            ps = xs
+        if pt is None:
+            pt = xt
+    elif ps is not None and ps == xs and pt == xt:
+        ps = pt = None
     eh = _to_float_safe(pred.get('v2_expected_home'))
     if eh is None:
         eh = _to_float_safe(pred.get('expected_home_score'))
@@ -30458,6 +30868,12 @@ def _backfill_prediction_markets(cursor, sport, pred) -> bool:
         f"UPDATE predictions SET {', '.join(updates)} WHERE id = ?",
         params,
     )
+    if ('lock_pl_spread = ?' in updates and pred.get('our_method') == 'college-ratings'
+            and str(sport).upper() in ('NCAAB', 'NCAAW')):
+        try:
+            _college_rating_lock_ids(cursor, add=game_id)
+        except Exception:
+            pass
     return True
 
 
@@ -30468,6 +30884,44 @@ try:
     _ensure_predictions_prob_columns()
 except Exception as _dbe:
     logger.warning(f"init_db failed: {_dbe}")
+
+
+def _clear_copied_college_pl_locks() -> None:
+    """Upcoming NCAAB / NCAAW games whose locked Prediction Lab line is the XSharp
+    line (both spread and total) lose that copy, so the real line locks instead."""
+    try:
+        today = datetime.now(ZoneInfo('America/New_York')).strftime('%Y-%m-%d')
+        conn = sqlite3.connect(DATABASE, timeout=10, isolation_level=None)
+        conn.execute("BEGIN IMMEDIATE")
+        # The lock guard undoes any change to a saved line; lifted for this one
+        # statement and restored in the same transaction.
+        conn.execute("DROP TRIGGER IF EXISTS pl_guard_lock_lock_pl_spread")
+        conn.execute("DROP TRIGGER IF EXISTS pl_guard_lock_lock_pl_total")
+        cur = conn.execute(
+            """UPDATE predictions SET lock_pl_spread = NULL, lock_pl_total = NULL
+               WHERE sport IN ('NCAAB','NCAAW') AND date(game_date) >= ?
+                 AND lock_pl_spread IS NOT NULL AND lock_pl_spread = lock_xs_spread
+                 AND lock_pl_total = lock_xs_total
+                 AND game_id IN (SELECT game_id FROM games
+                                 WHERE sport IN ('NCAAB','NCAAW') AND home_score IS NULL
+                                   AND lower(coalesce(status,'scheduled')) IN ('scheduled','pre'))""",
+            (today,),
+        )
+        for col in ('lock_pl_spread', 'lock_pl_total'):
+            conn.execute(
+                f"CREATE TRIGGER IF NOT EXISTS pl_guard_lock_{col} AFTER UPDATE OF {col} ON predictions "
+                f"WHEN OLD.{col} IS NOT NULL AND NEW.{col} IS NOT OLD.{col} "
+                f"BEGIN UPDATE predictions SET {col} = OLD.{col} WHERE id = NEW.id; END"
+            )
+        conn.execute("COMMIT")
+        conn.close()
+        if cur.rowcount:
+            logger.info(f"[college locks] cleared {cur.rowcount} copied Prediction Lab lines")
+    except Exception as exc:
+        logger.warning(f"[college locks] clear failed: {exc}")
+
+
+_clear_copied_college_pl_locks()
 
 
 def _maybe_backfill_soccer_on_startup():
@@ -30678,6 +31132,16 @@ try:
         _price_snapshots.init(DATABASE)
 except Exception as _pse:
     logger.debug(f"[price-snapshots] failed to start: {_pse}")
+
+try:
+    import lock_guard as _lock_guard
+    _lg_conn = sqlite3.connect(DATABASE, timeout=30)
+    try:
+        _lock_guard.ensure_lock_guard(_lg_conn)
+    finally:
+        _lg_conn.close()
+except Exception as _lge:
+    logger.warning(f"[lock-guard] not installed: {_lge}")
 
 try:
     import live_data_patch as _live_data_patch
@@ -36118,11 +36582,19 @@ def get_upcoming_predictions__ncaaf(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -37982,11 +38454,19 @@ def get_upcoming_predictions__mlb(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -39850,11 +40330,19 @@ def get_upcoming_predictions__nhl(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -41714,11 +42202,19 @@ def get_upcoming_predictions__nba(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -43631,11 +44127,19 @@ def get_upcoming_predictions__ncaab(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -43761,6 +44265,23 @@ def get_upcoming_predictions__ncaab(sport, days=365, _force_rebuild=False):
         except Exception as _se:
             logger.debug(f"[SOCCER] history load failed: {_se}")
             soccer_history_count = 0
+    if sport in ('NCAAB', 'NCAAW'):
+        # The ESPN window holds no finals at season start; Edge (Elo) trains on every stored final.
+        try:
+            conn_hist = get_db_connection()
+            rows = conn_hist.execute(
+                'SELECT game_id, home_team_id, away_team_id, home_score, away_score, game_date '
+                'FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL '
+                'ORDER BY game_date',
+                (sport,)
+            ).fetchall()
+            conn_hist.close()
+            _have_ids = {g.get('game_id') for g in completed_games if g.get('game_id')}
+            _older = [dict(r) for r in rows if r['game_id'] not in _have_ids]
+            if _older:
+                completed_games = _older + completed_games
+        except Exception as _ce:
+            logger.debug(f"[{sport}] history load failed: {_ce}")
 
     # ── NHL: inject team stats directly from completed API games ─────────────
     # The ESPN /teams endpoint doesn't expose NHL goals-per-game stats, and the
@@ -44084,7 +44605,24 @@ def get_upcoming_predictions__ncaab(sport, days=365, _force_rebuild=False):
             _fp_ts = _to_float_safe(game.get('stored_trueskill_prob'))
             _has_published = any(v is not None for v in (_fp_elo, _fp_xgb, _fp_ens))
             if _has_published:
-                if _fp_elo is not None:
+                if (_fp_elo is not None and abs(_fp_elo - 0.5) < 1e-9 and game.get('home_score') is None
+                        and game.get('home_team_id') in elo_ratings and game.get('away_team_id') in elo_ratings):
+                    # A 0.5 saved before Edge had any finals is a placeholder, not a pick.
+                    elo_prob = expected_score(get_elo(game['home_team_id']), get_elo(game['away_team_id']))
+                    try:
+                        _uc = get_db_connection()
+                        _uc.execute(
+                            "UPDATE predictions SET elo_home_prob=?, lock_card_json=CASE "
+                            "WHEN json_valid(lock_card_json) AND json_extract(lock_card_json, '$.elo_prob') = 50.0 "
+                            "THEN json_set(lock_card_json, '$.elo_prob', ?) ELSE lock_card_json END "
+                            "WHERE sport=? AND game_id=? AND elo_home_prob=0.5",
+                            (round(elo_prob, 4), round(elo_prob * 100, 1), sport, game.get('game_id')),
+                        )
+                        _uc.commit()
+                        _uc.close()
+                    except Exception as _ue:
+                        logger.debug(f"[{sport}] Edge placeholder update failed: {_ue}")
+                elif _fp_elo is not None:
                     elo_prob = _fp_elo
                 if _fp_xgb is not None:
                     xgb_prob = _fp_xgb
@@ -45500,11 +46038,19 @@ def get_upcoming_predictions__ncaaw(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -45630,6 +46176,23 @@ def get_upcoming_predictions__ncaaw(sport, days=365, _force_rebuild=False):
         except Exception as _se:
             logger.debug(f"[SOCCER] history load failed: {_se}")
             soccer_history_count = 0
+    if sport in ('NCAAB', 'NCAAW'):
+        # The ESPN window holds no finals at season start; Edge (Elo) trains on every stored final.
+        try:
+            conn_hist = get_db_connection()
+            rows = conn_hist.execute(
+                'SELECT game_id, home_team_id, away_team_id, home_score, away_score, game_date '
+                'FROM games WHERE sport=? AND home_score IS NOT NULL AND away_score IS NOT NULL '
+                'ORDER BY game_date',
+                (sport,)
+            ).fetchall()
+            conn_hist.close()
+            _have_ids = {g.get('game_id') for g in completed_games if g.get('game_id')}
+            _older = [dict(r) for r in rows if r['game_id'] not in _have_ids]
+            if _older:
+                completed_games = _older + completed_games
+        except Exception as _ce:
+            logger.debug(f"[{sport}] history load failed: {_ce}")
 
     # ── NHL: inject team stats directly from completed API games ─────────────
     # The ESPN /teams endpoint doesn't expose NHL goals-per-game stats, and the
@@ -45953,7 +46516,24 @@ def get_upcoming_predictions__ncaaw(sport, days=365, _force_rebuild=False):
             _fp_ts = _to_float_safe(game.get('stored_trueskill_prob'))
             _has_published = any(v is not None for v in (_fp_elo, _fp_xgb, _fp_ens))
             if _has_published:
-                if _fp_elo is not None:
+                if (_fp_elo is not None and abs(_fp_elo - 0.5) < 1e-9 and game.get('home_score') is None
+                        and game.get('home_team_id') in elo_ratings and game.get('away_team_id') in elo_ratings):
+                    # A 0.5 saved before Edge had any finals is a placeholder, not a pick.
+                    elo_prob = expected_score(get_elo(game['home_team_id']), get_elo(game['away_team_id']))
+                    try:
+                        _uc = get_db_connection()
+                        _uc.execute(
+                            "UPDATE predictions SET elo_home_prob=?, lock_card_json=CASE "
+                            "WHEN json_valid(lock_card_json) AND json_extract(lock_card_json, '$.elo_prob') = 50.0 "
+                            "THEN json_set(lock_card_json, '$.elo_prob', ?) ELSE lock_card_json END "
+                            "WHERE sport=? AND game_id=? AND elo_home_prob=0.5",
+                            (round(elo_prob, 4), round(elo_prob * 100, 1), sport, game.get('game_id')),
+                        )
+                        _uc.commit()
+                        _uc.close()
+                    except Exception as _ue:
+                        logger.debug(f"[{sport}] Edge placeholder update failed: {_ue}")
+                elif _fp_elo is not None:
                     elo_prob = _fp_elo
                 if _fp_xgb is not None:
                     xgb_prob = _fp_xgb
@@ -47358,11 +47938,19 @@ def get_upcoming_predictions__wnba(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -49232,11 +49820,19 @@ def get_upcoming_predictions__cfl(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -51090,11 +51686,19 @@ def get_upcoming_predictions__soccer(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -52948,11 +53552,19 @@ def get_upcoming_predictions__tennis(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -54806,11 +55418,19 @@ def get_upcoming_predictions__ufc(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -56664,11 +57284,19 @@ def get_upcoming_predictions__golf(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -58530,11 +59158,19 @@ def get_upcoming_predictions(sport, days=365, _force_rebuild=False):
                 continue  # already enriched from DB fallback
             pred = conn.execute('''
                 SELECT elo_home_prob, xgboost_home_prob, logistic_home_prob, win_probability,
-                       glicko_home_prob, trueskill_home_prob
+                       glicko_home_prob, trueskill_home_prob, home_team_id, away_team_id
                 FROM predictions WHERE game_id = ? AND sport = ?
             ''', (game['game_id'], sport)).fetchone()
             
             if pred:
+                # Stored chances are for the stored home team; ESPN can swap a neutral site.
+                if (
+                    pred['home_team_id'] == game.get('away_team_id')
+                    and pred['away_team_id'] == game.get('home_team_id')
+                    and pred['home_team_id'] != pred['away_team_id']
+                ):
+                    game['home_team_id'], game['away_team_id'] = pred['home_team_id'], pred['away_team_id']
+                    game['home_score'], game['away_score'] = game.get('away_score'), game.get('home_score')
                 game['stored_elo_prob'] = _to_float_safe(pred['elo_home_prob'])
                 game['stored_xgb_prob'] = _to_float_safe(pred['xgboost_home_prob'])
                 game['stored_ensemble_prob'] = _to_float_safe(pred['win_probability'])
@@ -70308,7 +70944,7 @@ def _align_roi_moneyline_to_season_perf(roi_total, season_perf):
 def build_roi_cards(roi_daily, roi_weekly, roi_total, *, win_pct_primary: bool = False):
     if not win_pct_primary:
         try:
-            win_pct_primary = _sport_variant.current_sport() == 'nfl'
+            win_pct_primary = _sport_variant.current_sport() in ('nfl', 'ncaab', 'ncaaw')
         except Exception:
             pass
 
@@ -70836,19 +71472,6 @@ _SEO_PICKS_PAGE_FOOTER = """
     </div>
 """
 
-_SEO_RESULTS_PAGE_FOOTER = """
-    <div class="seo-results-footer" style="max-width:1200px;margin:40px auto 0;padding:26px 22px;background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;color:#334155;line-height:1.75;font-size:0.95rem;">
-        <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">Understanding These Results</h2>
-        <p style="margin-bottom:14px;">The results displayed on this page reflect all tracked picks generated by the model. Performance is measured using standard sports betting metrics such as win percentage, units gained or lost, and overall return on investment.</p>
-        <p style="margin-bottom:22px;">These metrics provide a clearer picture of performance beyond simple win/loss records.</p>
-        <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">Why Transparency Matters</h2>
-        <p style="margin-bottom:14px;">All results are recorded without modification or filtering. This ensures that users can evaluate the model based on complete and accurate data rather than selective highlights.</p>
-        <p style="margin-bottom:22px;">Transparency is a core part of the approach, allowing users to build trust through consistent tracking.</p>
-        <h2 style="color:#0f172a;font-size:1.2rem;margin:0 0 12px;">Reviewing Picks Alongside Results</h2>
-        <p style="margin-bottom:14px;">For the best understanding of performance, results should be viewed alongside the original picks. This gives context to how the model operates and how outcomes compare over time.</p>
-        <p style="margin:0;">You can explore daily picks pages to see how selections were made and how they performed.</p>
-    </div>
-"""
 
 _SEO_UTILITY_FAQ_FOOTER = """
     <div class="seo-utility-footer" style="max-width:900px;margin:36px auto 0;padding:20px 22px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:14px;color:#475569;line-height:1.75;font-size:0.93rem;">
@@ -70967,6 +71590,25 @@ RESPONSIBLE_GAMING_TEMPLATE = BASE_TEMPLATE.replace(
             </div>
         </div>
         <div class="rg-card">
+            <h2>United Kingdom &amp; International Support Resources</h2>
+            <div class="rg-resource">
+                <h3><a href="https://www.gamcare.org.uk/" target="_blank" rel="noopener">GamCare</a></h3>
+                <p>Free information, advice and support for anyone affected by gambling. National Gambling Helpline (UK): <a href="tel:08088020133">0808 8020 133</a>, 24/7.</p>
+            </div>
+            <div class="rg-resource">
+                <h3><a href="https://www.begambleaware.org/" target="_blank" rel="noopener">BeGambleAware</a></h3>
+                <p>Free, confidential help and tools to understand and manage gambling.</p>
+            </div>
+            <div class="rg-resource">
+                <h3><a href="https://www.gamblingtherapy.org/" target="_blank" rel="noopener">Gambling Therapy</a></h3>
+                <p>Free online support for anyone affected by gambling, available worldwide in several languages.</p>
+            </div>
+        </div>
+        <div class="rg-card">
+            <h2>Self-limits</h2>
+            <p>Set a budget and a time limit before you bet, and never chase losses. Licensed sportsbooks offer deposit limits, time-outs and self-exclusion in your account settings; use them. You can also block gambling sites on your devices with free tools such as <a href="https://gamban.com/" target="_blank" rel="noopener">Gamban</a> or <a href="https://www.betblocker.org/" target="_blank" rel="noopener">BetBlocker</a>.</p>
+        </div>
+        <div class="rg-card">
             <p style="text-align:center;font-style:italic;color:#94a3b8;">If you or someone you know may have a gambling problem, reaching out for help is the first step.</p>
         </div>
 """ + _SEO_UTILITY_FAQ_FOOTER + """
@@ -71001,7 +71643,7 @@ TUTORIAL_TEMPLATE = BASE_TEMPLATE.replace(
         </div>
 
         <div class="tutorial-card">
-            <h2>📊 Model Confidence &amp; Pick Side</h2>
+            <h2>Model Confidence &amp; Pick Side</h2>
             <p>The models now display a confidence percentage and the team each model is picking.</p>
             <ul>
                 <li><strong>Grinder2</strong> = Team rating model</li>
@@ -71307,7 +71949,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
             <a class="rpt-btn rpt-btn-cta" href="/">View Today's Picks &rarr;</a>
         </div>
     </div>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 # ============================================================================
@@ -71341,7 +71983,7 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - VALUE BETTING PICKS</h1>
     <div class="section-tabs">
         <a href="/{{ sport_seo_slug }}" class="tab active">💰 Value Picks</a>
-        <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
+        <a href="/{{ sport_results_slug }}" class="tab">Results</a>
     </div>
     <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: rgba(251, 191, 36, 0.1); border-radius: 10px;">
         <p style="font-size: 1.2em; margin-bottom: 10px;">✅ <strong>Only showing games with +5% or higher edge</strong></p>
@@ -71376,7 +72018,7 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
                     <div class="situational-item">✈️ Rest: {{ pred.away_rest }}d</div>
                     {% if pred.home_b2b %}<div class="situational-item warning">⚠️ Home B2B</div>{% endif %}
                     {% if pred.away_b2b %}<div class="situational-item warning">⚠️ Away B2B</div>{% endif %}
-                    {% if pred.situational_edge != 0 %}<div class="situational-item">📊 Sit. Edge: {{ (pred.situational_edge * 100)|round(1) }}%</div>{% endif %}
+                    {% if pred.situational_edge != 0 %}<div class="situational-item">Sit. Edge: {{ (pred.situational_edge * 100)|round(1) }}%</div>{% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -71409,7 +72051,7 @@ TRAFFIC_TEMPLATE = BASE_TEMPLATE.replace(
     .no-data { text-align:center; padding:40px 12px; opacity:0.75; }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">📈 Site Traffic</h1>
+    <h1 class="page-title">Site Traffic</h1>
     {% if traffic_source %}
     <div style="text-align:center;opacity:0.7;margin-bottom:10px;">Source: {{ traffic_source }}</div>
     {% endif %}
@@ -71561,13 +72203,13 @@ PREDICTIONS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Predictions</h1>
     
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab active">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab active">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab">Results</a>
     </div>
     
     {% if today_date in sorted_dates %}
     <div style="text-align: center; margin-bottom: 20px;">
-        <a href="#date-{{ today_date }}" style="background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">⚡ Skip to Today</a>
+        <a href="#date-{{ today_date }}" style="background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #000; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">Skip to Today</a>
     </div>
     {% endif %}
     
@@ -71693,8 +72335,8 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Completed Games Results</h1>
     
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
     
     <div class="results-container">
@@ -71733,11 +72375,11 @@ NHL_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         </table>
         
         <div style="margin-top: 30px; text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.1); border-radius: 10px;">
-            <p style="font-size: 1.1em; margin-bottom: 10px;">📊 <strong>Total Games:</strong> {{ results|length }}</p>
+            <p style="font-size: 1.1em; margin-bottom: 10px;"><strong>Total Games:</strong> {{ results|length }}</p>
             <p style="opacity: 0.8;">Values shown are home team win probabilities. Higher % = model favors home team.</p>
         </div>
     </div>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
@@ -71826,11 +72468,11 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <div style="margin-bottom: 20px;">
         <a href="/" style="display: inline-block; padding: 10px 20px; background: #ffffff; border:1px solid rgba(15,23,42,0.18); border-radius: 8px; text-decoration: none; color: #0f172a; font-weight: 600;">← Back to Home</a>
     </div>
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
     <div class="results-container">
         {% if performance %}
@@ -71840,33 +72482,33 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="models-grid">
             <!-- Rating-Based Models -->
             <div class="model-card" style="border-color: #1e40af;">
-                <div class="model-name" style="color: #60a5fa;">📊 Grinder2</div>
+                <div class="model-name" style="color: #60a5fa;">Grinder2</div>
                 <div class="model-accuracy">{{ performance.glicko2.accuracy if performance.glicko2 else '—' }}{% if performance.glicko2 %}%{% endif %}</div>
                 <div class="model-record">{% if performance.glicko2 %}{{ performance.glicko2.correct }}-{{ performance.glicko2.total - performance.glicko2.correct }}{% else %}No data{% endif %}</div>
             </div>
             
             <div class="model-card" style="border-color: #7c3aed;">
-                <div class="model-name" style="color: #a78bfa;">🎯 Takedown</div>
+                <div class="model-name" style="color: #a78bfa;">Takedown</div>
                 <div class="model-accuracy">{{ performance.trueskill.accuracy if performance.trueskill else '—' }}{% if performance.trueskill %}%{% endif %}</div>
                 <div class="model-record">{% if performance.trueskill %}{{ performance.trueskill.correct }}-{{ performance.trueskill.total - performance.trueskill.correct }}{% else %}No data{% endif %}</div>
             </div>
             
             <div class="model-card" style="border-color: #059669;">
-                <div class="model-name" style="color: #34d399;">📊 Edge</div>
+                <div class="model-name" style="color: #34d399;">Edge</div>
                 <div class="model-accuracy">{{ performance.elo.accuracy if performance.elo else '—' }}{% if performance.elo %}%{% endif %}</div>
                 <div class="model-record">{% if performance.elo %}{{ performance.elo.correct }}-{{ performance.elo.total - performance.elo.correct }}{% else %}No data{% endif %}</div>
             </div>
             
             <!-- ML Models -->
             <div class="model-card" style="border-color: #dc2626;">
-                <div class="model-name" style="color: #f87171;">🤖 XSharp</div>
+                <div class="model-name" style="color: #f87171;">XSharp</div>
                 <div class="model-accuracy">{{ performance.xgboost.accuracy }}%</div>
                 <div class="model-record">{{ performance.xgboost.correct }}-{{ performance.xgboost.total - performance.xgboost.correct }}</div>
             </div>
             
             <!-- Sharp Consensus -->
             <div class="model-card ensemble" style="grid-column: span 2;">
-                <div class="model-name">🏆 Sharp Consensus</div>
+                <div class="model-name">Sharp Consensus</div>
                 <div class="model-accuracy" style="font-size: 4em;">{{ performance.ensemble.accuracy }}%</div>
                 <div class="model-record" style="font-size: 1.4em;">{{ performance.ensemble.correct }}-{{ performance.ensemble.total - performance.ensemble.correct }}</div>
             </div>
@@ -71875,7 +72517,7 @@ RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         <div class="no-data">Not enough data to calculate performance for {{ sport_info.name }}</div>
         {% endif %}
     </div>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 # Daily Results Template (for NHL/NBA/NCAAB etc.)
@@ -72034,10 +72676,10 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -72049,12 +72691,12 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -72120,7 +72762,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -72130,7 +72772,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -72171,7 +72813,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -72181,7 +72823,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -72203,7 +72845,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -72231,7 +72873,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -72242,7 +72884,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -72252,7 +72894,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -72262,7 +72904,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -72284,21 +72926,21 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -72538,7 +73180,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 # NFL Weekly Results Template
@@ -72697,10 +73339,10 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -72712,12 +73354,12 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -72783,7 +73425,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -72793,7 +73435,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -72834,7 +73476,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -72844,7 +73486,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -72866,7 +73508,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -72894,7 +73536,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -72905,7 +73547,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -72915,7 +73557,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -72925,7 +73567,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -72947,21 +73589,21 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -73200,7 +73842,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -73359,10 +74001,10 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -73374,12 +74016,12 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -73445,7 +74087,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -73455,7 +74097,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -73496,7 +74138,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -73506,7 +74148,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -73528,7 +74170,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -73556,7 +74198,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -73567,7 +74209,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -73577,7 +74219,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -73587,7 +74229,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -73609,21 +74251,21 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -73862,7 +74504,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -74021,10 +74663,10 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -74036,12 +74678,12 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -74107,7 +74749,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -74117,7 +74759,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -74158,7 +74800,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -74168,7 +74810,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -74190,7 +74832,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -74218,7 +74860,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -74229,7 +74871,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -74239,7 +74881,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -74249,7 +74891,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -74271,21 +74913,21 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -74524,7 +75166,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -74683,10 +75325,10 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -74698,12 +75340,12 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -74769,7 +75411,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -74779,7 +75421,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -74820,7 +75462,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -74830,7 +75472,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -74852,7 +75494,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -74880,7 +75522,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -74891,7 +75533,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -74901,7 +75543,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -74911,7 +75553,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -74933,21 +75575,21 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -75186,7 +75828,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -75345,10 +75987,10 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -75360,12 +76002,12 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -75431,7 +76073,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -75441,7 +76083,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -75482,7 +76124,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -75492,7 +76134,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -75514,7 +76156,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -75542,7 +76184,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -75553,7 +76195,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -75563,7 +76205,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -75573,7 +76215,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -75595,21 +76237,21 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -75848,7 +76490,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -76007,10 +76649,10 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -76022,12 +76664,12 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -76093,7 +76735,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -76103,7 +76745,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -76144,7 +76786,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -76154,7 +76796,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -76176,7 +76818,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -76204,7 +76846,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -76215,7 +76857,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -76225,7 +76867,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -76235,7 +76877,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -76257,21 +76899,21 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -76510,7 +77152,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -76669,10 +77311,10 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -76684,12 +77326,12 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -76755,7 +77397,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -76765,7 +77407,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -76806,7 +77448,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -76816,7 +77458,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -76838,7 +77480,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -76866,7 +77508,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -76877,7 +77519,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -76887,7 +77529,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -76897,7 +77539,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -76919,21 +77561,21 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -77172,7 +77814,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -77331,10 +77973,10 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -77346,12 +77988,12 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -77417,7 +78059,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -77427,7 +78069,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -77468,7 +78110,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -77478,7 +78120,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -77500,7 +78142,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -77528,7 +78170,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -77539,7 +78181,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -77549,7 +78191,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -77559,7 +78201,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -77581,21 +78223,21 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -77834,7 +78476,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -77993,10 +78635,10 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -78008,12 +78650,12 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -78079,7 +78721,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -78089,7 +78731,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -78130,7 +78772,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -78140,7 +78782,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -78162,7 +78804,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -78190,7 +78832,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -78201,7 +78843,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -78211,7 +78853,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -78221,7 +78863,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -78243,21 +78885,21 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -78496,7 +79138,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -78655,10 +79297,10 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -78670,12 +79312,12 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -78741,7 +79383,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -78751,7 +79393,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -78792,7 +79434,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -78802,7 +79444,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -78824,7 +79466,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -78852,7 +79494,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -78863,7 +79505,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -78873,7 +79515,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -78883,7 +79525,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -78905,21 +79547,21 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -79158,7 +79800,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -79317,10 +79959,10 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -79332,12 +79974,12 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -79403,7 +80045,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -79413,7 +80055,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -79454,7 +80096,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -79464,7 +80106,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -79486,7 +80128,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -79514,7 +80156,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -79525,7 +80167,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -79535,7 +80177,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -79545,7 +80187,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -79567,21 +80209,21 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -79820,7 +80462,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -79979,10 +80621,10 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
     @media(max-width:640px){ .roi-grid{grid-template-columns:1fr !important;} .daily-tally-head{gap:8px;} .tally-share-btn{padding:6px 12px; font-size:0.74em;} }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} Results, Performance and Model Accuracy</h1>
+    <h1 class="page-title">{{ sport_info.name }} Results, Performance and Model Accuracy</h1>
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
         {% if sport == 'WNBA' %}
         <div class="pl-view-toggle" role="navigation" aria-label="Results view">
@@ -79994,12 +80636,12 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
         .pl-view-btn.active{background:#0c1e3a;color:#fff;border-color:#0c1e3a}</style>
         {% endif %}
         {% if sport == 'WNBA' %}
-        {% set model_cards = [('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% else %}
-        {% set model_cards = [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble')] %}
+        {% set model_cards = [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble')] %}
         {% endif %}
         {# ── SECTION: Issue 5 — Efficiency as a 6th graded model in daily/weekly tally ── #}
-        {% set tally_model_cards = model_cards + [('⚡ Efficiency','efficiency')] %}
+        {% set tally_model_cards = model_cards + [('Efficiency','efficiency')] %}
         {% set label_glicko2 = 'Grinder2' %}
         {% set label_trueskill = 'Takedown' %}
         {% set label_elo = 'Edge' %}
@@ -80065,7 +80707,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -80075,7 +80717,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -80116,7 +80758,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">📈 Spread</div>
+                    <div class="daily-model">Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -80126,7 +80768,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">🎲 Over/Under</div>
+                    <div class="daily-model">Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -80148,7 +80790,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -80176,7 +80818,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
 
         <!-- ── Combined Stats Banner ── -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
-            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">🏆 Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
+            <h2 style="text-align:center;margin:0 0 6px 0;font-size:1.5em;color:#0f172a;">Season Performance{% if selected_league %} — {{ selected_league }}{% endif %}</h2>
             {% if sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 12px;font-size:0.78em;color:#64748b;">W-L tiles count <strong>graded model decisions</strong>, which can be fewer than completed games on the slate.</p>
             {% endif %}
@@ -80187,7 +80829,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
             {% endif %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline{% if sp and sp.ml_model_label %} ({{ sp.ml_model_label }}){% endif %}</div>
                     {% if sp and sp.ml_total > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -80197,7 +80839,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread{% if sp and sp.spread_model_label %} ({{ sp.spread_model_label }}){% endif %}</div>
                     {% if sp and sp.spread_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.spread_pct is none %}#94a3b8{% elif sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.spread_pct is not none %}{{ sp.spread_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -80207,7 +80849,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U{% if sp and sp.ou_model_label %} ({{ sp.ou_model_label }}){% endif %}</div>
                     {% if sp and sp.ou_graded > 0 %}
                     <div style="font-size:2em;font-weight:bold;color:{% if sp.ou_pct is none %}#94a3b8{% elif sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{% if sp.ou_pct is not none %}{{ sp.ou_pct }}%{% else %}—{% endif %}</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }} <span title="Number of Games" style="cursor:help;opacity:0.7;">ⓘ</span></div>
@@ -80229,21 +80871,21 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
             {% set sp = playoff_perf %}
             <div class="roi-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:8px;">
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎯 Moneyline</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Moneyline</div>
                     {% if sp.ml_total > 0 %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ml_accuracy>=55 %}#067647{% elif sp.ml_accuracy>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ml_accuracy }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ml_correct }}-{{ sp.ml_total - sp.ml_correct }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">📈 Spread</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">Spread</div>
                     {% if sp.spread_graded > 0 and sp.spread_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.spread_pct>=52 %}#067647{% elif sp.spread_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.spread_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.spread_covered }}-{{ sp.spread_graded - sp.spread_covered }}</div>
                     {% else %}<div style="font-size:1.2em;color:#94a3b8;">—</div>{% endif %}
                 </div>
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:9px;padding:14px;text-align:center;">
-                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">🎲 O/U</div>
+                    <div style="font-size:0.8em;opacity:0.85;margin-bottom:4px;color:#334155;">O/U</div>
                     {% if sp.ou_graded > 0 and sp.ou_pct is not none %}
                     <div style="font-size:1.8em;font-weight:bold;color:{% if sp.ou_pct>=52 %}#067647{% elif sp.ou_pct>=50 %}#fbbf24{% else %}#D93025{% endif %};">{{ sp.ou_pct }}%</div>
                     <div style="font-size:0.85em;opacity:0.9;color:#334155;">{{ sp.ou_correct }}-{{ sp.ou_graded - sp.ou_correct }}</div>
@@ -80482,7 +81124,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 
@@ -80639,8 +81281,8 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - Week by Week Results</h1>
     
     <div class="section-tabs">
-        <a href="/{{ sport_seo_slug }}" class="tab">📊 Predictions</a>
-        <a href="/{{ sport_results_slug }}" class="tab active">🎯 Results</a>
+        <a href="/{{ sport_seo_slug }}" class="tab">Predictions</a>
+        <a href="/{{ sport_results_slug }}" class="tab active">Results</a>
     </div>
     
     {% if daily_tally %}
@@ -80666,7 +81308,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             </div>
         </div>
             <div class="daily-tally-grid">
-            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble'),('⚡ Efficiency','efficiency')] %}
+            {% for m_label, m_key in [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble'),('Efficiency','efficiency')] %}
             {% set m = daily_tally.get(m_key, {'total': 0, 'correct': 0, 'accuracy': 0}) %}
             <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                 <div class="daily-model">{{ m_label }}</div>
@@ -80690,7 +81332,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
     <div class="daily-tally">
         <h2>Last 7 Days {{ sport_info.name }} Results — {{ weekly_tally_date_range }} ({{ weekly_tally_games }} games)</h2>
         <div class="daily-tally-grid">
-            {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble'),('⚡ Efficiency','efficiency')] %}
+            {% for m_label, m_key in [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble'),('Efficiency','efficiency')] %}
             {% set m = weekly_tally.get(m_key, {'total': 0, 'correct': 0, 'accuracy': 0}) %}
             <div class="daily-tally-card {% if m_key == 'ensemble' %}highlight{% endif %}">
                 <div class="daily-model">{{ m_label }}</div>
@@ -80714,9 +81356,9 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% set ens = overall_stats.ensemble %}
         <!-- Overall per-model performance -->
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:15px;padding:25px;margin-bottom:25px;">
-            <h2 style="text-align:center;margin:0 0 20px 0;font-size:1.8em;color:#0f172a;">🏆 Overall Model Performance &mdash; {{ ens.total }} Games</h2>
+            <h2 style="text-align:center;margin:0 0 20px 0;font-size:1.8em;color:#0f172a;">Overall Model Performance &mdash; {{ ens.total }} Games</h2>
             <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px;">
-                {% for m_label, m_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble'),('⚡ Efficiency','efficiency')] %}
+                {% for m_label, m_key in [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble'),('Efficiency','efficiency')] %}
                 {% set m = overall_stats[m_key] if m_key in overall_stats else {'total': 0, 'correct': 0, 'accuracy': 0} %}
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:15px;text-align:center;{% if m_key == 'ensemble' %}border:2px solid #fbbf24; grid-column: span 4;{% endif %}">
                     <div style="font-size:0.9em;opacity:0.9;margin-bottom:4px;color:#334155;">{{ m_label }}</div>
@@ -80737,7 +81379,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div style="opacity: 0.8;">{{ week_data.games|length }} Games</div>
             </div>
             <div class="week-models">
-                {% for wm_label, wm_key in [('⭐ Grinder2','glicko2'),('🎯 Takedown','trueskill'),('📊 Edge','elo'),('🤖 XSharp','xgboost'),('🏆 Sharp Consensus','ensemble'),('⚡ Efficiency','efficiency')] %}
+                {% for wm_label, wm_key in [('Grinder2','glicko2'),('Takedown','trueskill'),('Edge','elo'),('XSharp','xgboost'),('Sharp Consensus','ensemble'),('Efficiency','efficiency')] %}
                 {% set wm = week_data[wm_key] if wm_key in week_data else {'accuracy': 0, 'correct': 0, 'total': 0} %}
                 <div class="week-model-card {% if wm.accuracy == best_acc %}best{% endif %}">
                     <div class="model-label">{{ wm_label }}</div>
@@ -80867,7 +81509,7 @@ NFL_WEEKLY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setTallyShareMenuOpen(false); });
     });
 </script>
-""" + _SEO_RESULTS_PAGE_FOOTER + """
+
 """)
 
 # ============================================================================
@@ -86166,6 +86808,173 @@ def _build_team_performance_rows(sport_filter: str = ''):
     return team_chart_rows[:120]
 
 
+_WEB_COUNTS = {'ts': 0.0, 'counts': {}}
+
+
+def _web_game_counts():
+    """Games today and in the next six days per sport (cached 5 min) for the React sports list."""
+    now = _time.time()
+    if now - _WEB_COUNTS['ts'] < 300:
+        return _WEB_COUNTS['counts']
+    counts = {}
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT sport, "
+            "SUM(CASE WHEN date(game_date) = date('now','localtime') THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN date(game_date) BETWEEN date('now','localtime') "
+            "AND date('now','localtime','+6 days') THEN 1 ELSE 0 END) "
+            "FROM predictions GROUP BY sport"
+        ).fetchall()
+        for row in rows:
+            counts[row[0]] = (int(row[1] or 0), int(row[2] or 0))
+        conn.close()
+    except Exception as exc:
+        logger.debug(f"[web] game counts failed: {exc}")
+    _WEB_COUNTS['ts'] = now
+    _WEB_COUNTS['counts'] = counts
+    return counts
+
+
+# Months each sport is in season (approximate regular-season windows, by calendar month).
+_IN_SEASON_MONTHS = {
+    'NBA': set(range(10, 13)) | set(range(1, 7)),
+    'NHL': set(range(10, 13)) | set(range(1, 7)),
+    'NFL': set(range(9, 13)) | {1, 2},
+    'MLB': set(range(3, 11)),
+    'NCAAB': set(range(11, 13)) | set(range(1, 5)),
+    'NCAAW': set(range(11, 13)) | set(range(1, 5)),
+    'NCAAF': set(range(8, 13)) | {1},
+    'WNBA': set(range(5, 11)),
+    'CFL': set(range(6, 12)),
+    'GOLF': set(range(1, 12)),
+    'SOCCER': set(range(1, 13)),
+    'TENNIS': set(range(1, 13)),
+    'UFC': set(range(1, 13)),
+}
+
+
+def _web_sports_payload():
+    """Sports for the React sports list: plain names, and Today / In season / Offseason status."""
+    counts = _web_game_counts()
+    out = []
+    for sport_key in _LANDING_SPORT_ORDER:
+        if sport_key in _LIVE_HIDDEN_SPORTS:
+            continue
+        if sport_key == 'SOCCER' and not SOCCER_ENABLED:
+            continue
+        info = SPORTS.get(sport_key)
+        if not info:
+            continue
+        today_n, _week_n = counts.get(sport_key, (0, 0))
+        in_season = datetime.now().month in _IN_SEASON_MONTHS.get(sport_key, set(range(1, 13)))
+        if today_n:
+            status, status_text = 'Today', f'Today · {today_n}'
+        elif in_season:
+            status, status_text = 'In season', 'In season'
+        else:
+            status, status_text = 'Offseason', 'Offseason'
+        slug = SPORT_SEO_SLUGS.get(sport_key, sport_key.lower() + '-picks').replace('-projections', '-picks')
+        out.append({
+            'key': sport_key,
+            'slug': slug,
+            'name': _LANDING_SPORT_SHORT.get(sport_key, info['name']),
+            'status': status,
+            'statusText': status_text,
+        })
+    return out
+
+
+def _live_home_prob(row):
+    """Home win probability for a game: the ensemble, or the first model that is not a coin flip."""
+    ens = float(row['win_probability'])
+    if abs(ens - 0.5) >= 0.011:
+        return ens
+    for key in ('meta_home_prob', 'xgboost_home_prob', 'elo_home_prob', 'logistic_home_prob'):
+        value = row[key]
+        if value is None:
+            continue
+        try:
+            fv = float(value)
+        except Exception:
+            continue
+        if fv > 1.0:
+            fv = fv / 100.0
+        if abs(fv - 0.5) >= 0.011:
+            return fv
+    return None
+
+
+_LIVE_ROW_ORDER = ['NHL', 'NBA', 'NFL', 'NCAAF', 'SOCCER', 'MLB', 'WNBA', 'CFL', 'TENNIS', 'NCAAB', 'NCAAW']
+
+
+def _clean_team_name(name):
+    """Stored names sometimes repeat themselves in capitals ('Regis University REGIS UNIVERSITY')."""
+    words = str(name or '').split()
+    half = len(words) // 2
+    if len(words) >= 2 and len(words) % 2 == 0 and [w.lower() for w in words[:half]] == [w.lower() for w in words[half:]]:
+        return ' '.join(words[:half])
+    return ' '.join(words)
+
+
+def _web_live_payload():
+    """Every game dated today with no final score yet, across the sports, for the scrolling live row.
+    The big leagues come first; the college leagues, which have the most games, come last."""
+    sport_rank = {key: rank for rank, key in enumerate(_LIVE_ROW_ORDER)}
+    try:
+        conn = get_db_connection()
+        rows = conn.execute(
+            "SELECT p.game_id, p.sport, p.home_team_id, p.away_team_id, p.win_probability, "
+            "p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob "
+            "FROM predictions p "
+            "LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport "
+            "WHERE date(p.game_date) = date('now','localtime') "
+            "AND (g.home_score IS NULL OR g.game_id IS NULL) "
+            "AND p.win_probability IS NOT NULL "
+            "ORDER BY p.game_date ASC"
+        ).fetchall()
+        conn.close()
+    except Exception as exc:
+        logger.debug(f"[web] live games failed: {exc}")
+        return []
+    items = []
+    seen = set()
+    for row in sorted(rows, key=lambda r: sport_rank.get(r['sport'], len(sport_rank))):
+        if row['sport'] in _LIVE_HIDDEN_SPORTS or (row['sport'] == 'SOCCER' and not SOCCER_ENABLED):
+            continue
+        home_prob = _live_home_prob(row)
+        away, home = row['away_team_id'], row['home_team_id']
+        if home_prob is None or _is_placeholder_team_name(away) or _is_placeholder_team_name(home):
+            continue
+        game_id = str(row['game_id'] or '').strip()
+        matchup = _homepage_matchup_key(row['sport'], away, home)
+        if (game_id and (row['sport'], game_id) in seen) or matchup in seen:
+            continue
+        if game_id:
+            seen.add((row['sport'], game_id))
+        seen.add(matchup)
+        items.append({
+            'sport': _LANDING_SPORT_SHORT.get(row['sport'], row['sport']),
+            'away': _clean_team_name(away),
+            'home': _clean_team_name(home),
+            'awayPct': round((1.0 - home_prob) * 100, 1),
+            'homePct': round(home_prob * 100, 1),
+            'href': '/' + SPORT_SEO_SLUGS.get(row['sport'], '').replace('-projections', '-picks'),
+        })
+    return items
+
+
+def _web_results_html(sport):
+    """The sport's recent results block (last night, last 7, last 30) for the React results column."""
+    from picks_recent_results import _cached_recent
+    cached = _cached_recent(sport)
+    return cached[0] if cached else ''
+
+
+from web_api import api as _web_api_blueprint  # noqa: E402
+app.register_blueprint(_web_api_blueprint)
+
+
 @app.route('/player-props')
 def player_props_page():
     """Player props page — wired into the main app via /player-props-api/ routes.
@@ -86174,7 +86983,7 @@ def player_props_page():
     as a teaser (rest locked/blurred); premium users get full access. The
     per-tab gating is enforced by the /player-props-api/* routes below.
     """
-    if not current_user.is_authenticated:
+    if not current_user.is_authenticated and not is_premium_user():
         return redirect(url_for('auth.login_page', next=request.path))
     return render_template('player_props.html')
 
@@ -88696,7 +89505,11 @@ def sport_home(sport):
     return "Sport not found", 404
 
 
-_DAILY_REPORT_DISK = _os_v2.path.join(_os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'daily_report_page.json')
+try:
+    from served_cache import cache_dir as _sc_dir
+    _DAILY_REPORT_DISK = str(_sc_dir() / 'daily_report_page.json')
+except Exception:
+    _DAILY_REPORT_DISK = _os_v2.path.join(_os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'daily_report_page.json')
 _DAILY_REPORT_LOCK = threading.Lock()
 _DAILY_REPORT_BUILDING = [False]
 
@@ -89013,12 +89826,12 @@ def _daily_report_build():
     agg_ou['accuracy'] = round(agg_ou['correct'] / agg_ou['total'] * 100, 1) if agg_ou['total'] > 0 else 0.0
 
     model_labels = [
-        ('glicko2', '⭐ Grinder2'),
-        ('trueskill', '🎯 Takedown'),
-        ('elo', '📊 Edge'),
-        ('xgboost', '🤖 XSharp'),
-        ('ensemble', '🏆 Sharp Consensus'),
-        ('efficiency', '⚡ Efficiency'),
+        ('glicko2', 'Grinder2'),
+        ('trueskill', 'Takedown'),
+        ('elo', 'Edge'),
+        ('xgboost', 'XSharp'),
+        ('ensemble', 'Sharp Consensus'),
+        ('efficiency', 'Efficiency'),
     ]
 
     share_text = f"predictionlab.io Daily Report — {report_display}%0A"
@@ -92613,7 +93426,7 @@ def _results_fallback_page(sport, message):
             <p style="color:#334155;line-height:1.7;">{{ message }}</p>
             <p style="margin-top:10px;"><a href="/{{ sport_results_slug }}" style="color:#00529B;font-weight:700;">Refresh results page</a></p>
         </div>
-        """ + _SEO_RESULTS_PAGE_FOOTER + """
+        
         """),
         page=sport,
         sport=sport,
@@ -97376,7 +98189,7 @@ def sport_predictions__ncaaf(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -97415,7 +98228,7 @@ def sport_predictions__ncaaf(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -98249,7 +99062,7 @@ def sport_predictions__mlb(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -98288,7 +99101,7 @@ def sport_predictions__mlb(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -99150,7 +99963,7 @@ def sport_predictions__nhl(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -99189,7 +100002,7 @@ def sport_predictions__nhl(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -100031,7 +100844,7 @@ def sport_predictions__nba(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -100070,7 +100883,7 @@ def sport_predictions__nba(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -100898,7 +101711,7 @@ def sport_predictions__ncaab(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -100937,7 +101750,7 @@ def sport_predictions__ncaab(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -101764,7 +102577,7 @@ def sport_predictions__ncaaw(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -101803,7 +102616,7 @@ def sport_predictions__ncaaw(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -102641,7 +103454,7 @@ def sport_predictions__wnba(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -102680,7 +103493,7 @@ def sport_predictions__wnba(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -103513,7 +104326,7 @@ def sport_predictions__cfl(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -103552,7 +104365,7 @@ def sport_predictions__cfl(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -104408,7 +105221,7 @@ def sport_predictions__soccer(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -105361,7 +106174,7 @@ def sport_predictions__tennis(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -105400,7 +106213,7 @@ def sport_predictions__tennis(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -106226,7 +107039,7 @@ def sport_predictions__ufc(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -106265,7 +107078,7 @@ def sport_predictions__ufc(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -107093,7 +107906,7 @@ def sport_predictions__golf(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -107132,7 +107945,7 @@ def sport_predictions__golf(sport, filter_date=None):
                     return _inject_sport_blog_hub(
                         _apply_nfl_picks_html_fixups(cached_html), sport, filter_date)
                 return _inject_sport_blog_hub(cached_html, sport, filter_date)
-        if _use_page_cache:
+        if _use_page_cache and not _pl_force_page_rebuild():
             _any_nfl = _cached_usable_picks_html(sport, filter_date)
             if _any_nfl:
                 try:
@@ -107962,7 +108775,7 @@ def sport_predictions(sport, filter_date=None):
         if str(sport or '').upper() == 'NHL':
             cache_key += '::nhl_fill_v12'
         cache_ttl = _SPORT_PREDICTIONS_PAGE_TTL.get(sport, 180)
-        cached_page = _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
+        cached_page = None if _pl_force_page_rebuild() else _SPORT_PREDICTIONS_PAGE_CACHE.get(cache_key)
         if isinstance(cached_page, dict):
             cached_ts = cached_page.get('ts')
             cached_html = cached_page.get('html')
@@ -109331,7 +110144,24 @@ def _ncaaw_cards_html_for_chart():
                 return text
     except Exception:
         logger.exception("NCAAW chart cards lookup failed")
+    # Cold start: no cards page saved yet. Build it once (cards view never calls
+    # the chart), so a thin chart with dash rows is not served and saved.
+    if getattr(_NCAAW_CHART_CARDS_BUILD, "on", False):
+        return ""
+    try:
+        _NCAAW_CHART_CARDS_BUILD.on = True
+        resp = app.test_client().get("/ncaaw-results")
+        text = resp.get_data(as_text=True) if resp.status_code == 200 else ""
+        if "game-card" in text:
+            return text
+    except Exception:
+        logger.exception("NCAAW chart cards build failed")
+    finally:
+        _NCAAW_CHART_CARDS_BUILD.on = False
     return ""
+
+
+_NCAAW_CHART_CARDS_BUILD = threading.local()
 
 
 def _ncaaw_grade_word(grade):
@@ -110604,6 +111434,7 @@ def sport_results__ncaaf(sport):
                 }
                 try:
                     _attach_h2h_projection_to_daily_results(sport, _recent_daily, n=10)
+                    _attach_published_lines(sport, _recent_daily)
                 except Exception:
                     pass
                 _finalize_daily_result_cards(sport, _recent_daily)
@@ -114362,6 +115193,10 @@ def sport_results__nba(sport):
                     )
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
+                try:
+                    _attach_published_lines(sport, daily_results)
+                except Exception:
+                    pass
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _st_stats = _compute_spread_total_for_daily(
                     sport, daily_results, skip_efficiency=True, skip_h2h=True,
@@ -114372,6 +115207,7 @@ def sport_results__nba(sport):
                 }
                 try:
                     _attach_h2h_projection_to_daily_results(sport, _recent_daily, n=10)
+                    _attach_published_lines(sport, _recent_daily)
                 except Exception:
                     pass
                 _finalize_daily_result_cards(sport, _recent_daily)
@@ -115234,7 +116070,7 @@ def sport_results__ncaab(sport):
                     roi_total = compute_roi_for_range(
                         daily_results, _nfl_season['start_dt'], None,
                     )
-                    roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+                    roi_cards = build_roi_cards(roi_daily, roi_weekly, _align_roi_moneyline_to_season_perf(roi_total, season_perf) if season_perf else roi_total)
                     _date_ctx = _results_page_date_kwargs(daily_results, sorted_dates)
                     rendered = render_template_string(
                         DAILY_RESULTS_TEMPLATE__ncaab,
@@ -115478,7 +116314,7 @@ def sport_results__ncaab(sport):
                 roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
                 if not snapshot_stats:
                     roi_total = compute_roi_for_range(season_daily, None, None)
-                roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+                roi_cards = build_roi_cards(roi_daily, roi_weekly, _align_roi_moneyline_to_season_perf(roi_total, season_perf) if season_perf else roi_total)
 
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE__ncaab,
@@ -115587,6 +116423,10 @@ def sport_results__ncaab(sport):
                     )
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
+                try:
+                    _attach_published_lines(sport, daily_results)
+                except Exception:
+                    pass
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _st_stats = _compute_spread_total_for_daily(
                     sport, daily_results, skip_efficiency=True, skip_h2h=True,
@@ -115597,6 +116437,7 @@ def sport_results__ncaab(sport):
                 }
                 try:
                     _attach_h2h_projection_to_daily_results(sport, _recent_daily, n=10)
+                    _attach_published_lines(sport, _recent_daily)
                 except Exception:
                     pass
                 _finalize_daily_result_cards(sport, _recent_daily)
@@ -115616,7 +116457,7 @@ def sport_results__ncaab(sport):
                 roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
                 roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
                 roi_total = compute_roi_for_range(daily_results, None, None)
-                roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+                roi_cards = build_roi_cards(roi_daily, roi_weekly, _align_roi_moneyline_to_season_perf(roi_total, season_perf) if season_perf else roi_total)
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE__ncaab,
                     **_results_page_meta(sport),
@@ -115853,7 +116694,17 @@ def sport_results__ncaab(sport):
                     _results_cap = int(
                         SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('WNBA') or 330
                     ) + 40
-                elif sport in ('NBA', 'NCAAB', 'NCAAW'):
+                elif sport in ('NCAAB', 'NCAAW'):
+                    # One college night can pass 150 games: keep every game of the newest 8 days.
+                    _results_cap = 150
+                    if completed_games:
+                        _newest = str(completed_games[0]['game_date'])[:10]
+                        try:
+                            _floor = (datetime.strptime(_newest, '%Y-%m-%d') - timedelta(days=7)).strftime('%Y-%m-%d')
+                            _results_cap = max(150, sum(1 for _g in completed_games if str(_g['game_date'])[:10] >= _floor))
+                        except Exception:
+                            pass
+                elif sport == 'NBA':
                     _results_cap = 150
                 else:
                     _results_cap = 800
@@ -116139,11 +116990,11 @@ def sport_results__ncaab(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if sport in ('MLB', 'SOCCER', 'WNBA', 'NCAAB', 'NCAAW'):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -116453,7 +117304,7 @@ def sport_results__ncaaw(sport):
                     roi_total = compute_roi_for_range(
                         daily_results, _nfl_season['start_dt'], None,
                     )
-                    roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+                    roi_cards = build_roi_cards(roi_daily, roi_weekly, _align_roi_moneyline_to_season_perf(roi_total, season_perf) if season_perf else roi_total)
                     _date_ctx = _results_page_date_kwargs(daily_results, sorted_dates)
                     rendered = render_template_string(
                         DAILY_RESULTS_TEMPLATE__ncaaw,
@@ -116697,7 +117548,7 @@ def sport_results__ncaaw(sport):
                 roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
                 if not snapshot_stats:
                     roi_total = compute_roi_for_range(season_daily, None, None)
-                roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+                roi_cards = build_roi_cards(roi_daily, roi_weekly, _align_roi_moneyline_to_season_perf(roi_total, season_perf) if season_perf else roi_total)
 
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE__ncaaw,
@@ -116806,6 +117657,10 @@ def sport_results__ncaaw(sport):
                     )
                 
                 overall_stats = compute_overall_stats_from_daily(daily_results)
+                try:
+                    _attach_published_lines(sport, daily_results)
+                except Exception:
+                    pass
                 _ov, _un, _gou, _avg, _bench = _ou_stats(daily_results, sport)
                 _st_stats = _compute_spread_total_for_daily(
                     sport, daily_results, skip_efficiency=True, skip_h2h=True,
@@ -116816,6 +117671,7 @@ def sport_results__ncaaw(sport):
                 }
                 try:
                     _attach_h2h_projection_to_daily_results(sport, _recent_daily, n=10)
+                    _attach_published_lines(sport, _recent_daily)
                 except Exception:
                     pass
                 _finalize_daily_result_cards(sport, _recent_daily)
@@ -116835,7 +117691,7 @@ def sport_results__ncaaw(sport):
                 roi_daily = compute_roi_for_range(daily_results, yesterday_dt, yesterday_dt)
                 roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
                 roi_total = compute_roi_for_range(daily_results, None, None)
-                roi_cards = build_roi_cards(roi_daily, roi_weekly, roi_total)
+                roi_cards = build_roi_cards(roi_daily, roi_weekly, _align_roi_moneyline_to_season_perf(roi_total, season_perf) if season_perf else roi_total)
                 rendered = render_template_string(
                     DAILY_RESULTS_TEMPLATE__ncaaw,
                     **_results_page_meta(sport),
@@ -117072,7 +117928,17 @@ def sport_results__ncaaw(sport):
                     _results_cap = int(
                         SPORT_REGULAR_SEASON_LEAGUE_GAMES.get('WNBA') or 330
                     ) + 40
-                elif sport in ('NBA', 'NCAAB', 'NCAAW'):
+                elif sport in ('NCAAB', 'NCAAW'):
+                    # One college night can pass 150 games: keep every game of the newest 8 days.
+                    _results_cap = 150
+                    if completed_games:
+                        _newest = str(completed_games[0]['game_date'])[:10]
+                        try:
+                            _floor = (datetime.strptime(_newest, '%Y-%m-%d') - timedelta(days=7)).strftime('%Y-%m-%d')
+                            _results_cap = max(150, sum(1 for _g in completed_games if str(_g['game_date'])[:10] >= _floor))
+                        except Exception:
+                            pass
+                elif sport == 'NBA':
                     _results_cap = 150
                 else:
                     _results_cap = 800
@@ -117352,11 +118218,11 @@ def sport_results__ncaaw(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if sport in ('MLB', 'SOCCER', 'WNBA', 'NCAAB', 'NCAAW'):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -118046,6 +118912,7 @@ def sport_results__wnba(sport):
                 }
                 try:
                     _attach_h2h_projection_to_daily_results(sport, _recent_daily, n=10)
+                    _attach_published_lines(sport, _recent_daily)
                 except Exception:
                     pass
                 _finalize_daily_result_cards(sport, _recent_daily)
@@ -129685,6 +130552,12 @@ try:
     _ladder_picks.init_app(app)
 except Exception as _ladder_e:
     logger.warning(f"ladder picks not installed: {_ladder_e}")
+
+try:
+    import app_api as _app_api
+    _app_api.init_app(app)
+except Exception as _app_api_e:
+    logger.warning(f"app feed not installed: {_app_api_e}")
 
 
 if __name__ == '__main__':

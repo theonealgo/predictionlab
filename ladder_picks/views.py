@@ -81,6 +81,8 @@ def _day_view(row, show_pick: bool) -> dict:
             "odds": money.fmt_american(r.get("american_odds")),
             "decimal": f"{r['decimal_odds']:.2f}" if r.get("decimal_odds") else "—",
             "break_even": _pct(1 / r["decimal_odds"]) if r.get("decimal_odds") else "—",
+            "expected": (f"{(r['hist_hit_rate'] * r['decimal_odds'] - 1) * 100:+.1f}%"
+                         if r.get("decimal_odds") and r.get("hist_hit_rate") is not None else "—"),
             "model_prob": _pct(r.get("model_prob")),
             "start": _start_et(r.get("event_start")),
             "score": score,
@@ -127,7 +129,8 @@ def page_context(conn, premium: bool, cfg: Config | None = None) -> dict:
             "current_amount": money.fmt_money(c["current_amount_cents"]),
             "net": money.fmt_money(net),
             "net_cents": net,
-            "day": reached,
+            # A settled win/push leaves the ladder waiting on the next day, not on the one played.
+            "day": reached + 1 if (c["status"] == "active" and today_pick is None and reached < cfg.days) else reached,
             "end_reason": c.get("end_reason") or "",
         }
     progress = []

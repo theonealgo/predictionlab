@@ -266,6 +266,8 @@ def _nba_scored_night(N, date_key: str):
             N._nba_grade_missing_g2_td(game)
     try:
         N._attach_h2h_projection_to_daily_results("NBA", daily, n=10)
+        if hasattr(N, "_attach_published_lines"):
+            N._attach_published_lines("NBA", daily)
     except Exception:
         pass
     if hasattr(N, "_grade_efficiency_ml_from_spread"):
@@ -305,6 +307,8 @@ def _build_block(sport: str) -> str:
                 N._nba_grade_missing_g2_td(game)
     try:
         N._attach_h2h_projection_to_daily_results("NBA", daily, n=10)
+        if hasattr(N, "_attach_published_lines"):
+            N._attach_published_lines("NBA", daily)
     except Exception:
         pass
     if hasattr(N, "_grade_efficiency_ml_from_spread"):
@@ -317,6 +321,7 @@ def _build_block(sport: str) -> str:
         try:
             N._compute_spread_total_for_daily(
                 sport_u, daily, skip_efficiency=True,
+                skip_h2h=True,
             )
         except Exception:
             pass

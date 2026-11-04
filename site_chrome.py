@@ -288,6 +288,14 @@ _RG_FINEPRINT = (
 )
 
 
+# An earlier version put this fine print in the wrong place (inside a card). Any copy with this id is removed
+# first, so the page gets one copy, in the site footer.
+_RG_FINEPRINT_RE = re.compile(
+    r'<p\b[^>]*class="pl-rg-fineprint"[^>]*>.*?</p>\s*',
+    re.I | re.S,
+)
+
+
 def _has_gambling_policy_copy(html: str) -> bool:
     low = (html or "").lower()
     return (
@@ -310,12 +318,18 @@ def ensure_gambling_policy_chrome(html: str) -> str:
     html = _RG_AGE_BAR_RE.sub("", html)
     html = _RG_POLICY_RE.sub("", html)
     html = _RG_POLICY_CSS_RE.sub("", html)
+    html = _RG_FINEPRINT_RE.sub("", html)
     if _has_gambling_policy_copy(html):
         return html
-    if 'id="pl-rg-fineprint"' in html:
+    # The fine print goes in the site footer. A card can have a footer of its own (tennis cards do), so the
+    # last </footer> on the page is not always the site footer.
+    site = re.search(r'<footer\b[^>]*class="[^"]*\b(?:site-directory-footer|pl2-footer)\b', html, flags=re.I)
+    if site:
+        close = re.compile(r"</footer\s*>", flags=re.I).search(html, site.end())
+        if close:
+            return html[:close.start()] + _RG_FINEPRINT + html[close.start():]
         return html
-    lasts = list(re.finditer(r"</footer\s*>", html, flags=re.I))
-    if lasts:
-        i = lasts[-1].start()
-        return html[:i] + _RG_FINEPRINT + html[i:]
+    body = re.search(r"</body\s*>", html, flags=re.I)
+    if body:
+        return html[:body.start()] + _RG_FINEPRINT + html[body.start():]
     return html

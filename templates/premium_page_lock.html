@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ page_title }} | predictionlab.io{% endblock %}
+{% block head_meta %}
+<meta name="description" content="{{ page_blurb }}">
+<link rel="canonical" href="https://predictionlab.io{{ page_path }}">
+{% endblock %}
+{% block extra_styles %}
+<style>
+.ppl-wrap{max-width:760px;margin:0 auto;padding:14px 14px 34px;color:#0f172a}
+.ppl-wrap h1{font-size:1.8rem;text-align:center;margin:4px 0 6px}
+.ppl-lead{text-align:center;color:#475569;font-size:.95em;margin:0 auto 16px}
+.ppl-lock{text-align:center;padding:22px 10px;background:#f8fafc;border:1px dashed #94a3b8;border-radius:10px}
+.ppl-lock p{color:#334155;margin-bottom:12px}
+.ppl-btn{display:inline-block;padding:9px 16px;border-radius:8px;font-weight:700;text-decoration:none;margin:4px}
+.ppl-btn.primary{background:#2563eb;color:#fff}.ppl-btn.ghost{border:1px solid #2563eb;color:#2563eb;background:#fff}
+</style>
+{% endblock %}
+{% block content %}
+<div class="ppl-wrap">
+  <h1>{{ page_title }}</h1>
+  <p class="ppl-lead">{{ page_blurb }}</p>
+  <div class="ppl-lock">
+    <p><strong>{{ page_title }} is for premium members.</strong></p>
+    <a class="ppl-btn primary" href="/plans">Join Premium</a>
+    {% if not is_logged_in %}<a class="ppl-btn ghost" href="/login?next={{ page_path }}">Log in</a>{% endif %}
+  </div>
+</div>
+{% endblock %}

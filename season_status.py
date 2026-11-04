@@ -76,11 +76,22 @@ def parse_scoreboard(data: dict) -> dict | None:
     days = sorted(d for d in days if len(d) == 10)
     if not days:
         return None
+    events = (data or {}).get("events") or []
+    states = {str(((e.get("status") or {}).get("type") or {}).get("state") or "") for e in events}
+    last_event = ""
+    for e in events:
+        try:
+            when = datetime.strptime(str(e.get("date") or "")[:16], "%Y-%m-%dT%H:%M") - timedelta(hours=5)
+        except ValueError:
+            continue
+        last_event = max(last_event, when.strftime("%Y-%m-%d"))
     return {
         "start": days[0],
         "end": days[-1],
         "season_end": _day(season.get("endDate")),
         "type": stype,
+        "events_all_final": bool(events) and states == {"post"},
+        "last_event": last_event,
     }
 
 
@@ -97,6 +108,14 @@ def league_in_season(info: dict | None, today: datetime) -> bool | None:
         return None
     if info.get("type") == 4:
         return False
+    # Postseason whose scoreboard holds only the finished last game: the title was decided
+    # (ESPN keeps the calendar open for games that were never needed).
+    if info.get("type") == 3 and info.get("events_all_final") and info.get("last_event"):
+        try:
+            if (today - datetime.strptime(info["last_event"], "%Y-%m-%d")).days >= 2:
+                return False
+        except ValueError:
+            pass
     if info["start"] <= t <= info["end"]:
         return True
     # Opening week: picks for the first games are already up.
