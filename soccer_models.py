@@ -778,12 +778,13 @@ class EdgeEloPlus:
         aw = (1.0 - p_home_binary) * (1.0 - dp)
         return hw, dp, aw
 
-    def asian_handicap(self, home: str, away: str, league: Optional[str] = None) -> float:
+    def asian_handicap(self, home: str, away: str, league: Optional[str] = None,
+                       extra: float = 0.0) -> float:
         """PL AH from EdgeElo+ ratings — not Poisson λ."""
         lk = league or "UNK"
         rh0 = self.league_mean.get(lk, 1500.0) - 40.0
         ra0 = self.league_mean.get(lk, 1500.0) - 40.0
-        rh = 0.55 * self.rating_home.get(home, rh0) + 0.45 * self.rating.get(home, rh0) + self.home_adv
+        rh = 0.55 * self.rating_home.get(home, rh0) + 0.45 * self.rating.get(home, rh0) + self.home_adv + extra
         ra = 0.55 * self.rating_away.get(away, ra0) + 0.45 * self.rating.get(away, ra0)
         gd = max(-2.5, min(2.5, ((rh - ra) / 400.0) * 1.25))
         return round(gd * 2) / 2.0
@@ -840,6 +841,8 @@ class SoccerModelBundle:
     takedown: Optional[TakedownIndependent] = None  # proto Takedown
     elo: Optional[SoccerEloModel] = None
     edge_plus: Optional[EdgeEloPlus] = None
+    # European club competitions: league + club rating from every stored league.
+    league_elo: Optional[Any] = None
     takedown_model_version: str = TAKEDOWN_MODEL_VERSION_DEFAULT
     consensus_model_version: str = CONSENSUS_MODEL_VERSION_DEFAULT
 
@@ -927,6 +930,24 @@ class SoccerModelBundle:
         xs_hw, xs_dp, xs_aw = reg.get('home_win'), reg.get('draw'), reg.get('away_win')
         # Keep league-average λ 1X2 for XSharp. Do not copy Grinder2 into this slot.
 
+        # Clubs from different leagues: each model's 1X2 moves by the league
+        # strength gap (books already price it, so a market Edge is left alone).
+        league_gap = 0.0
+        if self.league_elo is not None:
+            from soccer_league_strength import is_european_competition, shift_three_way
+
+            if is_european_competition(league or self.league_name):
+                league_gap = float(self.league_elo.offset(home, away))
+        if league_gap:
+            if g2_hw is not None:
+                g2_hw, g2_dp, g2_aw = shift_three_way(g2_hw, g2_dp, g2_aw, league_gap)
+            if td_hw is not None:
+                td_hw, td_dp, td_aw = shift_three_way(td_hw, td_dp, td_aw, league_gap)
+            if ed_hw is not None and edge_src != 'market':
+                ed_hw, ed_dp, ed_aw = shift_three_way(ed_hw, ed_dp, ed_aw, league_gap)
+            if xs_hw is not None:
+                xs_hw, xs_dp, xs_aw = shift_three_way(xs_hw, xs_dp, xs_aw, league_gap)
+
         g2_bin = _binary_home(g2_hw, g2_dp) if g2_hw is not None else None
         td_bin = _binary_home(td_hw, td_dp) if td_hw is not None else None
         ed_bin = _binary_home(ed_hw, ed_dp) if ed_hw is not None else None
@@ -967,7 +988,7 @@ class SoccerModelBundle:
         if self.edge_plus is not None:
             try:
                 pl_spread = self.edge_plus.asian_handicap(
-                    home, away, league=league or self.league_name
+                    home, away, league=league or self.league_name, extra=league_gap
                 )
             except Exception:
                 pl_spread = None

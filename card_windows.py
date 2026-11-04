@@ -786,6 +786,20 @@ _BOX_RE = re.compile(
 )
 
 
+def _home_result(card: str) -> str | None:
+    """WIN / LOSS / PUSH (draw) for the card's home team, from its final score."""
+    names = re.findall(r'<div class="team-name">([^<]+)</div>', card[:40000])[:2]
+    scores = re.findall(r'class="final-score[^"]*">\s*(\d+)\s*<', card[:40000])[:2]
+    if len(scores) < 2:
+        return None
+    home_m = re.search(r'data-home-full="([^"]*)"', card[:3000])
+    home = unescape(home_m.group(1)).strip() if home_m else ""
+    names = [unescape(n).strip() for n in names]
+    hi = names.index(home) if home and home in names else 1
+    hs, as_ = int(scores[hi]), int(scores[1 - hi])
+    return "WIN" if hs > as_ else "LOSS" if hs < as_ else "PUSH"
+
+
 def _variable_panel_games(cards_html: str) -> list[dict]:
     """One consensus row per graded card, against the models that card shows."""
     games: list[dict] = []
@@ -810,9 +824,11 @@ def _variable_panel_games(cards_html: str) -> list[dict]:
                 counts[team] = counts.get(team, 0) + 1
             top = max(counts.values())
             if list(counts.values()).count(top) > 1:
-                # No majority side: counted in the Split row without a grade.
-                games.append({"date": dk, "label": f"{top}/{panel} Split / no consensus",
-                              "panel": panel, "maj": 0, "grade": "PUSH"})
+                # No majority side: the Split row records the home team (W-L-D).
+                grade = _home_result(card)
+                if grade:
+                    games.append({"date": dk, "label": f"{top}/{panel} Split / no consensus",
+                                  "panel": panel, "maj": 0, "grade": grade})
                 continue
             maj = next(t for t, n in counts.items() if n == top)
             dissent = [n for n in SIX if n in picks and picks[n][0] != maj]
@@ -875,6 +891,12 @@ def variable_panel_consensus(html: str, cards_html: str, sport_label: str) -> st
     if tb < 0 or te < 0 or (0 <= nxt < te):
         return html
     html = html[: tb + len("<tbody>")] + "".join(rows) + html[te:]
+    if any("Split" in label for _p, _m, label in labels):
+        html = html.replace(
+            "Even splits are omitted.",
+            "Even splits show the home team's record (wins-losses-draws).",
+            1,
+        )
     return re.sub(
         r"Moneyline on the pregame majority among the \d+ live models\.",
         "Moneyline on the pregame majority among the live models shown on each card.",

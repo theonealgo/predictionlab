@@ -20,10 +20,10 @@ const COLLEGE_FOOTBALL_FILTERS = [
   'Pioneer', 'Ivy', 'MEAC', 'NEC', 'OVC', 'UAC', 'FCS Ind.',
 ];
 
-// Soccer's league bubbles: the 15 active leagues from soccer_league_catalog.py, in the catalog's order.
+// Soccer's league bubbles: the active leagues from soccer_league_catalog.py, in the catalog's order.
 export const SOCCER_LEAGUES = [
   'All', 'English Premier League', 'Italian Serie A', 'German Bundesliga', 'Spanish LaLiga', 'French Ligue 1',
-  'Brazilian Serie A', 'Portuguese Primeira Liga', 'Belgian Pro League', 'Major League Soccer',
+  'UEFA Champions League', 'Brazilian Serie A', 'Portuguese Primeira Liga', 'Belgian Pro League', 'Major League Soccer',
   'EFL Championship', 'Dutch Eredivisie', 'Turkish Super Lig', 'Austrian Bundesliga', 'Scottish Premiership',
   'Swiss Super League',
 ];

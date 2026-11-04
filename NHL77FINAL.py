@@ -27360,7 +27360,51 @@ def _filter_soccer_picks(predictions, selected_slug=None, selected_region=None):
     return filtered, soccer_leagues, selected_league
 
 
+def _get_soccer_european_bundle(league_name):
+    """Clubs from different leagues: train on every stored league, plus league strength."""
+    cache_key = 'soccer_bundle_european'
+    now_ts = _time.time()
+    cached = _SOCCER_MODEL_CACHE.get(cache_key)
+    if not (cached and (now_ts - cached.get('ts', 0)) < _SOCCER_MODEL_TTL):
+        import dataclasses
+        from soccer_league_strength import LeagueElo
+        conn = get_db_connection()
+        try:
+            rows = [dict(r) for r in conn.execute('''
+                SELECT game_id, game_date, home_team_id, away_team_id,
+                       home_score, away_score, league
+                FROM games
+                WHERE sport = 'SOCCER' AND home_score IS NOT NULL AND away_score IS NOT NULL
+                ORDER BY game_date
+            ''').fetchall()]
+        finally:
+            conn.close()
+        bundle = build_soccer_model_bundle(rows[-3000:], min_games=12)
+        if bundle and getattr(bundle, 'ready', False):
+            elo = LeagueElo().fit([
+                {'league': _canonical_soccer_league_name(r['league']) or r['league'] or '',
+                 'home': r['home_team_id'], 'away': r['away_team_id'],
+                 'home_score': r['home_score'], 'away_score': r['away_score']}
+                for r in rows if r['home_team_id'] and r['away_team_id']
+            ])
+            bundle = dataclasses.replace(bundle, league_elo=elo)
+        cached = {'ts': now_ts, 'bundle': bundle}
+        _SOCCER_MODEL_CACHE[cache_key] = cached
+    bundle = cached.get('bundle')
+    if bundle and getattr(bundle, 'ready', False):
+        import dataclasses
+        return dataclasses.replace(bundle, league_name=league_name)
+    return bundle
+
+
 def _get_soccer_model_bundle(completed_games, league_name=None, exclude_game_ids=None):
+    if league_name and str(league_name).startswith('UEFA') and not exclude_game_ids:
+        try:
+            bundle = _get_soccer_european_bundle(league_name)
+            if bundle and getattr(bundle, 'ready', False):
+                return bundle
+        except Exception as exc:
+            logger.warning('[soccer] European bundle failed: %s', exc)
     league_key = _soccer_league_slug(league_name) if league_name else 'all'
     exclude = {str(x) for x in (exclude_game_ids or ()) if x}
     ex_key = str(hash(tuple(sorted(exclude)))) if exclude else 'none'
