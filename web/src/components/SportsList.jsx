@@ -59,9 +59,11 @@ export default function SportsList({ activeSlug }) {
   }, []);
 
   const soccerToday = Object.values(leagueCounts).reduce((sum, n) => sum + n, 0);
-  const shown = soccerToday
-    ? sports.map((sport) => (sport.key === 'SOCCER' ? { ...sport, status: 'Today', statusText: `Today · ${soccerToday}` } : sport))
-    : sports;
+  const tennisToday = tennisEvents.reduce((sum, item) => sum + (item.today || 0), 0);
+  const todayCounts = { SOCCER: soccerToday, TENNIS: tennisToday };
+  const shown = sports.map((sport) => (todayCounts[sport.key]
+    ? { ...sport, status: 'Today', statusText: `Today · ${todayCounts[sport.key]}` }
+    : sport));
   const byKey = Object.fromEntries(shown.map((sport) => [sport.key, sport]));
   const activeKey = (sports.find((sport) => sport.slug === activeSlug) || {}).key;
   const path = window.location.pathname.replace(/\/+$/, '');

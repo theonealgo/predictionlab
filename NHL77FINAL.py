@@ -71986,7 +71986,7 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
     .no-picks { text-align: center; padding: 60px; opacity: 0.7; font-size: 1.2em; }
     """
 ).replace('{% block content %}{% endblock %}', """
-    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - VALUE BETTING PICKS</h1>
+    <h1 class="page-title">{{ sport_info.icon }} {{ sport_info.name }} - PREDICTIONS</h1>
     <div class="section-tabs">
         <a href="/{{ sport_seo_slug|replace('-projections', '-picks')|replace('-picks', '-predictions') }}" class="tab active">💰 Value Picks</a>
         <a href="/{{ sport_results_slug }}" class="tab">Results</a>
@@ -72030,7 +72030,7 @@ VALUE_BETTING_TEMPLATE = BASE_TEMPLATE.replace(
             {% endfor %}
         {% else %}
         <div class="no-picks">
-            ❌ No value bets found for today<br>
+            ❌ No predictions for today<br>
             <span style="opacity: 0.7; font-size: 0.9em;">Market is efficiently priced or no games available</span>
         </div>
         {% endif %}

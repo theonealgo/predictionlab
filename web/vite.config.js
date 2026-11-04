@@ -18,7 +18,8 @@ const PREVIEW_HOST = process.env.PL_PREVIEW_HOST || '';
 export default defineConfig(({ command }) => ({
   // The build goes to static/web/, which Flask serves at /static/web/ (see react_shell.py).
   base: command === 'build' ? '/static/web/' : '/',
-  build: { outDir: '../static/web', emptyOutDir: true },
+  // Older bundles stay, so a page served just before a deploy still loads its files.
+  build: { outDir: '../static/web', emptyOutDir: false },
   plugins: [react()],
   server: {
     port: Number(process.env.PL_WEB_PORT) || 5173,

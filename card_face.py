@@ -26,7 +26,7 @@ _RESULTS_CHIPS = {
         ("team_results_charts", "_inject_soccer_pl_vs_books_chips", {}),
     ],
 }
-for _s, _models in (("NBA", "_WNBA_CONSENSUS_MODELS"), ("NCAAB", "_NCAAF_CONSENSUS_MODELS"),
+for _s, _models in (("NBA", "_NCAAF_CONSENSUS_MODELS"), ("NCAAB", "_NCAAF_CONSENSUS_MODELS"),
                     ("NCAAW", "_NCAAF_CONSENSUS_MODELS")):
     _RESULTS_CHIPS[_s] = [
         ("team_results_charts", "_inject_consensus_hist_chips", {"sport": _s, "models": _models}),
