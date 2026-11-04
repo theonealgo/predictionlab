@@ -108,27 +108,12 @@ export default function SportPage({ slug }) {
     setPayload(null);
     setError(null);
     setShowAllDays(false);
-    // A sport's first build after a restart can be slow: keep loading and try again before giving up.
-    let alive = true;
-    let timer = null;
-    const load = (triesLeft) => {
-      getJson(`/api/web/sports/${slug}/cards`)
-        .then((data) => {
-          if (!alive) return;
-          applyCardStyles(data.css);
-          setPayload(data);
-        })
-        .catch((err) => {
-          if (!alive) return;
-          if (triesLeft > 0) timer = setTimeout(() => load(triesLeft - 1), 3000);
-          else setError(err.message);
-        });
-    };
-    load(4);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-    };
+    getJson(`/api/web/sports/${slug}/cards`)
+      .then((data) => {
+        applyCardStyles(data.css);
+        setPayload(data);
+      })
+      .catch((err) => setError(err.message));
   }, [slug, isGolf]);
 
   const cards = payload ? payload.cards : [];
@@ -230,14 +215,7 @@ export default function SportPage({ slug }) {
         <h1 className="pl-title">{sport}</h1>
         <div className="pl-tabs" role="tablist">
           {nav.tabs.map((name) => (
-            <button
-              key={name}
-              type="button"
-              role="tab"
-              aria-selected={tab === name}
-              className={tab === name ? 'is-active' : ''}
-              onClick={() => chooseTab(name)}
-            >
+            <button key={name} type="button" className={tab === name ? 'is-active' : ''} onClick={() => chooseTab(name)}>
               {name}
             </button>
           ))}

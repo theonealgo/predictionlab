@@ -31509,8 +31509,6 @@ def _start_site_autorefresh():
         'SOCCER': lambda: _g['_start_soccer_finals_sync'](),
     }
     _sar.start(_g['app'], DATABASE, _sync_fns)
-    import web_api as _wa
-    _wa.start_cards_warmer(_g['app'])
 
 
 try:
@@ -86820,16 +86818,13 @@ def _web_game_counts():
         return _WEB_COUNTS['counts']
     counts = {}
     try:
-        # Game dates are US (Eastern) dates; the live server clock is UTC.
-        from zoneinfo import ZoneInfo as _ZI
-        today_et = datetime.now(_ZI('America/New_York')).date()
         conn = get_db_connection()
         rows = conn.execute(
             "SELECT sport, "
-            "SUM(CASE WHEN date(game_date) = ? THEN 1 ELSE 0 END), "
-            "SUM(CASE WHEN date(game_date) BETWEEN ? AND ? THEN 1 ELSE 0 END) "
-            "FROM predictions GROUP BY sport",
-            (today_et.isoformat(), today_et.isoformat(), (today_et + timedelta(days=6)).isoformat()),
+            "SUM(CASE WHEN date(game_date) = date('now','localtime') THEN 1 ELSE 0 END), "
+            "SUM(CASE WHEN date(game_date) BETWEEN date('now','localtime') "
+            "AND date('now','localtime','+6 days') THEN 1 ELSE 0 END) "
+            "FROM predictions GROUP BY sport"
         ).fetchall()
         for row in rows:
             counts[row[0]] = (int(row[1] or 0), int(row[2] or 0))

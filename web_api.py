@@ -7,7 +7,6 @@ helpers (sports list, live boxes, results) live in NHL77FINAL and are imported w
 import gzip
 import json
 import logging
-import os
 import re
 import threading
 import time
@@ -61,8 +60,7 @@ def _page_html(path, app=None, host=None, cookie=None):
     cookie = cookie if host else request.headers.get('Cookie')
     if cookie:
         headers['Cookie'] = cookie
-    # use_cookies=False: otherwise the test client drops the visitor's Cookie header and a member's page builds signed out.
-    resp = app.test_client(use_cookies=False).get(path, headers=headers)
+    resp = app.test_client().get(path, headers=headers)
     return resp.get_data(as_text=True) if resp.status_code == 200 else ''
 
 
@@ -302,13 +300,7 @@ _CARDS_KEEP = 6 * 3600
 _CARDS = {}  # (slug, tier) -> (saved at, payload)
 _CARDS_BUILDING = set()
 _CARDS_LOCK = threading.Lock()
-try:
-    from served_cache import cache_dir as _cache_dir
-    _CARDS_DIR = _cache_dir() / 'web_cards'  # the persistent disk on the live server, so a deploy starts warm
-except Exception:
-    _CARDS_DIR = Path(__file__).resolve().parent / '.cache' / 'web_cards'
-_WARM_HOST = 'predictionlab.io'
-_WARM_EVERY = 10 * 60
+_CARDS_DIR = Path(__file__).resolve().parent / '.cache' / 'web_cards'
 
 
 def _build_cards(slug, tier, app, host, cookie):
@@ -331,7 +323,7 @@ def _build_cards(slug, tier, app, host, cookie):
 
 
 def _cards_file(slug, tier):
-    return _CARDS_DIR / f'{slug}.{tier}.v2.json.gz'
+    return _CARDS_DIR / f'{slug}.{tier}.json.gz'
 
 
 def _saved_cards(slug, tier):
@@ -370,37 +362,6 @@ def _refresh_cards(slug, tier, app, host, cookie):
     finally:
         with _CARDS_LOCK:
             _CARDS_BUILDING.discard((slug, tier))
-
-
-def _warm_cards_loop(app):
-    """Keep every sport's signed-out feed built, one sport at a time, so no visitor waits on a build."""
-    from NHL77FINAL import SPORT_SEO_SLUGS
-    time.sleep(20)
-    while True:
-        for sport in _SPORT_ORDER:
-            slug = SPORT_SEO_SLUGS.get(sport, '').replace('-projections', '-picks')
-            if not slug or not _sport_for(slug):
-                continue
-            saved = _saved_cards(slug, 'guest')
-            if saved and time.time() - saved[0] < _WARM_EVERY:
-                continue
-            with _CARDS_LOCK:
-                if (slug, 'guest') in _CARDS_BUILDING:
-                    continue
-                _CARDS_BUILDING.add((slug, 'guest'))
-            _refresh_cards(slug, 'guest', app, _WARM_HOST, None)
-        time.sleep(_WARM_EVERY)
-
-
-_WARM_STARTED = False
-
-
-def start_cards_warmer(app):
-    global _WARM_STARTED
-    if _WARM_STARTED or os.environ.get('PL_WEB_WARM') != '1':
-        return
-    _WARM_STARTED = True
-    threading.Thread(target=_warm_cards_loop, args=(app,), daemon=True, name='web-cards-warm').start()
 
 
 @api.route('/api/web/sports/<slug>/cards')
