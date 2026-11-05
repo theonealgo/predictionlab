@@ -87134,9 +87134,43 @@ _PROPS_WARM_KEEP = 3 * 3600
 _PROPS_WARM_STARTED = False
 
 
+_PROPS_DISK_DIR = _os.path.join(_DATA_DIR, '.cache', 'props')
+_PROPS_DISK_KEEP = 12 * 3600
+
+
+def _props_disk_path(league):
+    return _os.path.join(_PROPS_DISK_DIR, f'{league}.json')
+
+
+def _props_disk_load(league):
+    """The league's last built props from disk (kept across restarts and deploys on /data)."""
+    try:
+        with open(_props_disk_path(league), encoding='utf-8') as fh:
+            saved = json.load(fh)
+        if _time.time() - float(saved['ts']) < _PROPS_DISK_KEEP and saved.get('payload') is not None:
+            return saved
+    except Exception:
+        pass
+    return None
+
+
+def _props_disk_save(league, entry):
+    try:
+        _os.makedirs(_PROPS_DISK_DIR, exist_ok=True)
+        tmp = _props_disk_path(league) + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as fh:
+            json.dump({'ts': entry['ts'], 'payload': entry['payload']}, fh, default=str)
+        _os.replace(tmp, _props_disk_path(league))
+    except Exception:
+        logger.debug('[props] could not save %s to disk', league, exc_info=True)
+
+
 def _props_rebuild(engine_mod, league):
     try:
         engine_mod.get_league_data(league)
+        entry = getattr(engine_mod, '_CACHE', {}).get(league)
+        if entry and entry.get('payload') is not None:
+            _props_disk_save(league, entry)
     except Exception:
         logger.exception('[props] rebuild failed for %s', league)
     finally:
@@ -87171,20 +87205,58 @@ def _props_warm_loop(engine_mod, config_mod):
             _props_rebuild(engine_mod, league)
 
 
-def _props_league_data(engine_mod, config_mod, league):
-    """The league's props at once: a saved copy past its 10 minutes is served while a fresh one builds."""
+def _start_props_warm(engine_mod, config_mod):
     global _PROPS_WARM_STARTED
-    _PROPS_VIEWED[league] = _time.time()
-    if not _PROPS_WARM_STARTED:
+    with _PROPS_LOCK:
+        if _PROPS_WARM_STARTED:
+            return
         _PROPS_WARM_STARTED = True
-        threading.Thread(target=_props_warm_loop, args=(engine_mod, config_mod), daemon=True, name='props-warm').start()
-    cached = getattr(engine_mod, '_CACHE', {}).get(league)
+    threading.Thread(target=_props_warm_loop, args=(engine_mod, config_mod), daemon=True, name='props-warm').start()
+
+
+def _props_league_data(engine_mod, config_mod, league):
+    """The league's props at once: a saved copy (memory, then disk) is served while a fresh one builds.
+
+    Returns None only when nothing was ever saved; the build then runs in the background.
+    """
+    _PROPS_VIEWED[league] = _time.time()
+    _start_props_warm(engine_mod, config_mod)
+    cache = getattr(engine_mod, '_CACHE', {})
+    cached = cache.get(league)
+    if not (cached and cached.get('payload') is not None):
+        saved = _props_disk_load(league)
+        if saved:
+            cached = {'ts': float(saved['ts']), 'payload': saved['payload']}
+            cache[league] = cached
     ttl = int(getattr(config_mod, 'CACHE_TTL_SECONDS', 600) or 600)
     if cached and cached.get('payload') is not None:
         if _time.time() - cached['ts'] >= ttl:
             _props_rebuild_in_background(engine_mod, league)
         return cached['payload']
-    return engine_mod.get_league_data(league)
+    _props_rebuild_in_background(engine_mod, league)
+    return None
+
+
+def _props_preload():
+    """After a start or deploy: build the in-season leagues' props before anyone opens them."""
+    _time.sleep(90)
+    try:
+        engine_mod, config_mod = _load_props_modules()
+    except Exception:
+        return
+    for league in getattr(config_mod, 'SUPPORTED_LEAGUES', []):
+        if _props_offseason_payload(league) is not None:
+            continue
+        _PROPS_VIEWED.setdefault(league, _time.time())
+        saved = _props_disk_load(league)
+        if saved and getattr(engine_mod, '_CACHE', {}).get(league) is None:
+            engine_mod._CACHE[league] = {'ts': float(saved['ts']), 'payload': saved['payload']}
+        with _PROPS_LOCK:
+            if league in _PROPS_BUILDING:
+                continue
+            _PROPS_BUILDING.add(league)
+        _props_rebuild(engine_mod, league)
+    _start_props_warm(engine_mod, config_mod)
 
 
 @app.route('/player-props-api/props')
@@ -87210,6 +87282,9 @@ def player_props_api_props():
         if off is not None:
             return jsonify(off)
         data = _props_league_data(engine_mod, config_mod, league)
+        if data is None:
+            return jsonify({'league': league, 'building': True, 'count': 0, 'items': [],
+                            'is_premium': is_premium_user()})
         # Snapshot today's picks (real book lines only) so Results/Streaks can
         # grade them against box scores later. Never blocks the response.
         try:
@@ -87481,6 +87556,10 @@ def _query_prop_results(league: str, for_date: str | None = None):
         }
     finally:
         conn.close()
+
+
+if _os.environ.get('PL_SNAPSHOT_BUILD') != '1' and _os.environ.get('PL_PROPS_PRELOAD', '1') != '0':
+    threading.Thread(target=_props_preload, daemon=True, name='props-preload').start()
 
 
 @app.route('/player-props-api/results')

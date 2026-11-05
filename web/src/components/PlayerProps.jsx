@@ -94,19 +94,27 @@ export default function PlayerProps({ league }) {
 
   useEffect(() => {
     let alive = true;
+    let retry = null;
     setData(null);
     setError(null);
     const query = new URLSearchParams({ league });
     if (requestDay) query.set('date', requestDay);
-    getJson(`/player-props-api/${tab}?${query.toString()}`)
-      .then((body) => {
-        if (alive) setData(body);
-      })
-      .catch((err) => {
-        if (alive) setError(err.message);
-      });
+    const load = () => {
+      getJson(`/player-props-api/${tab}?${query.toString()}`)
+        .then((body) => {
+          if (!alive) return;
+          setData(body);
+          // The server is building this league's first slate; ask again shortly.
+          if (body && body.building) retry = setTimeout(load, 4000);
+        })
+        .catch((err) => {
+          if (alive) setError(err.message);
+        });
+    };
+    load();
     return () => {
       alive = false;
+      clearTimeout(retry);
     };
   }, [tab, league, requestDay]);
 
@@ -194,7 +202,9 @@ export default function PlayerProps({ league }) {
         </div>
       )}
 
-      {!error && data && !data.off_season && !locked && tab === 'props' && (
+      {!error && data && data.building && <p className="pl-empty">Updating {league} props… this page fills in by itself.</p>}
+
+      {!error && data && !data.building && !data.off_season && !locked && tab === 'props' && (
         <>
           {data.is_premium === false && (
             <div className="pp-banner upgrade">
