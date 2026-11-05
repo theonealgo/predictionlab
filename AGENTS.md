@@ -184,3 +184,26 @@ The owner named exactly two NFL misses. Fix only these two. Do not touch any oth
 - RESULTS (`/nfl-results`): "finished cards are missing a score or a grade." Every NFL game marked FINAL, including today's Sunday games, must show its final score and a grade.
 
 When these two are done, NFL is locked again.
+
+## Site priorities (owner, 2026-11-04)
+
+There are still small bugs and errors to fix, but the two main things this
+site needs are:
+
+1. **Speed** — pages must open fast for every visitor.
+2. **Model performance** — the models' pick accuracy.
+
+Small bug fixes come after these two.
+
+Open search-engine items (found 2026-11-04; not done):
+
+- The homepage and every `/<sport>-predictions` page send Google about 9
+  words of text; the page is drawn by JavaScript. Put a plain-text summary of
+  the day's games in the page HTML.
+- The sitemap lists dated picks pages that are noindex (past days, days with
+  no games) and soccer / CFL dated pages whose canonical points to the sport
+  page. List only indexable pages.
+- CFL dated pages (`/cfl-picks-<month>-<day>-<year>`) carry MLB text and a
+  canonical pointing to `/mlb-predictions`.
+- The sitemap lists `/llms.txt`, `/ai.txt`, and the addresses with
+  "betting" in them.

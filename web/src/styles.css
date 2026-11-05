@@ -98,6 +98,41 @@ button {
   cursor: grabbing;
 }
 
+/* One group per sport / league, its name above its boxes. */
+.pl-live-group {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+.pl-live-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: 270px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pl-live-group-head span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pl-live-group-head span + span {
+  flex: none;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.pl-live-group-boxes {
+  display: flex;
+  gap: 14px;
+}
+
 .pl-live-box {
   min-width: 270px;
   scroll-snap-align: start;
@@ -350,6 +385,13 @@ button {
 
 .pl-card-row > * {
   max-width: 100%;
+}
+
+/* The game opened from a live box. */
+.pl-card-row.is-target {
+  border-radius: 14px;
+  box-shadow: 0 0 0 3px var(--green);
+  scroll-margin-top: 120px;
 }
 
 .pl-empty {

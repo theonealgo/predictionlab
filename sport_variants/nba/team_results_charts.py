@@ -4763,6 +4763,15 @@ def _wnba_nba_consensus_finals(sport: str) -> list[dict]:
         db_rows = _nfl_finals_from_db(limit=400, sport=sport_u)
     except Exception:
         db_rows = []
+    if sport_u == "NBA" and db_rows:
+        # After a deploy there is no saved results page; NBA cards show six
+        # models, so stored finals need Efficiency to match the card panel.
+        try:
+            six = _nfl_keep_six_model_rows(_nfl_attach_efficiency(db_rows))
+        except Exception:
+            six = []
+        if six:
+            db_rows = six
     return fallback or db_rows
 
 

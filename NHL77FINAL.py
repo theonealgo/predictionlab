@@ -86979,7 +86979,8 @@ def _web_live_payload():
         conn = get_db_connection()
         rows = conn.execute(
             "SELECT p.game_id, p.sport, p.home_team_id, p.away_team_id, p.win_probability, "
-            "p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob "
+            "p.elo_home_prob, p.xgboost_home_prob, p.logistic_home_prob, p.meta_home_prob, "
+            "COALESCE(g.league, p.league) AS league "
             "FROM predictions p "
             "LEFT JOIN games g ON p.game_id = g.game_id AND g.sport = p.sport "
             "WHERE date(p.game_date) = ? "
@@ -87008,8 +87009,10 @@ def _web_live_payload():
         if game_id:
             seen.add((row['sport'], game_id))
         seen.add(matchup)
+        sport_label = _LANDING_SPORT_SHORT.get(row['sport'], row['sport'])
         items.append({
-            'sport': _LANDING_SPORT_SHORT.get(row['sport'], row['sport']),
+            'sport': sport_label,
+            'group': (row['league'] or sport_label) if row['sport'] == 'SOCCER' else sport_label,
             'away': _clean_team_name(away),
             'home': _clean_team_name(home),
             'awayPct': round((1.0 - home_prob) * 100, 1),

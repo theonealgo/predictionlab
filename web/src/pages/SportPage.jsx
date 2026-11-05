@@ -86,6 +86,30 @@ function nameMatchers(conference) {
   );
 }
 
+function nameKey(name) {
+  return (name || '').toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '');
+}
+
+function sameTeam(a, b) {
+  const x = nameKey(a);
+  const y = nameKey(b);
+  return Boolean(x && y) && (x === y || x.includes(y) || y.includes(x));
+}
+
+// The card a live box points at (?game=Away|Home): both teams, else the home team, else the away team.
+function targetCard(cards, game) {
+  if (!game) return null;
+  const [away, home] = game.split('|');
+  const upcoming = cards.filter((card) => !card.html.includes('FINAL'));
+  for (const list of [upcoming, cards]) {
+    const both = list.find((card) => sameTeam(card.away, away) && sameTeam(card.home, home));
+    if (both) return both;
+  }
+  return upcoming.find((card) => sameTeam(card.home, home))
+    || upcoming.find((card) => sameTeam(card.away, away))
+    || null;
+}
+
 export default function SportPage({ slug }) {
   const sport = sportKey(slug);
   const isGolf = sport === 'GOLF';
@@ -141,6 +165,18 @@ export default function SportPage({ slug }) {
   }, [slug, isGolf]);
 
   const cards = payload ? payload.cards : [];
+  const [gameParam] = useState(() => new URLSearchParams(window.location.search).get('game'));
+  const target = useMemo(() => targetCard(cards, gameParam), [cards, gameParam]);
+
+  // Opened from a live box: show every day so the game is on the page, then scroll to it.
+  useEffect(() => {
+    if (!target) return;
+    setShowAllDays(true);
+    const timer = setTimeout(() => {
+      document.querySelector('.pl-card-row.is-target')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [target]);
 
   // Cards grouped by game date. Finished games are grouped by their date too (FINAL:<date>).
   const days = useMemo(() => {
@@ -371,7 +407,7 @@ export default function SportPage({ slug }) {
                 <h2 className="pl-day-title">{dayLabel(day, todayIso)}</h2>
                 {list.map((card, index) => (
                   <div
-                    className="pl-card-row"
+                    className={card === target ? 'pl-card-row is-target' : 'pl-card-row'}
                     key={`${day}-${card.away}-${card.home}-${index}`}
                     dangerouslySetInnerHTML={{ __html: card.html }}
                   />
@@ -391,7 +427,7 @@ export default function SportPage({ slug }) {
                     <h2 className="pl-day-title">{finalLabel(day, todayIso)}</h2>
                     {list.map((card, index) => (
                       <div
-                        className="pl-card-row"
+                        className={card === target ? 'pl-card-row is-target' : 'pl-card-row'}
                         key={`final-${day}-${card.away}-${card.home}-${index}`}
                         dangerouslySetInnerHTML={{ __html: card.html }}
                       />

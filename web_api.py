@@ -295,10 +295,15 @@ def api_live():
     items = _web_live_payload()
     starts = _card_start_times()
     now = datetime.now(_ET)
+    shown = []
     for item in items:
         start = starts.get(_team_key(item.get('home'))) or starts.get(_team_key(item.get('away')))
-        item['live'] = bool(start and start <= now < start + _LIVE_FOR)
-    items += _tennis_live_items()
+        length = _LIVE_FOR_SPORT.get(item.get('sport'), _LIVE_FOR)
+        if start and now >= start + length:
+            continue
+        item['live'] = bool(start and start <= now)
+        shown.append(item)
+    items = shown + _tennis_live_items()
     items.sort(key=lambda item: not item['live'])
     return jsonify({'items': items})
 
@@ -365,7 +370,7 @@ def _tennis_live_items():
     try:
         con = sqlite3.connect(f'file:{_TENNIS_DB}?mode=ro', uri=True, timeout=2)
         rows = con.execute(
-            "SELECT m.player_a, m.player_b, m.status, p.win_prob_a FROM matches m "
+            "SELECT m.player_a, m.player_b, m.status, p.win_prob_a, m.tournament FROM matches m "
             "LEFT JOIN predictions p ON p.match_id = m.match_id "
             "WHERE m.status IN ('live', 'scheduled') AND substr(m.match_date, 1, 10) = ? "
             "AND p.win_prob_a IS NOT NULL ORDER BY m.match_date",
@@ -376,14 +381,24 @@ def _tennis_live_items():
         logging.getLogger(__name__).debug('[web] tennis live rows failed: %s', exc)
         return []
     return [{
-        'sport': 'Tennis', 'away': a, 'home': b,
+        'sport': 'Tennis', 'group': tournament or 'Tennis', 'away': a, 'home': b,
         'awayPct': round(float(prob) * 100, 1), 'homePct': round((1 - float(prob)) * 100, 1),
         'href': '/tennis-predictions', 'live': status == 'live',
-    } for a, b, status, prob in rows]
+    } for a, b, status, prob, tournament in rows]
 
 
 _ET = ZoneInfo('America/New_York')
 _LIVE_FOR = timedelta(hours=4)
+# How long a game runs after its start time; scores can sync later than the final whistle.
+_LIVE_FOR_SPORT = {
+    'Soccer': timedelta(hours=2, minutes=5),
+    'NBA': timedelta(hours=2, minutes=45),
+    'WNBA': timedelta(hours=2, minutes=30),
+    'NCAAB': timedelta(hours=2, minutes=30),
+    'NCAAW': timedelta(hours=2, minutes=30),
+    'NHL': timedelta(hours=3),
+    'MLB': timedelta(hours=3, minutes=30),
+}
 _CARD_TIME = re.compile(r'\b(\d{1,2}):(\d{2})\s*([AP]M)\s*ET\b')
 
 

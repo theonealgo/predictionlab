@@ -39,6 +39,15 @@ export default function LiveStrip() {
     return null;
   }
 
+  // Boxes grouped by league (soccer, tennis) or sport, in feed order, so groups with live games lead.
+  const byGroup = new Map();
+  items.forEach((item) => {
+    const name = item.group || item.sport;
+    if (!byGroup.has(name)) byGroup.set(name, []);
+    byGroup.get(name).push(item);
+  });
+  const groups = [...byGroup.entries()];
+
   // One arrow press moves about two boxes.
   const scrollBy = (direction) => {
     strip.ref.current?.scrollBy({ left: direction * 300, behavior: 'smooth' });
@@ -54,12 +63,26 @@ export default function LiveStrip() {
         </div>
       </div>
       <div className="pl-live-row" ref={strip.ref} {...strip.handlers}>
-        {items.map((item) => (
-          <a className={item.live ? 'pl-live-box is-live' : 'pl-live-box'} key={`${item.sport}-${item.away}-${item.home}`} href={item.href}>
-            <div className="pl-live-meta">{item.sport} · {item.live ? 'Live' : 'Today'}</div>
-            <div className="pl-live-team"><span>{item.away}</span><b>{item.awayPct}%</b></div>
-            <div className="pl-live-team"><span>{item.home}</span><b>{item.homePct}%</b></div>
-          </a>
+        {groups.map(([name, list]) => (
+          <div className="pl-live-group" key={name}>
+            <div className="pl-live-group-head">
+              <span title={name}>{name}</span>
+              <span>{list.length} {list.length === 1 ? 'game' : 'games'}</span>
+            </div>
+            <div className="pl-live-group-boxes">
+              {list.map((item) => (
+                <a
+                  className={item.live ? 'pl-live-box is-live' : 'pl-live-box'}
+                  key={`${item.sport}-${item.away}-${item.home}`}
+                  href={`${item.href}?game=${encodeURIComponent(`${item.away}|${item.home}`)}`}
+                >
+                  <div className="pl-live-meta">{item.live ? 'Live' : 'Today'}</div>
+                  <div className="pl-live-team"><span>{item.away}</span><b>{item.awayPct}%</b></div>
+                  <div className="pl-live-team"><span>{item.home}</span><b>{item.homePct}%</b></div>
+                </a>
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>
