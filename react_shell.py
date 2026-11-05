@@ -9,6 +9,8 @@ import os
 import re
 from pathlib import Path
 
+from site_words import RENAMED, SERVED_BY
+
 ROOT = Path(__file__).resolve().parent
 SHELL_FILE = ROOT / 'static' / 'web' / 'index.html'
 CANONICAL = 'https://predictionlab.io'
@@ -93,6 +95,12 @@ class PublicPaths:
 
     def __call__(self, environ, start_response):
         path = environ.get('PATH_INFO', '')
+        renamed = RENAMED.get(path.rstrip('/') or '/')
+        if renamed and environ.get('REQUEST_METHOD') in ('GET', 'HEAD') and _real_visitor(environ):
+            target = renamed + ('?' + environ['QUERY_STRING'] if environ.get('QUERY_STRING') else '')
+            start_response('301 Moved Permanently', [('Location', target), ('Content-Length', '0'),
+                                                     ('Cache-Control', 'public, max-age=3600')])
+            return [b'']
         match = _OLD_SPORT_PAGE.match(path)
         host = (environ.get('HTTP_HOST') or '').split(':')[0].lower()
         if (match and environ.get('REQUEST_METHOD') in ('GET', 'HEAD') and _real_visitor(environ)
@@ -113,9 +121,12 @@ class PredictionsToPicks:
         self.wsgi_app = wsgi_app
 
     def __call__(self, environ, start_response):
-        match = _NEW_SPORT_PAGE.match(environ.get('PATH_INFO', ''))
+        path = environ.get('PATH_INFO', '')
+        match = _NEW_SPORT_PAGE.match(path)
         if match:
             environ['PATH_INFO'] = f'/{match.group(1)}-picks{match.group(2)}'
+        elif (path.rstrip('/') or '/') in SERVED_BY:
+            environ['PATH_INFO'] = SERVED_BY[path.rstrip('/')]
         return self.wsgi_app(environ, start_response)
 
 

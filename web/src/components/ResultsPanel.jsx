@@ -1,13 +1,24 @@
-import { useRef, useState } from 'react';
-import { routeLinks, trimFrame } from '../frameTools.js';
+import { useEffect, useRef, useState } from 'react';
+import { routeLinks, trimFrame, whenFrameParsed } from '../frameTools.js';
 
 // The sport's results page in the right column. Cards and Chart are its two views (the Chart view is the
 // same page with ?view=chart), so this panel's buttons replace the page's own. The site's header and footer
 // are hidden inside the column. Links inside the page are routed by frameTools.routeLinks.
+// Both are set up as soon as the page starts arriving, not after every image and script has loaded.
 export default function ResultsPanel({ src, picksPath, onPredictions }) {
   const frame = useRef(null);
   const [view, setView] = useState('cards');
   const url = view === 'chart' ? `${src}?view=chart` : src;
+
+  const prepare = () => {
+    trimFrame(frame.current);
+    routeLinks(frame.current, picksPath, onPredictions);
+  };
+
+  useEffect(() => (frame.current ? whenFrameParsed(frame.current, url, prepare) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [url]);
+
   return (
     <>
       <div className="pl-results-views" role="tablist">
@@ -18,16 +29,7 @@ export default function ResultsPanel({ src, picksPath, onPredictions }) {
           Chart
         </button>
       </div>
-      <iframe
-        ref={frame}
-        className="pl-results-frame"
-        title="Results"
-        src={url}
-        onLoad={() => {
-          trimFrame(frame.current);
-          routeLinks(frame.current, picksPath, onPredictions);
-        }}
-      />
+      <iframe ref={frame} className="pl-results-frame" title="Results" src={url} onLoad={prepare} />
     </>
   );
 }

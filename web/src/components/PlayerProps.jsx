@@ -72,7 +72,7 @@ const PROP_HEAD = [
   ['prop', 'Prop'],
   ['line', 'Line'],
   ['projection', 'Projection'],
-  ['pick', 'Pick'],
+  ['pick', 'Prediction'],
   ['ev', 'EV'],
   ...MODELS,
 ];
@@ -208,7 +208,7 @@ export default function PlayerProps({ league }) {
         <>
           {data.is_premium === false && (
             <div className="pp-banner upgrade">
-              You&apos;re viewing 1 free pick. <a href="/plans">Upgrade</a> to unlock every prop, filters, streaks and results.
+              You&apos;re viewing 1 free prediction. <a href="/plans">Upgrade</a> to unlock every prop, filters, streaks and results.
             </div>
           )}
           {data.lines_real === false && (
@@ -302,7 +302,7 @@ function PropsTable({ rows, league, sort, onSort }) {
               </td>
               <td>{propLabel(r.prop_type)}</td>
               <td colSpan={MODELS.length + 4}>
-                <span className="pp-lock-note">Locked. Upgrade to see the line, the pick and the model numbers.</span>
+                <span className="pp-lock-note">Locked. Upgrade to see the line, the prediction and the model numbers.</span>
               </td>
             </tr>
           ) : (
@@ -467,7 +467,7 @@ function ResultsView({ data, league }) {
         <div className="pp-table-wrap">
           <table className="pp-table">
             <thead>
-              <tr><th>Player</th><th>Prop</th><th>Pick</th><th>Line</th><th>Actual</th><th>Result</th></tr>
+              <tr><th>Player</th><th>Prop</th><th>Prediction</th><th>Line</th><th>Actual</th><th>Result</th></tr>
             </thead>
             <tbody>
               {items.map((r, index) => (

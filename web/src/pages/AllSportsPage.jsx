@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getJson } from '../api.js';
+import { getJson, peekJson } from '../api.js';
 import { useDragScroll } from '../hooks/useDragScroll.js';
 
 // All Sports Picks: every open pick across the sports, from the same board the classic page shows
@@ -78,7 +78,7 @@ function SummaryTable({ rows, label }) {
 }
 
 export default function AllSportsPage() {
-  const [payload, setPayload] = useState(null);
+  const [payload, setPayload] = useState(() => peekJson('/api/web/all-sports'));
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('Predictions');
   const [sport, setSport] = useState('All');
@@ -88,17 +88,17 @@ export default function AllSportsPage() {
   useEffect(() => {
     let alive = true;
     let timer = null;
-    const load = () => {
-      getJson('/api/web/all-sports')
+    const load = (again) => {
+      getJson('/api/web/all-sports', again ? { maxAge: 0 } : undefined)
         .then((data) => {
           if (!alive) return;
           setPayload(data);
           // The board builds in the background on a cold start; ask again shortly.
-          if (!data.locked && !data.board) timer = setTimeout(load, 8000);
+          if (!data.locked && !data.board) timer = setTimeout(() => load(true), 8000);
         })
         .catch((err) => alive && setError(err.message));
     };
-    load();
+    load(false);
     return () => {
       alive = false;
       clearTimeout(timer);

@@ -26,6 +26,16 @@ _ET = ZoneInfo("America/New_York")
 # Some saved pages gain a blank line each time they are re-saved; that must not
 # make every visit look like a new page.
 _BLANK_LINES = re.compile(rb"\n\s*\n(?:\s*\n)+")
+# Others gain one more copy of the header's stylesheet + script on each re-save (same page otherwise).
+_CHROME_ASSETS = re.compile(
+    rb'(?:<link rel="stylesheet" href="/static/css/pl-chrome\.css">\s*<script src="/static/js/pl-chrome\.js" defer></script>\s*)+')
+
+
+def _page_key(body: bytes) -> str:
+    body = _CHROME_ASSETS.sub(
+        b'<link rel="stylesheet" href="/static/css/pl-chrome.css">\n<script src="/static/js/pl-chrome.js" defer></script>\n',
+        body)
+    return hashlib.sha1(_BLANK_LINES.sub(b"\n\n", body)).hexdigest()
 
 _lock = threading.Lock()
 _memo: "OrderedDict[tuple, tuple[float, bytes, tuple]]" = OrderedDict()
@@ -77,7 +87,7 @@ def memoize_hook(hook, viewer):
             body = response.get_data()
             key = (
                 name,
-                hashlib.sha1(_BLANK_LINES.sub(b"\n\n", body)).hexdigest(),
+                _page_key(body),
                 request.full_path,
                 viewer(),
                 datetime.now(_ET).strftime("%Y-%m-%d"),

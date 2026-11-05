@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getJson } from '../api.js';
+import { getJson, peekJson } from '../api.js';
 import { CONFERENCES } from '../data/conferences.js';
 import { DEFAULT_NAV, SPORT_NAV } from '../data/sportNav.js';
 import { applyCardStyles } from '../cardStyles.js';
@@ -118,8 +118,14 @@ export default function SportPage({ slug }) {
   const college = collegeGroups[sport] || null;
   const todayIso = localIsoDate(new Date());
   const daysShownFirst = FOOTBALL.has(sport) ? 7 : 4;
+  const cardsPath = `/api/web/sports/${slug}/cards`;
   const [tab, setTab] = useState(nav.tabs[0]);
-  const [payload, setPayload] = useState(null);
+  // The last copy of these cards (from an earlier visit or a preload) paints at once; a fresh one follows.
+  const [payload, setPayload] = useState(() => {
+    const kept = isGolf ? null : peekJson(cardsPath);
+    if (kept) applyCardStyles(kept.css);
+    return kept;
+  });
   const [error, setError] = useState(null);
   // Phones show one column at a time; this switch flips between the games and the results.
   const [mobilePane, setMobilePane] = useState('predictions');
@@ -138,14 +144,12 @@ export default function SportPage({ slug }) {
 
   useEffect(() => {
     if (isGolf) return;
-    setPayload(null);
     setError(null);
-    setShowAllDays(false);
     // A sport's first build after a restart can be slow: keep loading and try again before giving up.
     let alive = true;
     let timer = null;
     const load = (triesLeft) => {
-      getJson(`/api/web/sports/${slug}/cards`)
+      getJson(cardsPath)
         .then((data) => {
           if (!alive) return;
           applyCardStyles(data.css);
@@ -162,7 +166,7 @@ export default function SportPage({ slug }) {
       alive = false;
       clearTimeout(timer);
     };
-  }, [slug, isGolf]);
+  }, [cardsPath, isGolf]);
 
   const cards = payload ? payload.cards : [];
   const [gameParam] = useState(() => new URLSearchParams(window.location.search).get('game'));

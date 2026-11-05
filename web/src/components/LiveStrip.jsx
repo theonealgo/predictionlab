@@ -10,7 +10,7 @@ export default function LiveStrip() {
 
   // Refreshed every minute, so games move to Live as they start and the row turns over each day.
   useEffect(() => {
-    const load = () => getJson('/api/web/live')
+    const load = () => getJson('/api/web/live', { maxAge: 0 })
       .then((data) => setItems(data.items || []))
       .catch(() => setItems((current) => current || []));
     load();

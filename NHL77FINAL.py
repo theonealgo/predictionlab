@@ -16984,6 +16984,11 @@ try:
 except Exception as _lc_err:
     logger.warning("landing copy not installed: %s", _lc_err)
 try:
+    from site_words import VisitorWords
+    app.wsgi_app = VisitorWords(app.wsgi_app)
+except Exception as _vw_err:
+    logger.warning("visitor wording not installed: %s", _vw_err)
+try:
     from gzip_middleware import GzipMiddleware
     app.wsgi_app = GzipMiddleware(app.wsgi_app)
 except Exception as _gz_err:
@@ -87238,25 +87243,27 @@ def _props_league_data(engine_mod, config_mod, league):
 
 
 def _props_preload():
-    """After a start or deploy: build the in-season leagues' props before anyone opens them."""
-    _time.sleep(90)
+    """After a start or deploy: build, one at a time, the in-season leagues that have no saved props on disk.
+
+    Leagues with a saved copy are left alone (a visitor's view refreshes them in the background), and
+    nothing here joins the 10-minute warm loop: each build is ~40 s of CPU on the single worker.
+    """
+    _time.sleep(180)
     try:
         engine_mod, config_mod = _load_props_modules()
     except Exception:
         return
     for league in getattr(config_mod, 'SUPPORTED_LEAGUES', []):
-        if _props_offseason_payload(league) is not None:
+        if _props_offseason_payload(league) is not None or _props_disk_load(league):
             continue
-        _PROPS_VIEWED.setdefault(league, _time.time())
-        saved = _props_disk_load(league)
-        if saved and getattr(engine_mod, '_CACHE', {}).get(league) is None:
-            engine_mod._CACHE[league] = {'ts': float(saved['ts']), 'payload': saved['payload']}
+        if getattr(engine_mod, '_CACHE', {}).get(league):
+            continue
         with _PROPS_LOCK:
             if league in _PROPS_BUILDING:
                 continue
             _PROPS_BUILDING.add(league)
         _props_rebuild(engine_mod, league)
-    _start_props_warm(engine_mod, config_mod)
+        _time.sleep(30)
 
 
 @app.route('/player-props-api/props')
@@ -89255,13 +89262,6 @@ def sitemap_xml():
         # Skip GOLF/TENNIS/UFC (no season window → always "live") — those dated
         # pages are often empty and waste crawl budget ("Crawled - not indexed").
         # Keep today + yesterday only; older empty dated URLs stay 200 + noindex.
-        if picks_slug and _is_live and sport_key in SEASON_CALENDAR:
-            for days_back in range(2):
-                d = now - timedelta(days=days_back)
-                month_name = _MONTH_NAMES.get(d.month, 'january')
-                daily_url = f"{_SITE_DOMAIN}/{picks_slug}-{month_name}-{d.day}-{d.year}"
-                urls.append((daily_url, 'daily', '0.7'))
-
     # Static / evergreen pages. Thin auto Trends blog is noindex — omit from sitemap.
     # Do not list /auth/*, /share/*, or legacy /sport/*/predictions (robots or 301s).
     urls.append((_SITE_DOMAIN + '/all-sports-results', 'weekly', '0.75'))
@@ -89277,8 +89277,8 @@ def sitemap_xml():
     urls.append((_SITE_DOMAIN + '/tutorial', 'monthly', '0.5'))
     urls.append((_SITE_DOMAIN + '/llms.txt', 'monthly', '0.2'))
     urls.append((_SITE_DOMAIN + '/ai.txt', 'monthly', '0.2'))
-    urls.append((_SITE_DOMAIN + '/ai-sports-betting-picks-today', 'weekly', '0.7'))
-    urls.append((_SITE_DOMAIN + '/what-are-ai-sports-betting-picks', 'weekly', '0.7'))
+    urls.append((_SITE_DOMAIN + '/ai-sports-predictions-today', 'weekly', '0.7'))
+    urls.append((_SITE_DOMAIN + '/what-are-ai-sports-predictions', 'weekly', '0.7'))
     urls.append((_SITE_DOMAIN + '/our-model-vs-sportsbooks', 'weekly', '0.7'))
     urls.append((_SITE_DOMAIN + '/privacy', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/terms', 'monthly', '0.3'))
@@ -91623,7 +91623,7 @@ def ai_picks_today_page():
 @app.route('/predictions')
 @app.route('/value-bets')
 def seo_query_redirects():
-    return redirect('/ai-sports-betting-picks-today', code=302)
+    return redirect('/ai-sports-predictions-today', code=302)
 
 
 @app.route('/what-are-ai-sports-betting-picks')

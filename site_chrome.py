@@ -214,8 +214,27 @@ def _ensure_left_drawer(html: str) -> str:
     return re.sub(r"</body\s*>", _LEFT_DRAWER + "</body>", html, count=1, flags=re.I)
 
 
+_CHROME_ASSET_TAGS = (
+    re.compile(r'<link rel="stylesheet" href="/static/css/pl-chrome\.css">\s*'),
+    re.compile(r'<script src="/static/js/pl-chrome\.js" defer></script>\s*'),
+)
+
+
+def _one_copy_of_chrome_assets(html: str) -> str:
+    """The header partial brings its stylesheet + script; re-inserting it must not stack more copies."""
+    for tag in _CHROME_ASSET_TAGS:
+        first = tag.search(html)
+        if first:
+            html = html[:first.end()] + tag.sub('', html[first.end():])
+    return html
+
+
 def ensure_locked_site_chrome(html: str, *, path: str = "") -> str:
     """Replace a thin/isolation header/footer with locked research chrome."""
+    return _one_copy_of_chrome_assets(_ensure_locked_site_chrome(html, path=path))
+
+
+def _ensure_locked_site_chrome(html: str, *, path: str = "") -> str:
     if not html or "<html" not in html.lower():
         return html
     if skip_path(path):

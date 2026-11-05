@@ -37,6 +37,42 @@ def _gzip_json(response):
     response.headers['Vary'] = 'Accept-Encoding'
     return response
 
+
+# Small feeds whose text the page shows as is (header / footer HTML, golf notes, the board's share text).
+# Registered after _gzip_json, so it runs before it. The card feed is reworded once when it is built.
+_WORDED_FEEDS = ('/api/web/chrome', '/api/web/golf', '/api/web/all-sports', '/api/web/live', '/api/web/season',
+                 '/api/web/search')
+
+
+@api.after_request
+def _visitor_words(response):
+    if response.status_code != 200 or response.direct_passthrough or response.headers.get('Content-Encoding'):
+        return response
+    if request.path not in _WORDED_FEEDS or not response.is_json:
+        return response
+    try:
+        from site_words import rewrite_json_strings
+        response.set_data(json.dumps(rewrite_json_strings(response.get_json()), separators=(',', ':')))
+    except Exception:
+        logging.getLogger(__name__).debug('visitor words skipped for %s', request.path, exc_info=True)
+    return response
+
+
+def _reword_cards(payload):
+    """Card HTML with visitor wording (site_words), done once per built or loaded feed."""
+    if payload.get('words'):
+        return payload
+    try:
+        from site_words import rewrite_html
+        for card in payload.get('cards') or []:
+            card['html'] = rewrite_html(card.get('html') or '')
+        if payload.get('shareImage'):
+            payload['shareImage'] = rewrite_html(payload['shareImage'])
+        payload['words'] = 1
+    except Exception:
+        logging.getLogger(__name__).debug('card wording skipped', exc_info=True)
+    return payload
+
 _GAME_ID = re.compile(r'\sdata-game-id="([^"]*)"')
 _GAME_DATES = {}  # sport -> (loaded at, {game id: 'YYYY-MM-DD'})
 _EMOJI = re.compile('[\U0001F300-\U0001FAFF☀-➿⭐️‍]+')
@@ -507,7 +543,8 @@ def _build_cards(slug, tier, app, host, cookie):
             found = _GAME_ID.search(card['html'])
             card['date'] = dates.get(found.group(1), '') if found else ''
     cards.sort(key=_page_order)
-    return {'cards': cards, 'total': len(cards), 'css': _card_styles(html, app), 'shareImage': _share_image(html)}
+    return _reword_cards({'cards': cards, 'total': len(cards), 'css': _card_styles(html, app),
+                          'shareImage': _share_image(html)})
 
 
 def _cards_file(slug, tier):
@@ -520,7 +557,7 @@ def _saved_cards(slug, tier):
         return saved
     try:
         path = _cards_file(slug, tier)
-        payload = json.loads(gzip.decompress(path.read_bytes()))
+        payload = _reword_cards(json.loads(gzip.decompress(path.read_bytes())))
         saved = (path.stat().st_mtime, payload)
         _CARDS[(slug, tier)] = saved
         return saved

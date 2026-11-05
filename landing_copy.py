@@ -11,7 +11,7 @@ import re
 
 _SLUGS = "mlb|nba|nhl|nfl|soccer|ncaab|ncaaf|ncaaw|wnba|cfl|tennis|ufc|golf"
 _ALIAS_PAGES = {
-    "/ai-sports-projections-today": "/ai-sports-betting-picks-today",
+    "/ai-sports-projections-today": "/ai-sports-predictions-today",
     "/how-our-models-work": "/what-are-ai-sports-betting-picks",
     "/our-model-vs-market": "/our-model-vs-sportsbooks",
     "/all-sports-projections": "/all-sports-picks",
