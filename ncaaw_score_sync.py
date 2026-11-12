@@ -99,6 +99,15 @@ def invalidate_site(site):
     for key in list(site._SPORT_RESULTS_CACHE):
         if "ncaaw" in str(key).lower():
             site._SPORT_RESULTS_CACHE.pop(key, None)
+    page_cache = getattr(site, "_SPORT_PREDICTIONS_PAGE_CACHE", {})
+    for key in list(page_cache):
+        if "ncaaw" in str(key).lower():
+            page_cache.pop(key, None)
+    import web_api
+    with web_api._CARDS_LOCK:
+        for key in list(web_api._CARDS):
+            if key[0] == "ncaaw-picks":
+                web_api._CARDS.pop(key, None)
     from sport_variant import sport_scope
     with sport_scope("ncaaw"):
         import isolate_checker_fixes
@@ -116,7 +125,9 @@ def invalidate_site(site):
     directory = cache_dir()
     paths = list(directory.glob("served_NCAAW*.html")) + [
         directory / "chart_src_NCAAW.html", directory / "results_summary/NCAAW.json",
+        directory / "served_picks_NCAAW.html",
     ]
+    paths.extend((directory / "web_cards").glob("ncaaw-picks.*.v2.json.gz"))
     for path in paths:
         try:
             path.unlink(missing_ok=True)

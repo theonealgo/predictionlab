@@ -338,7 +338,7 @@
                 <div class="pc-val">{% if _prob >= 50 %}{{ "%.1f"|format(_prob) if _prob != (_prob|int) else (_prob|int) }}{% else %}{{ "%.1f"|format(100 - _prob) }}{% endif %}%</div>
                 <div class="pc-side {% if _prob >= 50 %}home{% else %}away{% endif %}">{% if _prob >= 50 %}{{ team_short(home_id) }}{% else %}{{ team_short(away_id) }}{% endif %}{% if is_results and m.correct == true %} ✅{% elif is_results and m.correct == false %} ❌{% endif %}</div>
                 {% else %}
-                {% set _na_reason = m.reason if (m.reason is defined and m.reason) else (m.name ~ ' rating is not available for ' ~ (sport_info.name if (sport_info is defined and sport_info) else sport) ~ ' yet') %}
+                {% set _na_reason = m.name ~ ' output was not saved for this matchup. The original forecast is preserved.' %}
                 <div class="pc-val" style="color:#64748b;" title="{{ _na_reason }}">N/A</div>
                 <div class="pc-side" style="color:#64748b;background:transparent;" title="{{ _na_reason }}">N/A</div>
                 {% endif %}

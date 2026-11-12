@@ -91,6 +91,9 @@ export default function PropsPage() {
   [results, market, model, search, lineType, resultGame]);
   const typeSummaries = modelPropCounts(filtered);
   const modelSummaries = modelCounts(filtered, results?.models);
+  const firstModelDate = (results?.models || [])
+    .filter(item => (model === 'all' ? !item.id.startsWith('pl_') : item.id === model))
+    .map(item => item.first_recorded_date).filter(Boolean).sort()[0];
   const sportCounts = Object.fromEntries((feed?.counts || []).map(item => [item.league, item]));
 
   function changeSport(code, date = propsDay, game = '', resultDate = day) {
@@ -212,6 +215,11 @@ export default function PropsPage() {
           {results && <>
             {results.window !== 'night' && <p className="pp-hub-muted">{results.start_date} through {results.result_date}, inclusive.</p>}
             <p className="pp-hub-muted">{results.notice}</p>
+            {firstModelDate && day < firstModelDate && <p className="pl-empty">
+              {model === 'all' ? 'Named-model prop tracking' : `${results.models.find(item => item.id === model)?.name || 'Model'} prop tracking`}
+              {' '}began on {firstModelDate}. This date range ends before those records begin; earlier selections cannot be counted as model-specific results.
+              {' '}<button type="button" onClick={() => { setDay(firstModelDate); setResultWindow('night'); }}>View {firstModelDate} results</button>
+            </p>}
             <div className="pp-hub-table" role="region" aria-label="Results by model" tabIndex={0}><table>
               <thead><tr><th>Model</th><th>Wins</th><th>Losses</th><th>Pushes</th><th>Win rate</th></tr></thead>
               <tbody>{modelSummaries.filter((item) => model === 'all' || model === item.id).map((item) =>

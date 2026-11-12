@@ -217,7 +217,8 @@ def read_results(db_path, league=None, day=None, window="night"):
                            reason="A separate pregame model selection and probability were not recorded.",
                            event=None)
                 rows.append(row)
-    from prop_forecast_store import read as read_model_forecasts
+    from prop_forecast_store import read as read_model_forecasts, first_recorded_dates
+    recorded_dates = first_recorded_dates(db_path, league)
     original_forecasts = {}
     for row in sorted(read_model_forecasts(db_path, first_day, league, end_day=day),
                       key=lambda item: item.get("captured_at") or ""):
@@ -253,7 +254,8 @@ def read_results(db_path, league=None, day=None, window="night"):
         wins = sum(row["result"] == "Win" for row in selected)
         losses = sum(row["result"] == "Loss" for row in selected)
         pushes = sum(row["result"] == "Push" for row in selected)
-        models.append({"id": key, "name": name, "wins": wins, "losses": losses, "pushes": pushes,
+        models.append({"id": key, "name": name, "first_recorded_date": recorded_dates.get(key),
+                       "wins": wins, "losses": losses, "pushes": pushes,
                        "decided": wins+losses, "win_rate": 100*wins/(wins+losses) if wins+losses else None,
                        "reason": ("Efficiency is a game-winner model, not a player-stat model." if key == "efficiency"
                                   else "Awaiting decided results." if selected else "No separately recorded model results.")})

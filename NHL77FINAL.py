@@ -11679,11 +11679,24 @@ def _fill_college_card_gaps(pred: dict, sport: str) -> None:
         books = (int(float(pred.get('book_home_moneyline'))), int(float(pred.get('book_away_moneyline'))))
         ours = (int(float(pred.get('pl_model_home_ml'))), int(float(pred.get('pl_model_away_ml'))))
     except (TypeError, ValueError):
-        return
-    if books == ours:
+        books = ours = None
+    if books is not None and books == ours:
         pred['book_home_moneyline'] = None
         pred['book_away_moneyline'] = None
         pred['book_ml_estimated'] = False
+    # An older card may have locked model-generated prices before books posted.
+    # Fill only missing market fields on upcoming NCAAW cards, never the pick,
+    # the saved snapshot, or a completed game's grading baseline.
+    if sport == 'NCAAW' and pred.get('home_score') is None and pred.get('game_id'):
+        market_keys = ('book_home_moneyline', 'book_away_moneyline', 'book_spread', 'book_total')
+        if any(pred.get(key) is None for key in market_keys):
+            row = _bulk_load_book_lines_from_db(sport, [str(pred['game_id'])]).get(str(pred['game_id']))
+            if row and not _book_row_is_synthetic(row.get('source')):
+                for field, source in zip(market_keys, ('home_moneyline', 'away_moneyline', 'spread', 'total')):
+                    if pred.get(field) is None and _safe_float(row.get(source)) is not None:
+                        pred[field] = row[source]
+                pred['book_odds_source'] = row.get('source')
+                _set_card_book_lines(pred)
 
 
 def _prepare_pred_card_display__nba(pred: dict, sport: str = 'NBA') -> None:
@@ -30537,6 +30550,11 @@ def _persist_lock_card_json(cursor, sport, pred) -> bool:
     """Write the full card face once. Never overwrite."""
     if pred is None or pred.get('home_score') is not None:
         return False
+    if sport == 'NCAAW' and any(
+        _to_float_safe(pred.get(key)) is None
+        for key in ('glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob', 'ensemble_prob')
+    ):
+        return False
     game_id = pred.get('game_id')
     snap = _snapshot_lock_card(pred)
     if not game_id or not snap:
@@ -35897,6 +35915,11 @@ def _persist_upcoming_prediction_row(cursor, sport, pred) -> bool:
     if pred is None:
         return False
     if pred.get('home_score') is not None:
+        return False
+    if sport == 'NCAAW' and any(
+        _to_float_safe(pred.get(key)) is None
+        for key in ('glicko2_prob', 'trueskill_prob', 'elo_prob', 'xgb_prob', 'ensemble_prob')
+    ):
         return False
     game_id = pred.get('game_id')
     if not game_id:

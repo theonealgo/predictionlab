@@ -81,6 +81,22 @@ def capture(original_db, sections, now=None):
     return len(records)
 
 
+def first_recorded_dates(original_db, league=None):
+    """Earliest saved event date per model; never create or backfill a ledger."""
+    path = ledger_path(original_db)
+    if not path.exists():
+        return {}
+    with closing(sqlite3.connect(path.as_uri()+"?mode=ro", uri=True, timeout=3)) as conn:
+        conn.execute("PRAGMA query_only=ON")
+        sql = "SELECT json_extract(payload,'$.model_id'),MIN(pick_date) FROM forecasts"
+        params = []
+        if league:
+            sql += " WHERE league=?"
+            params.append(league)
+        sql += " GROUP BY json_extract(payload,'$.model_id')"
+        return {model: day for model, day in conn.execute(sql, params) if model and day}
+
+
 def read(original_db, day, league=None, end_day=None):
     path = ledger_path(original_db)
     if not path.exists():
