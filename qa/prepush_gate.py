@@ -58,6 +58,36 @@ BLANK_VALUES = {"", "N/A", "—", "-", "--", "None", "nan"}
 # Any host that is not local gets the free-visitor view.
 FREE_HOST = "plpreview.test"
 sys.path.insert(0, str(ROOT))
+_GATE_COOKIE = ""
+
+
+def _request_headers(host=None):
+    headers = {"User-Agent": "pl-prepush-gate"}
+    if host:
+        headers["Host"] = host
+    elif _GATE_COOKIE:
+        headers["Cookie"] = _GATE_COOKIE
+    return headers
+
+
+def _authenticate_worktree(work, base):
+    """Real login on the disposable database only; no saved/customer credentials."""
+    import secrets
+    import sqlite3
+    from qa.test_accounts import _hash
+    from qa.paid_viewer import _sign_in
+
+    if work.resolve() == ROOT.resolve() or urllib.parse.urlsplit(base).hostname != "127.0.0.1":
+        raise RuntimeError("Gate accounts require an isolated local worktree")
+    email = f"gate-{secrets.token_hex(12)}@example.invalid"
+    password = secrets.token_urlsafe(32)
+    with sqlite3.connect(work / "sports_predictions_original.db", timeout=30) as conn:
+        conn.execute(
+            "INSERT INTO users(email,name,password_hash,is_premium,premium_expires) VALUES(?,?,?,?,?)",
+            (email, "Disposable gate member", _hash(password), 1, "2099-01-01T00:00:00Z"),
+        )
+    jar = _sign_in(urllib.parse.urlsplit(base), email, password)
+    return "; ".join(f"{key}={value}" for key, value in jar.items())
 
 
 def _git(*args: str, cwd: Path = ROOT) -> str:
@@ -86,7 +116,7 @@ _tag_missing: set[str] = set()
 
 def _get(url: str, timeout: float) -> tuple[int, float, str]:
     t0 = time.time()
-    req = urllib.request.Request(url, headers={"User-Agent": "pl-prepush-gate"})
+    req = urllib.request.Request(url, headers=_request_headers())
     opener = urllib.request.build_opener(_NoRedirect)
     try:
         with opener.open(req, timeout=timeout) as r:
@@ -107,9 +137,7 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def _fetch(url: str, timeout: float, host: str | None = None) -> tuple[int, str]:
-    headers = {"User-Agent": "pl-prepush-gate"}
-    if host:
-        headers["Host"] = host
+    headers = _request_headers(host)
     try:
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as r:
             return r.status, r.read().decode("utf-8", "replace")
@@ -166,6 +194,8 @@ def measure_sports(base: str, timeout: float) -> dict:
 
 def run_commit(sha: str, port: int, rounds: int, min_seconds: int, timeout: float,
                log_dir: Path) -> dict:
+    global _GATE_COOKIE
+    _GATE_COOKIE = ""
     work = Path(tempfile.mkdtemp(prefix=f"pl_gate_{sha[:8]}_"))
     shutil.rmtree(work)
     subprocess.check_call([*GIT, "worktree", "add", "--detach", "-f", str(work), sha],
@@ -202,6 +232,15 @@ def run_commit(sha: str, port: int, rounds: int, min_seconds: int, timeout: floa
             result["fails"].append("app did not answer /healthz within 180s of start")
             return result
         result["boot_s"] = round(time.time() - t_start, 1)
+        try:
+            _GATE_COOKIE = _authenticate_worktree(work, base)
+            code, identity = _fetch(base + "/api/web/me", timeout)
+            if code != 200 or json.loads(identity) != {"loggedIn": True, "premium": True}:
+                raise RuntimeError("Paid gate identity could not be verified")
+            result["paid_authenticated"] = True
+        except Exception:
+            result["fails"].append("Could not establish a verified paid session on the disposable worktree")
+            return result
 
         workers = _children(master.pid)
         worker0 = workers[0] if workers else None
@@ -229,6 +268,7 @@ def run_commit(sha: str, port: int, rounds: int, min_seconds: int, timeout: floa
         result["sports"] = measure_sports(base, timeout)
         return result
     finally:
+        _GATE_COOKIE = ""
         try:
             os.killpg(master.pid, signal.SIGTERM)
             master.wait(timeout=20)
@@ -324,7 +364,7 @@ def main() -> int:
 
     base_res = None
     if base_sha and base_sha != sha:
-        cache = log_dir / f"base_{base_sha[:12]}_{time.strftime('%Y%m%d')}.json"
+        cache = log_dir / f"base_paid_v2_{base_sha[:12]}_{time.strftime('%Y%m%d')}.json"
         if cache.exists():
             base_res = json.loads(cache.read_text())
             print(f"baseline {base_sha[:8]}: cached ({base_res['peak_mb']:.0f} MB peak)")
