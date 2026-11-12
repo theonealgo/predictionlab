@@ -37,7 +37,7 @@ def _yesterday_et():
         now = datetime.now(ZoneInfo("America/New_York"))
     except Exception:
         now = datetime.now()
-    return (now - timedelta(days=1)).replace(hour=12, minute=0, second=0, microsecond=0)
+    return (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def _rec(tally: dict | None, key: str) -> str:

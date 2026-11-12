@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Win Predictions | PredictionLab{% endblock %}
+{% block extra_styles %}<style>{{ public_css }}</style>{% endblock %}
+{% block content %}
+<section style="max-width:900px;margin:24px auto;">
+  <h1>Win Predictions</h1>
+  <p style="margin:10px 0;">Win predictions and completed results are free. Prices, lines and additional features require premium membership.</p>
+  {% for card in cards %}{{ card }}{% else %}<p>No published win predictions are available for this view.</p>{% endfor %}
+  <p><a href="/all-sports-results">View free results</a> · <a href="/plans">View premium plans</a></p>
+</section>
+{% endblock %}

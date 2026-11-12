@@ -1,19 +1,30 @@
 {% extends "base.html" %}
 {% block title %}{{ page_title or post.title }} | Prediction Lab{% endblock %}
 {% block meta_description %}{{ page_description or post.excerpt or '' }}{% endblock %}
-{% block extra_head %}
+{% block head_meta %}
+<meta name="description" content="{{ page_description or post.excerpt or '' }}">
 <link rel="canonical" href="{{ canonical_url }}">
 <meta name="robots" content="{{ robots_meta or 'index,follow' }}">
 <meta property="og:title" content="{{ page_title or post.title }}">
 <meta property="og:description" content="{{ page_description or post.excerpt or '' }}">
 <meta property="og:url" content="{{ canonical_url }}">
+<meta property="og:type" content="article">
 {% if og_image %}<meta property="og:image" content="{{ og_image }}">{% endif %}
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ page_title or post.title }}">
+<meta name="twitter:description" content="{{ page_description or post.excerpt or '' }}">
+{% if og_image %}<meta name="twitter:image" content="{{ og_image }}">{% endif %}
+{% if date_published_iso %}<meta property="article:published_time" content="{{ date_published_iso }}">{% endif %}
+{% if date_modified_iso %}<meta property="article:modified_time" content="{{ date_modified_iso }}">{% endif %}
 {% if json_ld_blocks %}
 <script type="application/ld+json">{{ json_ld_blocks | tojson }}</script>
 {% endif %}
 <style>
   .blog-article{max-width:760px;margin:0 auto;padding:28px 18px 60px}
   .blog-article h1{font-size:1.85rem;line-height:1.25;margin:0 0 10px;color:#0f172a}
+  .blog-article .standfirst{font-size:1.12rem;line-height:1.65;color:#475569;margin:12px 0 18px}
+  .blog-article p{font-size:1rem;line-height:1.75;margin:0 0 16px;color:#334155}
+  .blog-article h2{font-size:1.3rem;line-height:1.35;margin:28px 0 12px;color:#0f172a}
   .blog-article .meta{color:#64748b;font-size:.9rem;margin:0 0 18px}
   .blog-article .hero{width:100%;max-height:360px;object-fit:cover;border-radius:12px;margin:0 0 18px}
   .blog-article .info-table,.blog-article .model-table{width:100%;border-collapse:collapse;font-size:.92rem;margin:12px 0}
@@ -30,8 +41,10 @@
 <article class="blog-article">
   <a class="back" href="/blog">← All articles</a>
   <h1>{{ post.title }}</h1>
+  {% if post.standfirst %}<p class="standfirst">{{ post.standfirst }}</p>{% endif %}
   <p class="meta">
-    {% if display_published %}<time datetime="{{ date_published_iso or post.date }}">{{ display_published }}</time>{% endif %}
+    {% if date_published_iso and display_published %}<time datetime="{{ date_published_iso }}">{{ display_published }}</time>
+    {% elif post.sections.game_info.date %}<span>Game date: {{ post.sections.game_info.date }}</span>{% endif %}
     {% if post.sport_tag %} · {{ post.sport_tag }}{% endif %}
   </p>
   {% if post.image and not post.image_is_logo %}

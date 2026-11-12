@@ -15037,6 +15037,13 @@ def _model_probs_for_grading__nhl(sport, game_row, home_team, away_team, game_da
 @_sport_variant.per_sport(nhl="_model_probs_for_grading__nhl")
 def _model_probs_for_grading(sport, game_row, home_team, away_team, game_date_key):
     """DB-first moneyline probs for results grading; frozen v2 fills historical gaps."""
+    if sport == 'NCAAW' and not any(
+        _to_float_safe(_row_field(game_row, key)) is not None for key in (
+            'glicko_home_prob', 'trueskill_home_prob', 'elo_home_prob', 'xgboost_home_prob',
+            'logistic_home_prob', 'meta_home_prob', 'win_probability',
+        )
+    ):
+        return None, None, None, None, None
     glicko2_prob, trueskill_prob, elo_prob, xgb_prob, ens_prob = _model_probs_from_row_and_v2(
         sport,
         home_team,
@@ -15943,6 +15950,8 @@ def _fetch_live_market_line(
     return None
 
 app = Flask(__name__)
+from paywall import install_access_policy as _install_access_policy
+_install_access_policy(app)
 
 
 class _ClassicPrefix:
@@ -15994,32 +16003,16 @@ _PAGE_HTTP_RE = re.compile(
 
 
 @app.after_request
+def _remember_public_results_board(response):
+    from all_sports_summary import remember_response
+    return remember_response(response)
+
+
+@app.after_request
 def _free_visitor_paywall(response):
     """Registered first so it runs last: nothing after it can re-add paid values."""
-    try:
-        if request.method != 'GET' or response.status_code != 200:
-            return response
-        if 'text/html' not in (response.content_type or '') or response.direct_passthrough:
-            return response
-        import paywall as _pw
-        if _viewer_is_paid():
-            html = response.get_data(as_text=True)
-            if 'joinPremiumBar' in html or 'premium-upsell-strip' in html or 'Join Premium' in html:
-                response.set_data(_pw.strip_upsell_for_paid(html))
-            return response
-        if _pw.is_results_path(request.path):
-            return response
-        html = response.get_data(as_text=True)
-        if not _pw.has_locked_content(html):
-            if request.path.rstrip('/').endswith(('-picks', '-projections')):
-                response.set_data(_pw.lock_card_data_attrs(html))
-                response.headers['Cache-Control'] = 'private, no-store'
-            return response
-        response.set_data(_pw.lock_free_picks_html(html))
-        response.headers['Cache-Control'] = 'private, no-store'
-    except Exception as _pw_e:
-        logger.warning(f"[paywall] free lock failed on {request.path}: {_pw_e}")
-    return response
+    from paywall import enforce_response
+    return enforce_response(response)
 
 
 _SPORT_LAYOUT_PATH_RE = re.compile(r'^/([a-z0-9]+)-(?:picks|projections)$')
@@ -16143,7 +16136,6 @@ def _api_picks_paywall(response):
 _PREMIUM_ONLY_PAGES = {
     '/ladder': ('10-Day Ladder Picks', 'One pick a day backed by our graded record, rolled into the next day\'s wager for up to 10 days.'),
     '/ladder-picks': ('10-Day Ladder Picks', 'One pick a day backed by our graded record, rolled into the next day\'s wager for up to 10 days.'),
-    '/all-sports-results': ('All Sports Results', 'Every sport\'s model records on one page: last night, the last 7 days, and the season.'),
     '/performance': ('Model Performance', 'How every model has done, by sport, pick type, and confidence.'),
     '/all-sports-picks': ('All Sports Picks', 'Today\'s picks across every sport, with the full card detail.'),
 }
@@ -17138,13 +17130,6 @@ def inject_globals():
         _is_premium = is_premium_user()
     except Exception:
         _is_premium = False
-    if not _is_premium:
-        try:
-            _host = (request.host or '').split(':')[0].lower()
-            if _host in ('127.0.0.1', 'localhost'):
-                _is_premium = True
-        except Exception:
-            pass
     return {
         'stripe_donation_url': STRIPE_DONATION_URL,
         'contact_email': CONTACT_EMAIL,
@@ -89288,7 +89273,9 @@ def sitemap_xml():
 
     try:
         from sport_blog_previews import sitemap_article_entries
-        for loc, lastmod, freq, prio in sitemap_article_entries(_load_blog_posts_from_json(), _SITE_DOMAIN):
+        from sports_news import published_posts
+        for loc, lastmod, freq, prio in sitemap_article_entries(
+                published_posts() + _load_blog_posts_from_json(), _SITE_DOMAIN):
             urls.append((loc, freq, prio, lastmod))
     except Exception as _sm_blog_exc:
         logger.debug('sitemap blog articles skipped: %s', _sm_blog_exc)
@@ -89534,20 +89521,8 @@ def _schedule_asr_refresh():
 
 
 def all_sports_results_page__soccer():
-    """Season dashboard. Serve the last page immediately; refresh off the request."""
-    now = _time.time()
-    hit = _ASR_PAGE_CACHE.get("html")
-    if hit and (now - hit[0]) < _ASR_LIVE_TTL and hit[1]:
-        return _patch_asr_rows_from_boards(hit[1])
-    disk, age = _read_asr_disk()
-    if disk:
-        if age is None or age >= _ASR_LIVE_TTL:
-            _schedule_asr_refresh()
-        return _patch_asr_rows_from_boards(disk)
-    if hit and hit[1]:
-        _schedule_asr_refresh()
-        return _patch_asr_rows_from_boards(hit[1])
-    return _build_all_sports_results_html()
+    from all_sports_summary import render_page
+    return render_page()
 
 
 def _asr_last_season_link(html):
@@ -89564,67 +89539,9 @@ def _asr_last_season_link(html):
 @app.route('/all-sports-results')
 @_sport_variant.per_sport(soccer="all_sports_results_page__soccer")
 def all_sports_results_page():
-    """Season dashboard from frozen JSON snapshots (no live regrade on load)."""
-    try:
-        from isolate_checker_fixes import (
-            asr_refresh_forced,
-            lookup_asr_html,
-            schedule_asr_refresh,
-        )
-        if not asr_refresh_forced():
-            _disk, _age = lookup_asr_html()
-            if _disk:
-                if _age is None or _age >= 180:
-                    schedule_asr_refresh()
-                try:
-                    from isolate_checker_fixes import align_asr_with_season_boards
-                    return _asr_last_season_link(align_asr_with_season_boards(_disk))
-                except Exception:
-                    return _asr_last_season_link(_disk)
-    except Exception:
-        pass
-    hit = _ASR_PAGE_CACHE.get("html")
-    if hit and (_time.time() - hit[0]) < _ASR_LIVE_TTL:
-        try:
-            from isolate_checker_fixes import align_asr_with_season_boards
-            return _asr_last_season_link(align_asr_with_season_boards(hit[1]))
-        except Exception:
-            return _asr_last_season_link(hit[1])
-    try:
-        snapshots = _load_all_sports_live_season_snaps()
-        dashboard_rows = _build_all_sports_dashboard_rows(snapshots)
-        last_season_rows = _build_all_sports_dashboard_rows(
-            _load_all_sports_season_snapshots()
-        )
-    except Exception:
-        logger.exception('all_sports_results_page failed loading snapshots')
-        dashboard_rows = []
-        last_season_rows = []
-    rendered = render_template_string(
-        ALL_SPORTS_RESULTS_TEMPLATE,
-        page='all-sports-results',
-        page_title='All Sports Results | Season Model Performance | predictionlab.io',
-        page_description=(
-            'Season moneyline, spread, and over/under model results across NHL, NBA, MLB, '
-            'NFL, NCAAB, NCAAF, WNBA, and Soccer.'
-        ),
-        dashboard_rows=dashboard_rows,
-        last_season_rows=last_season_rows,
-        ml_models=_ML_DASHBOARD_MODELS,
-    )
-    if dashboard_rows:
-        _ASR_PAGE_CACHE["html"] = (_time.time(), rendered)
-        try:
-            from isolate_checker_fixes import store_asr_html
-            store_asr_html(rendered)
-        except Exception:
-            pass
-    try:
-        from isolate_checker_fixes import align_asr_with_season_boards
-        rendered = align_asr_with_season_boards(rendered)
-    except Exception:
-        pass
-    return _asr_last_season_link(rendered)
+    """Public records from the same boards served on the sport results pages."""
+    from all_sports_summary import render_page
+    return render_page()
 
 
 # ── SEO picks routes ──────────────────────────────────────────────────────────
@@ -99099,11 +99016,7 @@ def sport_predictions__ncaaf(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -100002,11 +99915,7 @@ def sport_predictions__mlb(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -100883,11 +100792,7 @@ def sport_predictions__nhl(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -101750,11 +101655,7 @@ def sport_predictions__nba(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -102616,11 +102517,7 @@ def sport_predictions__ncaab(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -103482,11 +103379,7 @@ def sport_predictions__ncaaw(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -104365,11 +104258,7 @@ def sport_predictions__wnba(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -105231,11 +105120,7 @@ def sport_predictions__cfl(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -106209,11 +106094,7 @@ def sport_predictions__soccer(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -107078,11 +106959,7 @@ def sport_predictions__tennis(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -107943,11 +107820,7 @@ def sport_predictions__ufc(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -108810,11 +108683,7 @@ def sport_predictions__golf(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -109690,11 +109559,7 @@ def sport_predictions(sport, filter_date=None):
         ga_tracking_id=GA_TRACKING_ID,
         todays_picks=[],
         team_logo_url=team_logo_url,
-        is_premium=(
-            True
-            if (request.host or '').split(':')[0].lower() in ('127.0.0.1', 'localhost')
-            else is_premium_user()
-        ),
+        is_premium=is_premium_user(),
         offseason_notice=offseason_notice,
         robots_meta=_picks_robots_meta(
             sport=sport,
@@ -128727,6 +128592,7 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
         .blog-page .posts .pl-blog-card-image-wrap{width:140px;height:100px;flex-shrink:0;border-radius:8px;overflow:hidden;background:#f8fafc;display:flex;align-items:center;justify-content:center}
         .blog-page .posts .pl-blog-card-image{width:100%;height:100%;object-fit:cover;display:block}
         .blog-page .posts .pl-blog-card-image.is-logo{object-fit:contain;padding:14px;box-sizing:border-box}
+        .blog-page .posts .pl-blog-card-image.is-news{object-fit:contain;background:#071c35}
         .blog-page .posts .pl-blog-card-content{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center}
         .blog-page .posts .blog-post-title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:18px;line-height:1.3;margin:0 0 6px;color:#1a1a1a;font-weight:600}
         .blog-page .posts .blog-excerpt{font-size:14px;color:#666;margin:0 0 8px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -128751,7 +128617,23 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
         #soro-blog{min-height:480px;margin-top:8px}
         .blog-section{margin-top:40px}
         .blog-section-title{font-size:1.35rem;color:#0f172a;margin:0 0 16px;padding-bottom:10px;border-bottom:2px solid rgba(15,23,42,0.08)}
+        .news-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+        .news-story{min-width:0;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden;background:#fff}
+        .news-story:first-child{grid-column:1/-1}
+        .news-story-link{display:block;color:#0f172a;text-decoration:none;height:100%}
+        .news-story-link:hover h3{text-decoration:underline;color:#00529B}
+        .news-story-link:focus-visible{outline:3px solid #08aeef;outline-offset:-3px}
+        .news-story-image{aspect-ratio:1200/630;background:#071c35}
+        .news-story-image img{display:block;width:100%;height:100%;object-fit:contain}
+        .news-story-copy{padding:20px}
+        .news-story-meta{font-size:12px;font-weight:700;letter-spacing:.03em;color:#64748b;margin:0 0 10px}
+        .news-story h3{font-size:21px;line-height:1.3;margin:0 0 10px}
+        .news-story:first-child h3{font-size:27px}
+        .news-story-excerpt{font-size:15px;line-height:1.6;color:#475569;margin:0 0 14px}
+        .news-story-more{font-size:13px;font-weight:700;color:#00529B}
         @media (max-width:600px){
+            .news-grid{grid-template-columns:1fr}
+            .news-story:first-child h3{font-size:23px}
             .blog-page .posts .pl-blog-card{flex-direction:column;gap:12px;align-items:stretch;min-height:0}
             .blog-page .posts .pl-blog-card-image-wrap{width:100%;height:180px}
         }
@@ -128763,33 +128645,30 @@ BLOG_ARCHIVE_TEMPLATE = """{% extends "base.html" %}
     <header class="top">
         <span class="eyebrow">Daily articles</span>
         <h1>Prediction Lab Blog</h1>
-        <p class="sub">Game-day previews from Prediction Lab's stored board — matchups and model context when a sport has a slate. Predictions are model outputs, not guarantees.</p>
+        <p class="sub">Original sports news and game recaps from Prediction Lab, with verified scores and links to the full source coverage.</p>
     </header>
     <section class="blog-section" aria-label="Soro blog feed">
         <h2 class="blog-section-title">Trending in Sports</h2>
         <div id="soro-blog"></div>
         <script src="https://app.trysoro.com/api/embed/7713f25e-b95b-4eb2-a414-ec63a136d16f" defer></script>
     </section>
+    {% include "partials/blog_news_cards.html" %}
     <section class="blog-section" aria-label="Prediction Lab articles">
         <h2 class="blog-section-title">Latest from Prediction Lab</h2>
         <div class="posts">
-        {% for post in posts %}
-        <details class="blog-post-item" id="{{ post.slug }}">
-            <summary class="pl-blog-card">
+        {% for post in preview_posts %}
+        <article class="blog-post-item" id="{{ post.slug }}">
+            <a class="pl-blog-card" href="{{ post.article_url }}">
                 <div class="pl-blog-card-image-wrap">
-                    <img class="pl-blog-card-image{% if post.image_is_logo %} is-logo{% endif %}" src="{{ post.image }}" alt="" width="140" height="100" loading="lazy">
+                    <img class="pl-blog-card-image{% if post.image_is_logo %} is-logo{% endif %}{% if post.kind == 'sports_news' %} is-news{% endif %}" src="{{ post.image }}" alt="" width="140" height="100" loading="lazy">
                 </div>
                 <div class="pl-blog-card-content">
-                    <span class="blog-post-title">{{ post.title }}</span>
+                    <h3 class="blog-post-title">{{ post.title }}</h3>
                     <p class="blog-excerpt">{{ post.card_excerpt }}</p>
                     <p class="pl-blog-card-date"><time datetime="{{ post.date }}">{{ post.display_date }}</time></p>
                 </div>
-            </summary>
-            <div class="blog-post-body">
-                {% set in_place = true %}
-                {% include "partials/blog_article_body.html" %}
-            </div>
-        </details>
+            </a>
+        </article>
         {% endfor %}
         </div>
     </section>
@@ -128990,7 +128869,7 @@ _BLOG_GAME_DAY_ESPN = {
     'CFL': ('football', 'cfl'),
 }
 
-_BLOG_GAME_DAY_AUTO_PUBLISH = True
+_BLOG_GAME_DAY_AUTO_PUBLISH = False
 _BLOG_GAME_DAY_MAX_POSTS = 160
 _BLOG_GAME_DAY_PER_SPORT = 12
 
@@ -129071,19 +128950,22 @@ def _blog_article_url(post: dict) -> str:
 
 
 def _blog_template_posts():
-    posts = _get_blog_posts(include_generated=False)
+    from sports_news import published_posts
+    from blog_presentation import public_blog_post
+    posts = published_posts() + _get_blog_posts(include_generated=False)
+    unique = {}
+    for post in posts:
+        unique.setdefault(post.get("slug"), post)
+    posts = sorted(unique.values(), key=lambda post: str(post.get("date_published") or post.get("date") or ""), reverse=True)
     out = []
-    for p in posts:
+    for original in posts:
+        p = public_blog_post(original)
         if str(p.get('status') or 'published').lower() != 'published':
             continue
         image, image_is_logo = _blog_post_image(p)
+        if p.get('kind') == 'sports_news' and image == '/static/pl-logo.svg':
+            image_is_logo = True
         excerpt = str(p.get('excerpt') or '').strip() or _blog_excerpt(' '.join(p.get('body') or []), 2)
-        try:
-            from sport_blog_previews import coerce_sections
-            coerce_sections(p)
-        except Exception:
-            if not isinstance(p.get('sections'), dict):
-                p['sections'] = {}
         out.append({
             **p,
             'display_date': _blog_display_date(p),
@@ -130192,9 +130074,12 @@ def blog_archive_page():
         _anon = not (getattr(current_user, 'is_authenticated', False) and current_user.is_authenticated)
     except Exception:
         _anon = True
+    from sports_news_store import revision as _news_revision
+    _news_version = _news_revision()
     if _anon:
         _cached = _BLOG_PAGE_CACHE.get('html')
-        if _cached and (_time.time() - _BLOG_PAGE_CACHE.get('ts', 0)) < _BLOG_PAGE_TTL:
+        if (_cached and _BLOG_PAGE_CACHE.get('news_version') == _news_version
+                and (_time.time() - _BLOG_PAGE_CACHE.get('ts', 0)) < _BLOG_PAGE_TTL):
             return _cached
     posts = []
     try:
@@ -130202,12 +130087,13 @@ def blog_archive_page():
     except Exception as _blog_e:
         logger.exception('blog posts failed: %s', _blog_e)
     page_description = (
-        "Game-day previews with Prediction Lab model probabilities and market context. "
-        "Updated when a sport has a live slate. Predictions are model outputs, not guarantees."
+        "Original sports roundups, verified final scores, and the latest from Prediction Lab."
     )
     html = render_template_string(
         BLOG_ARCHIVE_TEMPLATE,
         posts=posts,
+        news_posts=[post for post in posts if post.get('kind') == 'sports_news'],
+        preview_posts=[post for post in posts if post.get('kind') != 'sports_news'],
         site_domain=_SITE_DOMAIN,
         page='blog',
         page_title='Prediction Lab Blog | predictionlab.io',
@@ -130216,23 +130102,24 @@ def blog_archive_page():
     if _anon and isinstance(html, str) and html and 'soro-blog' in html:
         _BLOG_PAGE_CACHE['ts'] = _time.time()
         _BLOG_PAGE_CACHE['html'] = html
+        _BLOG_PAGE_CACHE['news_version'] = _news_version
     return html
 
 
 def _match_blog_post(posts: list, slug: str):
+    from blog_urls import article_aliases, with_public_url
     clean = _slugify_blog(slug)
     for p in posts or []:
-        if _slugify_blog(p.get('slug')) == clean:
-            return p
-        if _slugify_blog(p.get('legacy_slug') or '') == clean:
-            return p
-        path = str(p.get('canonical_path') or p.get('article_url') or '')
-        if path.rstrip('/').endswith('/' + clean):
-            return p
+        if clean in {_slugify_blog(alias) for alias in article_aliases(p)}:
+            return with_public_url(p)
     return None
 
 
 def _find_blog_post(slug: str):
+    from sports_news import published_posts
+    news = _match_blog_post(published_posts(), slug)
+    if news:
+        return news
     hit = _match_blog_post(_load_blog_posts_from_json(), slug)
     if hit:
         return hit
@@ -130240,10 +130127,12 @@ def _find_blog_post(slug: str):
 
 
 def _render_blog_article_page(post: dict):
+    from blog_presentation import public_blog_post
+    from blog_urls import publication_dates
+    post = public_blog_post(post)
     from sport_blog_previews import article_json_ld, OG_IMAGE_PATH, is_indexable_post, _iso_datetime, coerce_sections
     slug = str((post or {}).get('slug') or '').strip()
     try:
-        coerce_sections(post)
         indexable = is_indexable_post(post)
         robots_meta = 'index,follow' if indexable else 'noindex,follow'
         site = _SITE_DOMAIN
@@ -130253,6 +130142,7 @@ def _render_blog_article_page(post: dict):
         if str(og).startswith('/'):
             og = site + og
         json_ld = article_json_ld(post, site)
+        published_iso, modified_iso = publication_dates(post)
         return render_template(
             'blog_article.html',
             post=post,
@@ -130260,8 +130150,8 @@ def _render_blog_article_page(post: dict):
             canonical_url=canonical_url,
             og_image=og,
             json_ld_blocks=json_ld,
-            date_published_iso=_iso_datetime(post.get('date_published') or post.get('date') or ''),
-            date_modified_iso=_iso_datetime(post.get('date_modified') or post.get('date_published') or post.get('date') or ''),
+            date_published_iso=published_iso,
+            date_modified_iso=modified_iso,
             display_published=_blog_display_date(post),
             display_modified=_blog_display_date({'date': post.get('date_modified') or post.get('date')}),
             page='blog',
@@ -130319,6 +130209,8 @@ def blog_post_redirect(slug):
 # Blog caches (annotated assignments missed by the bulk port)
 _BLOG_CACHE: dict = {'ts': 0, 'posts': []}
 _BLOG_NEWS_CACHE: dict = {'ts': 0, 'items': []}
+from sports_news_review import init_news as _init_sports_news_review
+_init_sports_news_review(app, invalidate=lambda: _BLOG_PAGE_CACHE.clear())
 
 
 
@@ -130755,6 +130647,12 @@ try:
     _app_api.init_app(app)
 except Exception as _app_api_e:
     logger.warning(f"app feed not installed: {_app_api_e}")
+
+
+from navigation_compat import install as _install_navigation_compat
+_install_navigation_compat(app)
+from ncaaw_score_sync import start_worker as _start_ncaaw_scores, invalidate_site as _invalidate_ncaaw_scores
+_start_ncaaw_scores(app, DATABASE, lambda: _invalidate_ncaaw_scores(__import__('sys').modules[__name__]))
 
 
 if __name__ == '__main__':

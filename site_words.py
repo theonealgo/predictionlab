@@ -12,6 +12,7 @@ import threading
 from collections import OrderedDict
 
 SITE = 'https://predictionlab.io'
+WORDING_VERSION = 2
 SPORT_SLUGS = ('nhl', 'nba', 'ncaab', 'ncaaw', 'mlb', 'soccer', 'nfl', 'ncaaf', 'wnba', 'tennis', 'ufc', 'golf',
                'cfl', 'all-sports')
 
@@ -52,7 +53,16 @@ _WORDS = [
     (r"(?<![-/\w])PICK(?![-/\w])", 'PREDICTION'),
 ]
 _RULES = [(re.compile(p), r) for p, r in _PHRASES + _WORDS]
-_HAS_PICK = re.compile(r'pick', re.I)
+_HAS_PICK = re.compile(r'pick|books?|sharp consensus|ladder|player (?:props|projections)|odds|prediction lab', re.I)
+_DISPLAY_RULES = [
+    (re.compile(r'\bPlayer (?:Props|Projections)\b', re.I), 'Players'),
+    (re.compile(r'(?<!Performance )(?<![-/\w])Ladder(?![-/\w])', re.I), 'Performance Ladder'),
+    (re.compile(r'\b(?:PL|Prediction Lab)(?: Model)? Odds\b', re.I), 'Predictionlab'),
+    (re.compile(r'\bOdds\s*&(?:amp;)?\s*Lines\b', re.I), 'Market & Projections'),
+    (re.compile(r'\bSharp Consensus\b', re.I), 'Market Consensus'),
+    (re.compile(r'(?<![-/\w])Sportsbooks(?![-/\w])', re.I), 'Markets'),
+    (re.compile(r'(?<![-/\w])(?:Books|Sportsbook)(?![-/\w])', re.I), 'Market'),
+]
 
 
 def soften(text):
@@ -64,9 +74,10 @@ def soften(text):
     return text
 
 
-_SKIP = re.compile(r'(<(script|style|textarea|code|pre)\b.*?</\2\s*>|<!--.*?-->)', re.S | re.I)
-_TEXT = re.compile(r'>([^<>]*[Pp][Ii][Cc][Kk][^<>]*)<')
-_ATTR = re.compile(r'(\s(?:title|alt|aria-label|placeholder|data-tip|data-tooltip|data-info)=")([^"]*[Pp]ick[^"]*)(")')
+_SKIP = re.compile(r'(<(script|style|textarea|code|pre|blockquote)\b.*?</\2\s*>|<!--.*?-->|'
+                   r'<(div|span|strong|b)\b(?=[^>]*\bclass="[^"]*\b(?:team-name|player-name|pp-player|golf-player|pl-golf-name)\b)[^>]*>.*?</\3\s*>)', re.S | re.I)
+_TEXT = re.compile(r'>([^<>]*)<')
+_ATTR = re.compile(r'(\s(?:title|alt|aria-label|placeholder|data-tip|data-tooltip|data-info)=")([^"]*)(")')
 _META = re.compile(r'(<meta\s+(?:name|property)="(?:description|og:title|og:description|twitter:title|twitter:description)"'
                    r'\s+content=")([^"]*)(")', re.I)
 _TITLE_TAG = re.compile(r'(<title>)(.*?)(</title>)', re.S | re.I)
@@ -80,7 +91,11 @@ _MENU_STRINGS = [
     ("'Picks & Predictions'", "'Predictions'"),
     ('"Picks & Predictions"', '"Predictions"'),
     ("'All Sports Picks'", "'All Sports Predictions'"),
-    ("'10-Day Ladder Picks'", "'10-Day Ladder'"),
+    ("'10-Day Ladder Picks'", "'10-Day Performance Ladder'"),
+    ("'The Ladder'", "'Performance Ladder'"),
+    ('"The Ladder"', '"Performance Ladder"'),
+    ("'Player Props'", "'Players'"),
+    ('"Player Props"', '"Players"'),
 ]
 _MENU_LINK = re.compile(r"(h:')(/(?:%s)-picks|%s)(')" % (_sports, '|'.join(re.escape(old) for old in RENAMED)))
 _ABS_RENAMED = re.compile('|'.join(re.escape(SITE + old) for old in RENAMED) + r'(?=["\'?#<\s])')
@@ -94,10 +109,21 @@ def _new_path(path):
     return path
 
 
+def _display_words(text):
+    if re.search(r'not (?:an? online gambling operator|a sportsbook)|do not (?:take bets|accept wagers)|responsible (?:gaming|gambling)|1-800-GAMBLER', text, re.I):
+        return text
+    text = soften(text)
+    for pattern, replacement in _DISPLAY_RULES:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 def _soften_segment(html):
-    html = _TEXT.sub(lambda m: '>' + soften(m.group(1)) + '<', html)
-    html = _ATTR.sub(lambda m: m.group(1) + soften(m.group(2)) + m.group(3), html)
-    html = _META.sub(lambda m: m.group(1) + soften(m.group(2)) + m.group(3), html)
+    html = re.sub(r'(<span\b[^>]*class="[^"]*\bml-src\b[^"]*\bpl\b[^"]*"[^>]*>)\s*Prediction Lab\s*(</span>)',
+                  r'\1Predictionlab\2', html)
+    html = _TEXT.sub(lambda m: '>' + _display_words(m.group(1)) + '<', html)
+    html = _ATTR.sub(lambda m: m.group(1) + _display_words(m.group(2)) + m.group(3), html)
+    html = _META.sub(lambda m: m.group(1) + _display_words(m.group(2)) + m.group(3), html)
     return html
 
 
@@ -106,6 +132,13 @@ def _script(block):
         if old in block:
             block = block.replace(old, new)
     return _MENU_LINK.sub(lambda m: m.group(1) + _new_path(m.group(2)) + m.group(3), block)
+
+def rewrite_policy(html):
+    """Policy text stays verbatim; only the shared navigation gets new labels."""
+    return re.sub(
+        r'<(header|footer)\b[^>]*>[\s\S]*?</\1\s*>',
+        lambda match: rewrite_html(match.group(0)), html, flags=re.I,
+    )
 
 
 def rewrite_json_strings(value):
@@ -186,14 +219,15 @@ class VisitorWords:
                 close()
         path = environ.get('PATH_INFO', '')
         blog = path == '/blog' or path.startswith('/blog/')
-        out = _remembered(body, rewrite_menus if blog else rewrite_html)
+        policy = path.rstrip('/') in ('/terms', '/privacy', '/refund-policy', '/responsible-gaming')
+        out = _remembered(body, rewrite_policy if policy else rewrite_menus if blog else rewrite_html)
         headers = [(k, v) for k, v in headers if k.lower() != 'content-length']
         headers.append(('Content-Length', str(len(out))))
         start_response(status, headers, captured.get('exc_info'))
         return [out]
 
 
-_MENU_TEXT = re.compile(r'Picks &(?:amp;)? Predictions|All Sports Picks|AI picks overview|What AI picks are')
+_MENU_TEXT = re.compile(r'Picks &(?:amp;)? Predictions|All Sports Picks|AI picks overview|What AI picks are|Player (?:Props|Projections)|(?<!Performance )\bLadder\b')
 
 
 def rewrite_menus(html):
@@ -203,11 +237,11 @@ def rewrite_menus(html):
     parts = []
     last = 0
     for m in _SKIP.finditer(html):
-        parts.append(_MENU_TEXT.sub(lambda t: soften(t.group(0)), html[last:m.start()]))
+        parts.append(_MENU_TEXT.sub(lambda t: _display_words(t.group(0)), html[last:m.start()]))
         block = m.group(0)
         parts.append(_script(block) if block[:7].lower() == '<script' else block)
         last = m.end()
-    parts.append(_MENU_TEXT.sub(lambda t: soften(t.group(0)), html[last:]))
+    parts.append(_MENU_TEXT.sub(lambda t: _display_words(t.group(0)), html[last:]))
     html = _LINK.sub(lambda m: m.group(1) + (SITE if m.group(0)[len(m.group(1)):].startswith('http') else '')
                      + _new_path(m.group(2)), ''.join(parts))
     return _ABS_RENAMED.sub(lambda m: SITE + RENAMED[m.group(0)[len(SITE):]], html)
@@ -226,7 +260,7 @@ def rewrite_html(html):
         last = m.end()
     parts.append(_soften_segment(html[last:]))
     html = ''.join(parts)
-    html = _TITLE_TAG.sub(lambda m: m.group(1) + soften(m.group(2)) + m.group(3), html)
+    html = _TITLE_TAG.sub(lambda m: m.group(1) + _display_words(m.group(2)) + m.group(3), html)
     html = _LINK.sub(lambda m: m.group(1) + (SITE if m.group(0)[len(m.group(1)):].startswith('http') else '')
                      + _new_path(m.group(2)), html)
     return _ABS_RENAMED.sub(lambda m: SITE + RENAMED[m.group(0)[len(SITE):]], html)

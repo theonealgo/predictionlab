@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}News review | Prediction Lab{% endblock %}
+{% block head_meta %}
+<meta name="robots" content="noindex,nofollow">
+<style>
+.news-review{max-width:1080px;margin:auto;padding:28px 18px 70px;line-height:1.6}
+.news-review h1{font-size:30px;margin:0 0 8px}.news-review h2{font-size:23px;line-height:1.3;margin:0 0 12px}
+.news-review h3{margin:18px 0 8px}.news-review p{margin:0 0 14px}
+.news-card,.news-runs{border:1px solid #dce4ee;border-radius:16px;padding:22px;margin:22px 0;background:#fff}
+.news-note{padding:14px;border-radius:10px;background:#edf7ff;color:#173d62;margin:16px 0}
+.news-review .actions{display:flex;gap:12px;flex-wrap:wrap;margin:16px 0;align-items:center}
+.news-review button,.news-review .button{display:inline-block;padding:10px 16px;border:1px solid #007ac5;border-radius:24px;background:#008cdb;color:#fff;text-decoration:none;font:inherit;font-weight:700;cursor:pointer}
+.news-review .secondary{color:#125886;background:#fff}.news-review .status{display:inline-block;padding:3px 12px;background:#edf2f7;border-radius:20px;font-weight:700;font-size:13px}
+.news-review .published{background:#e0f4ef;color:#086348}.news-review .error{color:#9f1c27;background:#fff1f1;padding:12px}
+.news-review summary{cursor:pointer;font-weight:700;color:#005b95;padding:8px 0}.news-review .article-body{max-width:760px;margin-top:16px}
+.news-review .score-wrap{overflow:auto}.news-review table{border-collapse:collapse;width:100%;font-size:14px}
+.news-review th,.news-review td{padding:8px;text-align:left;border-bottom:1px solid #e4eaf1}
+.news-review .social-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.news-review img{width:100%;height:auto;border-radius:12px}
+.news-review textarea{width:100%;min-height:180px;padding:12px;font:inherit;font-size:14px;border:1px solid #c9d4e3;border-radius:10px}
+.news-review .meta{font-size:14px;color:#53677c}.news-review a{overflow-wrap:anywhere}
+@media(max-width:700px){.news-review .social-grid{grid-template-columns:1fr}.news-card{padding:16px}.news-review h1{font-size:26px}}
+</style>
+{% endblock %}
+{% block content %}
+<main class="news-review">
+  <a href="/blog">← Blog</a>
+  <h1>Sports news review</h1>
+  <p>Daily original roundups for <strong>Latest from Prediction Lab</strong>. Review the article and verified final scores before publishing.</p>
+  <div class="news-note">Drafts are prepared after 9 AM Eastern, up to three articles per day. Nothing is published automatically. Soro remains on the blog. Social downloads are prepared files—not delivered posts.</div>
+  {% if message %}<p class="news-note" role="status">{{ message }}</p>{% endif %}
+  <form method="post" action="/admin/sports-news/generate">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit">Prepare yesterday’s roundups</button>
+  </form>
+  <details class="news-runs">
+    <summary>Recent draft preparation</summary>
+    {% for run in runs %}
+    <p><strong>{{ run.game_date }}</strong> · {{ run.status }} · {{ run.started_at }}{% if run.reason %}<br>{{ run.reason }}{% endif %}</p>
+    <ul>{% for sport in run.sports or [] %}<li>{{ sport.sport }}: {{ sport.status }}{% if sport.reason %} — {{ sport.reason }}{% endif %}{% if sport.games is defined %} · {{ sport.games }} finals{% endif %}</li>{% endfor %}</ul>
+    {% else %}<p>No run recorded yet. Use the preparation button to check yesterday’s final scores.</p>{% endfor %}
+  </details>
+  {% for post in posts %}
+  <article class="news-card" id="{{ post.slug }}">
+    <p><span class="status {{ post.status }}">{{ post.status|capitalize }}</span> <span class="meta">{{ post.sport_tag }} · Games: {{ post.game_date }} · {{ post.provenance.facts|length }} verified finals</span></p>
+    <h2>{{ post.title }}</h2>
+    <p>{{ post.excerpt }}</p>
+    {% if post.validation_error %}<p class="error">{{ post.validation_error }}</p>{% endif %}
+    <details class="review-article">
+      <summary>Read article and check every final score</summary>
+      <div class="article-body">{% for paragraph in post.body %}<p>{{ paragraph }}</p>{% endfor %}</div>
+      <div class="score-wrap"><table><thead><tr><th>Away</th><th>Score</th><th>Home</th><th>Source</th></tr></thead><tbody>
+      {% for fact in post.provenance.facts %}
+      <tr><td>{{ fact.away }}</td><td>{{ fact.away_score }}–{{ fact.home_score }}</td><td>{{ fact.home }}</td><td><a href="{{ fact.source_url }}" target="_blank" rel="noopener noreferrer">Final box score</a></td></tr>
+      {% endfor %}
+      </tbody></table></div>
+    </details>
+    {% if not post.validation_error %}
+    <div class="actions">
+      <form method="post" action="/admin/sports-news/{{ post.slug }}/review">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="version" value="{{ post.version }}">
+        {% if post.status == "published" %}
+        <button type="submit" name="action" value="draft" class="secondary">Return to draft</button>
+        {% else %}
+        <button type="submit" name="action" value="publish">Approve and publish to blog</button>
+        {% endif %}
+      </form>
+      {% if post.status == "published" %}<a href="{{ post.canonical_path }}">View article →</a>{% endif %}
+      <a class="button secondary" href="/admin/sports-news/{{ post.slug }}/package.zip">Download social package</a>
+    </div>
+    <details>
+      <summary>Preview Facebook and Instagram package</summary>
+      <p class="meta">These images are original Prediction Lab artwork. Confirm the article is live before manually posting. Downloading does not publish to Facebook or Instagram.</p>
+      <div class="social-grid">
+      {% for platform in ("facebook", "instagram") %}
+        <section><h3>{{ platform|capitalize }}</h3>
+        <img src="/admin/sports-news/{{ post.slug }}/{{ platform }}.png" alt="{{ platform|capitalize }} article artwork" loading="lazy">
+        <label for="{{ post.slug }}-{{ platform }}">Caption — select to copy</label>
+        <textarea id="{{ post.slug }}-{{ platform }}" readonly>{{ post.social[platform] }}</textarea></section>
+      {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+  </article>
+  {% else %}<p>No news drafts yet. Prepare yesterday’s roundups to begin.</p>{% endfor %}
+</main>
+{% endblock %}

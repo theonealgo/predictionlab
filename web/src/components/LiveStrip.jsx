@@ -1,20 +1,21 @@
 import { useEffect, useState } from 'react';
 import { getJson } from '../api.js';
 import { useDragScroll } from '../hooks/useDragScroll.js';
+import { selectLiveStripItems } from '../liveStripItems.js';
 
-// Every game dated today with no final score yet, across the sports, as boxes under the header.
+// A short preview per sport, plus every live game, as boxes under the header.
 // The row scrolls: drag it, use the trackpad, or use the arrows.
 export default function LiveStrip() {
   const [items, setItems] = useState(null);
   const strip = useDragScroll();
 
-  // Refreshed every minute, so games move to Live as they start and the row turns over each day.
+  // Scores and official game status refresh independently of saved predictions.
   useEffect(() => {
     const load = () => getJson('/api/web/live', { maxAge: 0 })
-      .then((data) => setItems(data.items || []))
+      .then((data) => setItems(selectLiveStripItems(data.items)))
       .catch(() => setItems((current) => current || []));
     load();
-    const timer = setInterval(load, 60 * 1000);
+    const timer = setInterval(load, 30 * 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -76,9 +77,25 @@ export default function LiveStrip() {
                   key={`${item.sport}-${item.away}-${item.home}`}
                   href={`${item.href}?game=${encodeURIComponent(`${item.away}|${item.home}`)}`}
                 >
-                  <div className="pl-live-meta">{item.live ? 'Live' : 'Today'}</div>
-                  <div className="pl-live-team"><span>{item.away}</span><b>{item.awayPct}%</b></div>
-                  <div className="pl-live-team"><span>{item.home}</span><b>{item.homePct}%</b></div>
+                  <div className="pl-live-meta" title={item.scoreReason || undefined}>
+                    {item.scoreState === 'delayed' ? 'Score update delayed'
+                      : item.live ? `Live${item.statusDetail ? ` · ${item.statusDetail}` : ''}`
+                        : item.scoreState === 'pre' ? item.statusDetail || 'Today'
+                          : 'Today · score N/A'}
+                  </div>
+                  <div className="pl-live-columns" aria-hidden="true">
+                    <span /><span>{item.scoreLabel || 'Score'}</span><span>Prediction %</span>
+                  </div>
+                  <div className="pl-live-team">
+                    <span title={item.away}>{item.away}</span>
+                    <strong title={item.scoreReason || undefined}>{item.awayScore ?? '—'}</strong>
+                    <b title="Pregame prediction">{item.awayPct == null ? 'N/A' : `${item.awayPct}%`}</b>
+                  </div>
+                  <div className="pl-live-team">
+                    <span title={item.home}>{item.home}</span>
+                    <strong title={item.scoreReason || undefined}>{item.homeScore ?? '—'}</strong>
+                    <b title="Pregame prediction">{item.homePct == null ? 'N/A' : `${item.homePct}%`}</b>
+                  </div>
                 </a>
               ))}
             </div>

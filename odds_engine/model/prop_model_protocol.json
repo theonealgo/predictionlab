@@ -1,0 +1,22 @@
+{
+  "version": "player-props-v1",
+  "purpose": "New player-stat prop adapters; never reuse team-winner probabilities as player-stat probabilities",
+  "families": {
+    "elo": {"public_name": "Edge", "k": 20, "initial": 1500, "opponent": "fixed threshold anchor"},
+    "glicko2": {"public_name": "Grinder2", "implementation": "existing Glicko2Rating", "opponent": "fixed threshold anchor"},
+    "trueskill": {"public_name": "Takedown", "implementation": "existing TrueSkillRating", "opponent": "fixed threshold anchor"},
+    "xgboost": {"public_name": "XSharp", "objective": "binary:logistic", "n_estimators": 100, "max_depth": 2, "learning_rate": 0.05, "min_child_weight": 5, "reg_lambda": 10, "random_state": 42, "n_jobs": 2},
+    "ensemble": {"public_name": "Sharp Consensus", "members": ["elo", "glicko2", "trueskill", "xgboost"], "weights": "equal; all four members required"},
+    "efficiency": {"available": false, "reason": "The owner's PL-spread-to-moneyline rule is not a player-stat forecast"}
+  },
+  "inputs": "Verified regular-season player observations strictly before prediction ET date",
+  "rating_targets": "Player actual exceeds an integer-stat threshold, not team game winner",
+  "xgboost_features": ["mean5", "mean10", "std10", "last1", "mean3", "line", "line_z", "history_count"],
+  "xgboost_training_thresholds": "Prior-only mean plus [-1,-0.5,0,0.5,1] standard deviations, rounded to half lines",
+  "validation": "One frozen chronological 80/20 split by whole ET dates; no hyperparameter selection on validation",
+  "minimum_training_rows": 100,
+  "minimum_validation_rows": 40,
+  "xgboost_gate": "Finite validation Brier <= 0.25; record baseline comparison and coverage, never claim proven betting accuracy",
+  "performance_policy": "Only immutable published pregame selections enter live model win/loss records; synthetic training thresholds never become historical bet records",
+  "probability_policy": "Separate Over, Under and Push; no confidence offsets or copied model probabilities"
+}

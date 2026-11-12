@@ -297,7 +297,7 @@ export default function AllSportsPage() {
         </div>
         {body}
       </main>
-      <aside className="pl-right">
+      <aside className="pl-right pl-all-results" aria-label="All sports results summary" tabIndex={0}>
         <div className="pl-right-title">Last night · {board ? board.results_label : ''}</div>
         {board ? <SummaryTable rows={board.summary_last_night} label="Record" /> : <p className="pl-asp-muted">—</p>}
         <div className="pl-right-title pl-asp-gap">Last 7 days</div>

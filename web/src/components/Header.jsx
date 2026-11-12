@@ -9,7 +9,7 @@ function escapeHtml(value) {
 }
 
 // The header's search box. The header arrives as HTML, so its own script does not run here:
-// this lists matching teams and sports under the box, and Enter opens the first one.
+// this lists matching players, teams and sports; Enter opens the resolved first match.
 function wireSearch(root) {
   const form = root.querySelector('form.pl-search-form');
   const input = form && form.querySelector('input[name="query"]');
@@ -22,6 +22,8 @@ function wireSearch(root) {
   let results = [];
   let timer = null;
   let asked = '';
+  let completed = '';
+  let partial = false;
 
   const show = () => {
     if (!input.value.trim()) {
@@ -33,7 +35,7 @@ function wireSearch(root) {
         `<a class="pl-search-item" href="${escapeHtml(r.href)}"><span>${escapeHtml(r.label)}</span>`
         + `<span class="pl-search-sport">${escapeHtml(r.sport)}</span></a>`
       )).join('')
-      : '<div class="pl-search-empty">No teams found</div>';
+      : `<div class="pl-search-empty">${partial ? 'Player directory unavailable. Please retry.' : 'No players or teams found'}</div>`;
     list.hidden = false;
   };
 
@@ -47,32 +49,41 @@ function wireSearch(root) {
     }
     return getJson(`/api/web/search?q=${encodeURIComponent(q)}`)
       .then((data) => {
-        if (asked !== q) return;
+        if (asked !== q || input.value.trim() !== q) return;
         results = data.results || [];
+        partial = Boolean(data.partial);
+        completed = q;
         show();
       })
-      .catch(() => {});
+      .catch(() => {
+        if (asked !== q || input.value.trim() !== q) return;
+        results = [];
+        completed = '';
+        partial = true;
+        show();
+      });
   };
 
   const onInput = () => {
     clearTimeout(timer);
-    timer = setTimeout(lookUp, 150);
+    list.hidden = true;
+    timer = setTimeout(lookUp, 250);
   };
   const onSubmit = (event) => {
     event.preventDefault();
     clearTimeout(timer);
     const go = () => {
-      if (results[0]) window.location.href = results[0].href;
+      if (completed === input.value.trim() && results[0]) window.location.href = results[0].href;
       else show();
     };
-    if (asked === input.value.trim()) go();
+    if (completed === input.value.trim()) go();
     else lookUp().then(go);
   };
   const onDocClick = (event) => {
     if (!form.contains(event.target)) list.hidden = true;
   };
   const onFocus = () => {
-    if (results.length) show();
+    if (completed === input.value.trim() && results.length) show();
   };
 
   input.setAttribute('autocomplete', 'off');

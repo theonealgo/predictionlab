@@ -157,6 +157,18 @@ def _parse_attempts(value: str) -> float:
     except Exception:
         return 0.0
 
+def _parse_makes(value: str) -> Optional[float]:
+    """Made baskets, not attempts; missing or inconsistent stats stay unavailable."""
+    try:
+        made, attempts = (float(part.strip()) for part in str(value).split("-"))
+        if not (math.isfinite(made) and math.isfinite(attempts)):
+            return None
+        if not (made.is_integer() and attempts.is_integer() and 0 <= made <= attempts):
+            return None
+        return made
+    except (TypeError, ValueError):
+        return None
+
 
 def _num(value: str) -> float:
     try:
@@ -173,11 +185,22 @@ def _espn_scoreboard_url(league: str) -> str:
 def fetch_schedule_and_teams(league: str, target_date=None) -> List[Dict]:
     url = _espn_scoreboard_url(league)
     def _rows_for(ds: str) -> List[Dict]:
-        resp = requests.get(url, params={"dates": ds}, timeout=12)
+        params = {"dates": ds, "limit": 1000}
+        if league in ("NCAAF", "NCAAB", "NCAAW"):
+            params["groups"] = 50 if league in ("NCAAB", "NCAAW") else 80
+        resp = requests.get(url, params=params, timeout=12)
         resp.raise_for_status()
         events = resp.json().get("events", [])
         rows = []
         for ev in events:
+            try:
+                event_time = datetime.fromisoformat(str(ev["date"]).replace("Z", "+00:00"))
+                if event_time.tzinfo is None or event_time.astimezone(ZoneInfo("America/New_York")).strftime("%Y%m%d") != ds:
+                    continue
+            except (KeyError, TypeError, ValueError):
+                continue
+            if target_date is None and ((ev.get("status") or {}).get("type") or {}).get("state") in ("post", "in"):
+                continue
             if league == "UFC":
                 # MMA: each competition is a fight; competitors are athletes.
                 for fight in (ev.get("competitions") or []):
@@ -224,73 +247,11 @@ def fetch_schedule_and_teams(league: str, target_date=None) -> List[Dict]:
         now_et = datetime.now(ZoneInfo("America/New_York"))
         use_date = target_date or now_et.date()
         rows = _rows_for(use_date.strftime("%Y%m%d"))
-        if rows:
-            return rows
-        for d in range(1, 8):
-            probe = (use_date + timedelta(days=d)).strftime("%Y%m%d")
-            rows = _rows_for(probe)
-            if rows:
-                return rows
-        # Use scoreboard calendar to auto-activate when the next season date arrives.
-        # This keeps each sport "ready" without manual date updates.
-        resp = requests.get(url, timeout=12)
-        resp.raise_for_status()
-        body = resp.json()
-        cal = ((body.get("leagues") or [{}])[0].get("calendar") or [])
-        candidate_days = []
-        for entry in cal:
-            if isinstance(entry, str):
-                try:
-                    candidate_days.append(datetime.fromisoformat(entry.replace("Z", "+00:00")).date())
-                except Exception:
-                    continue
-            elif isinstance(entry, dict):
-                for key in ("startDate", "date"):
-                    if entry.get(key):
-                        try:
-                            candidate_days.append(datetime.fromisoformat(str(entry[key]).replace("Z", "+00:00")).date())
-                            break
-                        except Exception:
-                            continue
-        upcoming = sorted({d for d in candidate_days if d >= use_date})
-        for d in upcoming[:6]:
-            rows = _rows_for(d.strftime("%Y%m%d"))
-            if rows:
-                return rows
-        events = body.get("events", [])
-        rows = []
-        for ev in events:
-            comp = (ev.get("competitions") or [{}])[0]
-            teams = comp.get("competitors") or []
-            if len(teams) < 2:
-                continue
-            home = next((t for t in teams if t.get("homeAway") == "home"), teams[0])
-            away = next((t for t in teams if t.get("homeAway") == "away"), teams[1])
-            rows.append(
-                {
-                    "event_id": ev.get("id", ""),
-                    "start_time": ev.get("date"),
-                    "home_team": home.get("team", {}).get("displayName", "Home"),
-                    "away_team": away.get("team", {}).get("displayName", "Away"),
-                    "home_team_id": str(home.get("team", {}).get("id", "")),
-                    "away_team_id": str(away.get("team", {}).get("id", "")),
-                }
-            )
-        if rows:
-            return rows
-        return []
+        return rows
     except Exception:
-        pass
-    # Fallback synthetic schedule so app remains usable in dev
-    return [
-        {
-            "event_id": f"{league}-{i}",
-            "start_time": datetime.utcnow().isoformat(),
-            "home_team": f"{league} Team {2*i+1}",
-            "away_team": f"{league} Team {2*i+2}",
-        }
-        for i in range(12)
-    ]
+        if target_date is not None:
+            raise
+    return []
 
 
 def _espn_season_year() -> int:
@@ -406,21 +367,30 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
         if key_name in seen_name_team:
             return
         _min_lo, _min_hi = _LEAGUE_MINUTES_RANGE.get(league, (24.0, 40.0))
-        # Deterministic stub minutes from id (not random EV ranking).
-        seed = abs(hash(f"{league}:{key_id or name}:{team}")) % 1000
-        projected_minutes = _min_lo + (_min_hi - _min_lo) * (seed / 1000.0)
-        # Prefer depth-chart usage over hash stubs when available.
+        # Unknown playing time is not a player statistic. Keep it unknown rather than
+        # deriving projections or relevance from a hash of the player's identity.
+        projected_minutes = None
         d_rank = int(depth_rank or 0)
         if d_rank > 0:
             usage = max(0.15, 0.95 - (d_rank - 1) * 0.18)
             prop_frequency = max(0.2, 0.9 - (d_rank - 1) * 0.15)
         else:
-            usage = 0.20 + 0.25 * (seed / 1000.0)
-            prop_frequency = 0.20 + 0.25 * ((999 - seed) / 1000.0)
-        score = projected_minutes * 0.45 + usage * 30 + prop_frequency * 25
+            usage = 0.0
+            prop_frequency = 0.0
+        score = usage * 30 + prop_frequency * 25
         if d_rank > 0:
             score += max(0.0, 80.0 - (d_rank - 1) * 25.0)
-        final_id = key_id if key_id else f"{league}-{idx}"
+        if not key_id.isdigit():
+            return
+        final_id = key_id
+        games = sorted((game for game in schedule_rows if str(team_id) in
+                        (str(game.get("home_team_id")), str(game.get("away_team_id")))),
+                       key=lambda game: str(game.get("start_time") or ""))
+        def appearance(game):
+            home = str(team_id) == str(game.get("home_team_id"))
+            return {"event_id": str(game.get("event_id") or ""), "start_time": game.get("start_time"),
+                    "opponent": game.get("away_team") if home else game.get("home_team"),
+                    "is_home": home}
         players.append(
             {
                 "player_id": final_id,
@@ -433,10 +403,12 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
                 "experience_years": experience_years,
                 "jersey": jersey,
                 "depth_rank": d_rank or None,
-                "projected_minutes": round(projected_minutes, 1),
+                "projected_minutes": projected_minutes,
                 "usage_score": round(usage, 3),
                 "prop_frequency": round(prop_frequency, 3),
                 "top50_score": round(score, 2),
+                "next_game": appearance(games[0]) if games else {},
+                "games": [appearance(game) for game in games],
             }
         )
         seen_player_ids.add(final_id)
@@ -567,7 +539,7 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
         kept, _audit = select_top_pool(players, league=league)
         return kept
 
-    for game in schedule_rows[:25]:
+    for game in schedule_rows:
         _fetch_roster(game.get("home_team_id", ""), game["home_team"])
         _fetch_roster(game.get("away_team_id", ""), game["away_team"])
 
@@ -580,9 +552,9 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
 
 
 def _player_log_path() -> str:
-    primary = "/logs/player_filter.log"
+    primary = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "logs", "player_filter.log"))
     try:
-        os.makedirs("/logs", exist_ok=True)
+        os.makedirs(os.path.dirname(primary), exist_ok=True)
         return primary
     except Exception:
         fallback = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs", "player_filter.log")
@@ -603,7 +575,7 @@ def _append_filter_log(lines: List[str]):
 def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Dict:
     now = time.time()
     cached = _PLAYER_METRICS_CACHE.get(player_id)
-    if cached and (now - cached["ts"]) < _PLAYER_METRICS_TTL:
+    if cached and (now - cached["ts"]) < _PLAYER_METRICS_TTL and cached["payload"].get("history_schema") == "nba-prior-date-v2":
         return cached["payload"]
 
     url = f"https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/{player_id}/gamelog"
@@ -623,6 +595,13 @@ def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Di
             for ev in cat.get("events") or []:
                 if ev.get("stats"):
                     events.append(ev)
+        verified_history = []
+        if body.get("events"):
+            from odds_engine.model.gamelog import observations
+            verified_history = observations(body, player_id, datetime.now(ZoneInfo("America/New_York")))
+            by_id = {str(ev.get("eventId")): ev for ev in events}
+            events = [by_id[row["event_id"]] for row in reversed(verified_history)
+                      if row["event_id"] in by_id]
         mins, usage_raw = [], []
         pts_vals, reb_vals, ast_vals, thr_vals = [], [], [], []
         for ev in events:
@@ -636,8 +615,10 @@ def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Di
             pts = _num(stats[idx["PTS"]]) if "PTS" in idx and idx["PTS"] < len(stats) else 0.0
             reb = _num(stats[idx["REB"]]) if "REB" in idx and idx["REB"] < len(stats) else 0.0
             ast = _num(stats[idx["AST"]]) if "AST" in idx and idx["AST"] < len(stats) else 0.0
-            thr = _parse_attempts(stats[idx["3PT"]]) if "3PT" in idx and idx["3PT"] < len(stats) else 0.0
+            thr = _parse_makes(stats[idx["3PT"]]) if "3PT" in idx and idx["3PT"] < len(stats) else None
             if m > 0:
+                if thr is None:
+                    continue
                 mins.append(m)
                 usage_raw.append((fg + 0.44 * ft + to) / max(m, 1.0))
                 pts_vals.append(pts)
@@ -684,6 +665,14 @@ def _fetch_nba_player_metrics(player_id: str, athlete: Dict | None = None) -> Di
                     "threes": round(_weighted(thr_vals), 2),
                 },
                 "insufficient_data": False,
+                "history_verified": bool(verified_history),
+                "history_schema": "nba-prior-date-v2",
+                "stat_history": {key: [row[key] for row in reversed(verified_history[-20:])]
+                                 for key in ("points", "rebounds", "assists", "threes")},
+                "stat_observations": {key: [{"date": row["start_utc"], "event_id": row["event_id"], "actual": row[key]}
+                                            for row in verified_history[-60:]]
+                                      for key in ("points", "rebounds", "assists", "threes")},
+                "history_before": verified_history[-1]["date_et"] if verified_history else None,
             }
     except Exception:
         pass
@@ -821,10 +810,12 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
     for g in schedule_rows[:15]:
         if g.get("home_team_id"):
             team_ids.add((g["home_team_id"], g["home_team"]))
-            next_game_by_team[g["home_team_id"]] = {"opponent": g.get("away_team", ""), "start_time": g.get("start_time", "")}
+            next_game_by_team.setdefault(g["home_team_id"], {"event_id": str(g.get("event_id") or ""),
+                "opponent": g.get("away_team", ""), "start_time": g.get("start_time", ""), "is_home": True})
         if g.get("away_team_id"):
             team_ids.add((g["away_team_id"], g["away_team"]))
-            next_game_by_team[g["away_team_id"]] = {"opponent": g.get("home_team", ""), "start_time": g.get("start_time", "")}
+            next_game_by_team.setdefault(g["away_team_id"], {"event_id": str(g.get("event_id") or ""),
+                "opponent": g.get("home_team", ""), "start_time": g.get("start_time", ""), "is_home": False})
 
     log_lines = []
     for team_id, team_name in team_ids:
@@ -910,6 +901,10 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
                         "stats_last5": metrics.get("stats_last5", {}),
                         "stats_last10": metrics.get("stats_last10", {}),
                         "stats_weighted": metrics.get("stats_weighted", {}),
+                        "stat_history": metrics.get("stat_history", {}),
+                        "stat_observations": metrics.get("stat_observations", {}),
+                        "history_verified": metrics.get("history_verified", False),
+                        "history_before": metrics.get("history_before"),
                         "prop_frequency": round(_clamp(len(last_10) / 10.0, 0.4, 1.0), 3),
                         "top50_score": round((avg_minutes * 0.5) + (usage_rate * 100.0 * 0.5), 2),
                         "is_superstar": superstar,
@@ -1093,6 +1088,10 @@ def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
                 p = by_name.get(nm)
         if not p:
             continue
+        known_games = p.get("games") or ([p["next_game"]] if p.get("next_game") else [])
+        if known_games and row.get("event_id") and str(row["event_id"]) not in {
+                str(game.get("event_id")) for game in known_games}:
+            continue
         lg = str(p.get("league") or league)
         role = p.get("role") or position_to_role(lg, p.get("position"))
         pt = str(row.get("prop_type") or "")
@@ -1104,7 +1103,9 @@ def _match_real_rows(raw_rows: List[Dict], players: List[Dict]) -> List[Dict]:
             "prop_type": pt,
             "line": line,
             "line_for_calc": line,
-            "line_source": "espn_props",
+            "line_source": row.get("line_source", "espn_props"),
+            "event_id": row.get("event_id"),
+            "event_start": row.get("event_start"),
             "odds_over": row["odds_over"],
             "odds_under": row["odds_under"],
         }
@@ -1150,6 +1151,8 @@ def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
     if not name:
         return None
     n = name.lower()
+    if re.search(r"\b(?:half|quarter|period|innings?|fantasy)\b", n) or re.search(r"\b(?:and|plus)\b", n):
+        return None
     if "+" in n or "allowed" in n:  # combos / pitcher 'hits allowed' etc.
         return None
     # Milestone markets are yes/no "to reach N" (usually N=1), not two-way O/U.
@@ -1310,11 +1313,9 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
 
     def _not_final(ev) -> bool:
         st = ((((ev.get("status") or {}).get("type")) or {}).get("state") or "").lower()
-        return st != "post"
+        return st == "pre"
 
     ev_ids = [str(e.get("id")) for e in events if e.get("id") and _not_final(e)]
-    if not ev_ids:
-        ev_ids = [str(e.get("id")) for e in events if e.get("id")]
     ev_ids = ev_ids[:ESPN_EVENTS_CAP]
     if not ev_ids:
         return []
@@ -1377,7 +1378,7 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
                 ):
                     target_f = max(0.5, float(target_f) - 0.5)
                     over_only = True
-                key = (athlete_id, prop_type)
+                key = (eid, athlete_id, prop_type)
                 slot = agg.get(key)
 
                 def _line_pref(line: float) -> tuple:
@@ -1405,7 +1406,8 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
             page += 1
 
     rows = []
-    for (athlete_id, prop_type), slot in agg.items():
+    event_starts = {str(event.get("id")): event.get("date") for event in events}
+    for (event_id, athlete_id, prop_type), slot in agg.items():
         prices = [p for p in (slot.get("prices") or []) if p is not None]
         # ESPN football often posts the line without american prices — leave
         # odds None so the engine uses its projection model (do not fake -110).
@@ -1416,6 +1418,8 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
             odds_under = prices[1] if len(prices) >= 2 else None
         row = {
             "player_id": athlete_id,
+            "event_id": event_id,
+            "event_start": event_starts.get(event_id),
             "norm_name": None,
             "prop_type": prop_type,
             "line": _to_half_step(slot["line"]),
@@ -1454,6 +1458,10 @@ def fetch_real_prop_lines(league: str, players: List[Dict]) -> Optional[List[Dic
         raw_rows = _espn_fetch_prop_rows(league, espn_sport, espn_league)
     except Exception:
         raw_rows = []
+    if not raw_rows and ODDS_API_KEY and os.getenv("PL_PROPS_PAID_LINES", "0").lower() in ("1", "true", "yes"):
+        from .provider_lines import fetch_rows
+        raw_rows = fetch_rows(league, players, _ODDS_API_SPORT_KEYS.get(league),
+                              _ODDS_API_MARKETS.get(league), ODDS_API_KEY, ODDS_EVENTS_CAP, requests.get)
     # Cache even an empty result so we don't repeatedly hammer ESPN when a
     # league currently has no player props (off-season / uncovered slate).
     _REAL_LINES_CACHE[league] = {"ts": now, "rows": raw_rows}
@@ -1463,71 +1471,21 @@ def fetch_real_prop_lines(league: str, players: List[Dict]) -> Optional[List[Dic
 
 
 def fetch_prop_lines(league: str, players: List[Dict], use_real: bool = True) -> List[Dict]:
-    if not players:
+    if not players or not use_real:
         return []
-    # 1) Real DraftKings lines (ESPN free core API) — preferred for every league
-    #    when building a live slate. Historical/grading rebuilds pass
-    #    use_real=False (ESPN prop feeds only cover upcoming/live games).
-    if use_real:
-        real = fetch_real_prop_lines(league, players)
-        if real:
-            return real
-    # 2) Fast NBA path: already-fetched gamelog-based weighted projections
-    #    (dev / no-odds fallback so /props doesn't stall on another fan-out).
-    if league == "NBA":
-        fast = _internal_nba_prop_lines(players)
-        if fast:
-            return fast
-    if ODDS_ENGINE_URL:
-        try:
-            payload = {
-                "sport": league,
-                "items": [
-                    {
-                        "player_id": p.get("player_id"),
-                        "player_name": p.get("name"),
-                        "team": p.get("team"),
-                        "prop_type": primary_market_for_role(
-                            league, p.get("role") or position_to_role(league, p.get("position"))
-                        )
-                        or next(iter(_LEAGUE_PROP_TYPES.get(league) or ["points"]), "points"),
-                    }
-                    for p in players
-                    if primary_market_for_role(
-                        league, p.get("role") or position_to_role(league, p.get("position"))
-                    )
-                ],
-            }
-            resp = requests.post(f"{ODDS_ENGINE_URL}/player-props/batch", json=payload, timeout=8)
-            resp.raise_for_status()
-            body = resp.json()
-            items = body.get("props") or []
-            by_key = {(str(x.get("player_id")), str(x.get("prop_type"))): x for x in items}
-            out = []
-            for src in payload["items"]:
-                k = (str(src["player_id"]), str(src["prop_type"]))
-                row = by_key.get(k)
-                if not row:
-                    continue
-                out.append(
-                    {
-                        "player_id": src["player_id"],
-                        "prop_type": src["prop_type"],
-                        "line": _to_half_step(row.get("line")) if row.get("line") is not None else None,
-                        "line_for_calc": _to_half_step(row.get("line")) if row.get("line") is not None else None,
-                        "line_source": row.get("line_source", "internal_odds_api"),
-                        "odds_over": row.get("odds_over", -110),
-                        "odds_under": row.get("odds_under", -110),
-                    }
-                )
-            if out:
-                return out
-        except Exception:
-            pass
-    internal = _internal_generic_prop_lines(league, players)
-    if internal:
-        return internal
-    return _synthetic_prop_lines(league, players)
+    real = fetch_real_prop_lines(league, players) or []
+    from .pl_lines import lines_from_players
+    fallback = lines_from_players(
+        league, players, _LEAGUE_PROP_TYPES.get(league, []),
+        lambda p, pt: market_allowed(league, p.get("role") or position_to_role(league, p.get("position")),
+                                     pt, line_source="pl_model"),
+        endpoint=ODDS_ENGINE_URL, post=requests.post, market_lines=real,
+    )
+    def key(row):
+        return (str(row["player_id"]), row["prop_type"], str(row.get("event_id")), float(row["line"]))
+    enriched = {key(row): row for row in fallback}
+    covered = {key(row) for row in real}
+    return [enriched.get(key(row), row) for row in real] + [row for row in fallback if key(row) not in covered]
 
 
 def implied_prob(american_odds: float) -> float:

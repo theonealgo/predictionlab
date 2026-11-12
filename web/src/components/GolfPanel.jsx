@@ -61,8 +61,8 @@ export default function GolfPanel() {
         <span>{selected.date} · {selected.status}</span>
       </h2>
 
-      <h2 className="pl-day-title">Our predictions</h2>
-      {data.picks.length === 0 && <p className="pl-empty">No predictions for this tournament yet.</p>}
+      {data.locked ? <div className="pl-login-prompt">Additional golf projections require premium membership. <a href="/plans">View premium plans</a>.</div> : <h2 className="pl-day-title">Our predictions</h2>}
+      {!data.locked && data.picks.length === 0 && <p className="pl-empty">No predictions for this tournament yet.</p>}
       <div className="pl-golf-picks">
         {data.picks.map((pick) => (
           <div className="pl-golf-pick" key={pick.market}>
@@ -91,8 +91,8 @@ export default function GolfPanel() {
               <th>Rank</th>
               <th>Player</th>
               <th className="num">Win</th>
-              <th className="num">Top 10</th>
-              <th className="num">Top 20</th>
+              {!data.locked && <th className="num">Top 10</th>}
+              {!data.locked && <th className="num">Top 20</th>}
             </tr>
           </thead>
           <tbody>
@@ -106,8 +106,8 @@ export default function GolfPanel() {
                   </span>
                 </td>
                 <td className="num">{row.win}</td>
-                <td className="num">{row.top10}</td>
-                <td className="num">{row.top20}</td>
+                {!data.locked && <td className="num">{row.top10}</td>}
+                {!data.locked && <td className="num">{row.top20}</td>}
               </tr>
             ))}
           </tbody>

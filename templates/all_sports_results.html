@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}All Sports Results | PredictionLab{% endblock %}
+{% block head_meta %}
+<meta name="description" content="Public completed model results across every sport, matching each sport’s results page.">
+<link rel="canonical" href="https://predictionlab.io/all-sports-results">
+{% endblock %}
+{% block extra_styles %}
+<link rel="stylesheet" href="/static/css/all-sports-results.css">
+{% endblock %}
+{% block content %}
+<section class="pl-results-summary-page">
+  <h1>All Sports Results</h1>
+  <p><a href="/historic-results">Historic results by season →</a></p>
+  {{ summary }}
+</section>
+{% endblock %}

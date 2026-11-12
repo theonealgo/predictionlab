@@ -1,0 +1,27 @@
+.pl-results-summary-page{max-width:1200px;margin:0 auto;padding:12px 16px 48px;color:#0f172a}
+.pl-results-summary-page h1{font-size:1.75rem;margin:0 0 10px}
+.pl-results-summary{margin:16px 0 28px;color:#0f172a;min-width:0}
+.pl-results-summary-note{font-size:.82rem;line-height:1.6;color:#64748b;margin:8px 0 14px}
+.pl-results-summary-section{border:1px solid #e2e8f0;border-radius:12px;margin:12px 0;background:#fff;overflow:hidden}
+.pl-results-summary-section>summary{padding:14px 16px;font-size:.95rem;font-weight:700;cursor:pointer;background:#f8fafc}
+.pl-results-summary-section>.pl-results-summary-note{padding:0 16px}
+.pl-results-summary-scroll{overflow-x:auto;max-width:100%;scrollbar-width:thin}
+.pl-results-summary .asr-table{border-collapse:collapse;width:100%;min-width:640px;font-size:.82rem}
+.pl-results-summary .asr-table caption{text-align:left;padding:12px 14px;color:#64748b;font-size:.77rem}
+.pl-results-summary .asr-table th,.pl-results-summary .asr-table td{padding:12px 10px;border-bottom:1px solid #e2e8f0;text-align:center;vertical-align:top}
+.pl-results-summary .asr-table thead th{font-size:.72rem;color:#475569;background:#f8fafc}
+.pl-results-summary .asr-table tbody th{background:#fff;color:#0f172a}
+.pl-results-summary .asr-table th:first-child{text-align:left;min-width:84px}
+.pl-results-summary .asr-table a{text-decoration:none;color:#0369a1;font-weight:700}
+.pl-results-summary .asr-table a:hover{text-decoration:underline}
+.pl-results-summary .asr-table tbody tr:last-child>*{border-bottom:0}
+.pl-results-summary .asr-pct,.pl-results-summary .asr-rec,.pl-results-summary .asr-status{display:block}
+.pl-results-summary .asr-pct{font-size:.95rem}
+.pl-results-summary .asr-rec{color:#64748b;font-size:.75rem;margin-top:4px}
+.pl-results-summary .asr-status{font-size:.78rem;color:#64748b}
+.pl-results-summary td small{display:block;color:#64748b;font-size:.68rem;line-height:1.45;max-width:160px;margin:4px auto 0}
+.pl-results-summary-scroll:focus-visible,.pl-results-summary a:focus-visible,.pl-results-summary summary:focus-visible{outline:2px solid #0369a1;outline-offset:-2px}
+.pl-home-results-title{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.pl-home-results-title h2{margin:0;font-size:1.25rem}
+.pl-home-results-title a{font-size:.82rem;color:#0369a1;text-decoration:underline}
+@media(max-width:640px){.pl-results-summary .asr-table{min-width:620px}.pl-results-summary .asr-table th,.pl-results-summary .asr-table td{padding:10px 8px}}

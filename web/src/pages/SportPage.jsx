@@ -9,6 +9,7 @@ import PlayersPanel from '../components/PlayersPanel.jsx';
 import GolfPanel from '../components/GolfPanel.jsx';
 import ResultsPanel from '../components/ResultsPanel.jsx';
 import PicksChart from '../components/PicksChart.jsx';
+import { todayET, cardIsFinal } from '../slateDates.js';
 
 // Football shows its whole week by default; the other sports show 4 days, with a button for the rest.
 const FOOTBALL = new Set(['NFL', 'NCAAF', 'CFL']);
@@ -100,7 +101,7 @@ function sameTeam(a, b) {
 function targetCard(cards, game) {
   if (!game) return null;
   const [away, home] = game.split('|');
-  const upcoming = cards.filter((card) => !card.html.includes('FINAL'));
+  const upcoming = cards.filter((card) => !cardIsFinal(card) && card.date >= todayET());
   for (const list of [upcoming, cards]) {
     const both = list.find((card) => sameTeam(card.away, away) && sameTeam(card.home, home));
     if (both) return both;
@@ -116,7 +117,7 @@ export default function SportPage({ slug }) {
   const nav = SPORT_NAV[sport] || DEFAULT_NAV;
   const conference = CONFERENCES[sport] || null;
   const college = collegeGroups[sport] || null;
-  const todayIso = localIsoDate(new Date());
+  const [todayIso, setTodayIso] = useState(() => todayET());
   const daysShownFirst = FOOTBALL.has(sport) ? 7 : 4;
   const cardsPath = `/api/web/sports/${slug}/cards`;
   const [tab, setTab] = useState(nav.tabs[0]);
@@ -148,27 +149,39 @@ export default function SportPage({ slug }) {
     // A sport's first build after a restart can be slow: keep loading and try again before giving up.
     let alive = true;
     let timer = null;
+    let pending = false;
     const load = (triesLeft) => {
-      getJson(cardsPath)
+      if (pending) return;
+      pending = true;
+      setTodayIso(todayET());
+      getJson(cardsPath, { maxAge: 0 })
         .then((data) => {
           if (!alive) return;
           applyCardStyles(data.css);
           setPayload(data);
+          setError(null);
         })
         .catch((err) => {
           if (!alive) return;
           if (triesLeft > 0) timer = setTimeout(() => load(triesLeft - 1), 3000);
           else setError(err.message);
-        });
+        }).finally(() => { pending = false; });
     };
     load(4);
+    const refresh = () => { if (document.visibilityState !== 'hidden') load(1); };
+    const interval = setInterval(refresh, 60000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       alive = false;
       clearTimeout(timer);
+      clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
     };
   }, [cardsPath, isGolf]);
 
-  const cards = payload ? payload.cards : [];
+  const cards = payload?.cards || [];
   const [gameParam] = useState(() => new URLSearchParams(window.location.search).get('game'));
   const target = useMemo(() => targetCard(cards, gameParam), [cards, gameParam]);
 
@@ -186,7 +199,7 @@ export default function SportPage({ slug }) {
   const days = useMemo(() => {
     const map = new Map();
     cards.forEach((card) => {
-      const key = card.html.includes('FINAL') ? `FINAL:${card.date || ''}` : card.date || '';
+      const key = cardIsFinal(card) ? `FINAL:${card.date || ''}` : card.date || '';
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(card);
     });
@@ -196,9 +209,9 @@ export default function SportPage({ slug }) {
   // Upcoming days, earliest first.
   const upcomingDays = useMemo(
     () => days
-      .filter(([key]) => !key.startsWith('FINAL'))
+      .filter(([key]) => !key.startsWith('FINAL') && key >= todayIso)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
-    [days],
+    [days, todayIso],
   );
 
   // The last two days of finished games, most recent first.

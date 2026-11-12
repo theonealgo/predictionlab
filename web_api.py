@@ -22,6 +22,147 @@ from flask import Blueprint, current_app, jsonify, render_template, request
 api = Blueprint('pl_web_api', __name__)
 
 
+@api.record_once
+def _start_prop_workers(state):
+    if state.app.testing:
+        return
+    import NHL77FINAL as site
+    if os.getenv('PL_PROP_SETTLEMENT', '1') == '1':
+        from prop_settlement import start_worker
+        start_worker(site.DATABASE)
+    if os.getenv('PL_PROP_PUBLICATION', '1') == '1':
+        from props_service import start_daily
+        start_daily(site)
+
+
+def _props_hub_access():
+    from flask_login import current_user
+    from auth_system import is_premium_user
+    if not current_user.is_authenticated or not is_premium_user():
+        response = jsonify(locked=True, loggedIn=bool(current_user.is_authenticated),
+                           detail='An active premium membership is required for Sports Props.')
+        response.status_code = 403 if current_user.is_authenticated else 401
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.vary.add('Cookie')
+        return response
+    return None
+
+
+@api.route('/api/web/props-navigation')
+def api_props_navigation():
+    from props_navigation import navigation
+    from sports_props_hub import LEAGUES
+    import NHL77FINAL as site
+    day = request.args.get('date') or datetime.now(ZoneInfo('America/New_York')).date().isoformat()
+    try:
+        if datetime.strptime(day, '%Y-%m-%d').strftime('%Y-%m-%d') != day:
+            raise ValueError
+    except ValueError:
+        return jsonify(error='Invalid date'), 400
+    from props_service import entries as prop_entries
+    entries = prop_entries(site, day)
+    try:
+        data = navigation(site.DATABASE, day, entries)
+    except Exception:
+        current_app.logger.exception('Props availability metadata unavailable')
+        return jsonify(date=day, sports=[], known_total=None, complete=False), 503
+    response = jsonify(data)
+    response.headers['Cache-Control'] = 'public, max-age=30'
+    return response
+
+
+@api.route('/api/web/props-hub')
+def api_props_hub():
+    denied = _props_hub_access()
+    if denied is not None:
+        return denied
+    from sports_props_hub import LEAGUES, preview, historical_catalog
+    import NHL77FINAL as site
+    selected = (request.args.get('league') or '').upper()
+    if selected and selected not in LEAGUES:
+        return jsonify(error='Unsupported sport'), 400
+    day = request.args.get('date') or datetime.now(ZoneInfo('America/New_York')).date().isoformat()
+    try:
+        if datetime.strptime(day, '%Y-%m-%d').strftime('%Y-%m-%d') != day:
+            raise ValueError
+    except ValueError:
+        return jsonify(error='Choose a valid YYYY-MM-DD props date.'), 400
+    if day < datetime.now(ZoneInfo('America/New_York')).date().isoformat():
+        from props_navigation import game_catalog, bind_games
+        data = historical_catalog(site.DATABASE, day, selected, limit=None if selected else 3)
+        catalog = game_catalog(site.DATABASE, day)
+        for section in data['sections']:
+            bind_games(section, catalog)
+        response = jsonify(data)
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.vary.add('Cookie')
+        return response
+    sections = []
+    from props_navigation import game_catalog, bind_games
+    from props_service import entries as prop_entries, ensure, building as prop_building
+    if not current_app.testing:
+        ensure(site, day, selected or None)
+    entries = prop_entries(site, day)
+    catalog = game_catalog(site.DATABASE, day)
+    counts = []
+    for league in LEAGUES:
+        entry = entries.get(league)
+        building = prop_building(site, league, day)
+        section = preview(league, entry, limit=None if selected else 3, day=day)
+        bind_games(section, catalog, entry)
+        section['building'] = building
+        counts.append({'league': league, 'count': section['total'], 'kind': 'available',
+                       'status': section.get('status'), 'reason': section.get('reason')})
+        if not selected or selected == league:
+            sections.append(section)
+    from prop_forecast_store import capture
+    from prop_settlement import start_worker
+    recorded = 0
+    try:
+        recorded = capture(site.DATABASE, sections)
+        if recorded and not current_app.testing:
+            start_worker(site.DATABASE)
+        from prop_forecast_store import _aware
+        now = datetime.now(ZoneInfo('UTC'))
+        expected = sum(bool(forecast.get('side')) for section in sections for row in section.get('items') or []
+                       if _aware(row.get('event_start')) and _aware(row['event_start']) > now
+                       for forecast in row.get('model_forecasts') or [])
+        tracking_available = recorded >= expected
+    except Exception:
+        current_app.logger.exception('Prospective prop capture failed')
+        tracking_available = False
+    for section in sections:
+        for row in section.get('items') or []:
+            row.pop('input_values', None)
+            row.pop('input_hash', None)
+    response = jsonify(leagues=list(LEAGUES), date=day, counts=counts, sections=sections, captured_forecasts=recorded,
+                       tracking_available=tracking_available)
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.vary.add('Cookie')
+    return response
+
+
+@api.route('/api/web/props-results')
+def api_props_results():
+    denied = _props_hub_access()
+    if denied is not None:
+        return denied
+    from sports_props_hub import read_results
+    from NHL77FINAL import DATABASE
+    try:
+        data = read_results(DATABASE, (request.args.get('league') or '').upper() or None,
+                            request.args.get('date') or None, window=request.args.get('window') or 'night')
+    except ValueError:
+        return jsonify(error='Choose a supported sport and a valid YYYY-MM-DD date.'), 400
+    except Exception:
+        current_app.logger.exception('Read-only props results unavailable')
+        return jsonify(error='Recorded prop results could not be loaded. Please retry.'), 503
+    response = jsonify(data)
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.vary.add('Cookie')
+    return response
+
+
 @api.after_request
 def _gzip_json(response):
     """Compress the JSON API: the sport cards payloads are large and very repetitive."""
@@ -34,7 +175,7 @@ def _gzip_json(response):
         return response
     response.set_data(gzip.compress(body, compresslevel=5))
     response.headers['Content-Encoding'] = 'gzip'
-    response.headers['Vary'] = 'Accept-Encoding'
+    response.vary.add('Accept-Encoding')
     return response
 
 
@@ -60,7 +201,8 @@ def _visitor_words(response):
 
 def _reword_cards(payload):
     """Card HTML with visitor wording (site_words), done once per built or loaded feed."""
-    if payload.get('words'):
+    from site_words import WORDING_VERSION
+    if payload.get('words') == WORDING_VERSION:
         return payload
     try:
         from site_words import rewrite_html
@@ -68,7 +210,7 @@ def _reword_cards(payload):
             card['html'] = rewrite_html(card.get('html') or '')
         if payload.get('shareImage'):
             payload['shareImage'] = rewrite_html(payload['shareImage'])
-        payload['words'] = 1
+        payload['words'] = WORDING_VERSION
     except Exception:
         logging.getLogger(__name__).debug('card wording skipped', exc_info=True)
     return payload
@@ -100,7 +242,9 @@ def _page_html(path, app=None, host=None, cookie=None):
     if cookie:
         headers['Cookie'] = cookie
     # use_cookies=False: otherwise the test client drops the visitor's Cookie header and a member's page builds signed out.
-    resp = app.test_client(use_cookies=False).get(path, headers=headers)
+    from paywall import page_source
+    with page_source():
+        resp = app.test_client(use_cookies=False).get(path, headers=headers)
     return resp.get_data(as_text=True) if resp.status_code == 200 else ''
 
 
@@ -235,7 +379,7 @@ def _search_teams():
 
 @api.route('/api/web/search')
 def api_search():
-    """Teams and sports whose name matches the query; each result opens that sport's page."""
+    """Public names across teams and players, independent of today's props slate."""
     q = ' '.join((request.args.get('q') or '').lower().split())
     if len(q) < 2:
         return jsonify({'results': []})
@@ -248,19 +392,15 @@ def api_search():
     if 'props' in q or 'player' in q:
         results.append({'label': 'Player Props', 'sport': 'PROPS', 'href': '/player-props'})
 
-    def _rank(row):
-        sport, name = row
-        words = name.lower().split()
-        starts = any(' '.join(words[i:]).startswith(q) for i in range(len(words)))
-        return (0 if starts else 1, _SPORT_ORDER.index(sport), name)
-
-    teams = sorted((r for r in _search_teams() if q in r[1].lower() and r[0] in slug_of), key=_rank)
-    for sport, name in teams[:12]:
-        results.append({
-            'label': name, 'sport': sport,
-            'href': f"/{slug_of[sport].replace('-picks', '-predictions')}?team={quote(name)}",
-        })
-    return jsonify({'results': results[:14]})
+    from NHL77FINAL import get_db_connection
+    from public_name_search import find_names, local_entities
+    connection = get_db_connection()
+    try:
+        names = local_entities(connection)
+    finally:
+        connection.close()
+    matched, partial = find_names(q, names, slug_of, _SPORT_ORDER)
+    return jsonify({'results': (results + matched)[:20], 'partial': partial})
 
 
 @api.route('/api/web/all-sports')
@@ -285,19 +425,17 @@ def api_sports():
 
 @api.route('/api/web/soccer-leagues')
 def api_soccer_leagues():
-    """Today's soccer games per league, counted from the saved soccer cards (the menu's green league counts)."""
+    """Read-only, date-separated league counts from the existing soccer board."""
+    from soccer_nav_counts import counts
     today = datetime.now(_ET).date().isoformat()
-    counts = {}
+    payload = None
     for tier in ('member', 'free', 'guest'):
         saved = _saved_cards('soccer-picks', tier)
         if not saved:
             continue
-        for card in saved[1].get('cards') or []:
-            match = re.search(r'data-league="([^"]*)"', card.get('html') or '')
-            if card.get('date') == today and match:
-                counts[match.group(1)] = counts.get(match.group(1), 0) + 1
+        payload = saved[1]
         break
-    return jsonify({'today': counts})
+    return jsonify(counts(payload, today))
 
 
 _CARD_DAY = re.compile(r'\b(\d{4}-\d{2}-\d{2}) ·')
@@ -328,20 +466,19 @@ def api_tennis_events():
 @api.route('/api/web/live')
 def api_live():
     from NHL77FINAL import _web_live_payload
-    items = _web_live_payload()
-    starts = _card_start_times()
-    now = datetime.now(_ET)
-    shown = []
-    for item in items:
-        start = starts.get(_team_key(item.get('home'))) or starts.get(_team_key(item.get('away')))
-        length = _LIVE_FOR_SPORT.get(item.get('sport'), _LIVE_FOR)
-        if start and now >= start + length:
-            continue
-        item['live'] = bool(start and start <= now)
-        shown.append(item)
-    items = shown + _tennis_live_items()
-    items.sort(key=lambda item: not item['live'])
-    return jsonify({'items': items})
+    from live_scores import enrich_live_items
+    items = enrich_live_items(_web_live_payload() + _tennis_live_items())
+    response = jsonify({'items': items})
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+@api.route('/api/web/results-summary')
+def api_results_summary():
+    from all_sports_summary import render_fragment, summary_rows, warm_missing
+    rows = summary_rows()
+    warm_missing(current_app._get_current_object(), rows)
+    return jsonify({'html': render_fragment(rows),
+                    'pending': any(not row['available'] and row['sport'] != 'GOLF' for row in rows)})
 
 
 _TENNIS_DB = Path(__file__).resolve().parent / 'tennis' / 'database' / 'tennis.sqlite'
@@ -566,6 +703,8 @@ def _saved_cards(slug, tier):
 
 
 def _save_cards(slug, tier, payload):
+    from slate_freshness import current_payload
+    payload = current_payload(payload)
     if not payload['cards']:
         return  # an empty page (a failed build) never replaces a good saved feed
     _CARDS[(slug, tier)] = (time.time(), payload)
@@ -648,6 +787,18 @@ def api_cards(slug):
     else:
         payload = _build_cards(slug, tier, app, request.host, request.headers.get('Cookie'))
         _save_cards(slug, tier, payload)
+    from slate_freshness import current_payload
+    payload = current_payload(payload)
+    if payload['suppressed_stale_predictions']:
+        with _CARDS_LOCK:
+            start = (slug, tier) not in _CARDS_BUILDING
+            if start:
+                _CARDS_BUILDING.add((slug, tier))
+        if start:
+            threading.Thread(target=_refresh_cards,
+                             args=(slug, tier, app, request.host, request.headers.get('Cookie')),
+                             daemon=True).start()
+    payload['refreshing'] = (slug, tier) in _CARDS_BUILDING
     limit = request.args.get('limit', type=int)
     if limit:
         payload = dict(payload, cards=payload['cards'][:limit])

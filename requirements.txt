@@ -28,6 +28,7 @@ nfl-data-py
 nhlpy
 
 # Utilities
+Pillow>=10.1,<13
 colorama
 tqdm
 openpyxl

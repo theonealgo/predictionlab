@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Premium Membership Required | PredictionLab{% endblock %}
+{% block content %}
+<section style="max-width:720px;margin:32px auto;padding:24px;border:1px solid #e5e7eb;border-radius:14px;">
+  <h1>Premium membership required</h1>
+  <p style="margin:12px 0;">Win predictions and completed results are free. Prices, lines, projections, Performance Ladder, Model Performance, Players, and other features require an active premium membership.</p>
+  {% if not logged_in %}<a href="{{ login_url }}">Log in</a> or {% endif %}
+  <a href="/plans">View premium plans</a>
+  <p style="margin-top:16px;"><a href="/">Free win predictions</a> · <a href="/all-sports-results">Free results</a></p>
+</section>
+{% endblock %}

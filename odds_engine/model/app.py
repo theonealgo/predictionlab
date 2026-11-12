@@ -2,8 +2,12 @@ import os
 from typing import Optional, Dict, Any, List
 
 import numpy as np
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+try:
+    from .prop_math import calculate as calculate_prop
+except ImportError:
+    from prop_math import calculate as calculate_prop
 
 app = FastAPI()
 
@@ -56,6 +60,8 @@ class PredictRequest(BaseModel):
 
 class PropRequest(BaseModel):
     player: str
+    player_id: Optional[str] = None
+    request_id: Optional[str] = None
     sport: str
     prop_type: str
     player_stats: Dict[str, Any]
@@ -142,39 +148,8 @@ def _ladder_line(prop_type: str, projection: float) -> float:
 
 
 def generate_internal_prop_line(player_stats: Dict[str, Any], sport: str, prop_type: str, player: str) -> Dict[str, Any]:
-    sport_u = sport.upper()
-    scale = _SPORT_PROP_SCALE.get(sport_u, {})
-    prop = prop_type.lower()
-    recent = player_stats.get("recent_form", []) or []
-    if not isinstance(recent, list):
-        recent = []
-    last5 = recent[:5] if len(recent) >= 5 else recent
-    last10 = recent[:10] if len(recent) >= 10 else recent
-    avg_last5 = float(np.mean(last5)) if last5 else 0.0
-    avg_last10 = float(np.mean(last10)) if last10 else avg_last5
-    season = _safe_float(player_stats.get(prop), avg_last10 if avg_last10 > 0 else avg_last5)
-    mins = _safe_float(player_stats.get("minutes_played"), 30.0)
-    usage = _safe_float(player_stats.get("usage_rate"), 0.22)
-    minutes_adj = max(0.55, min(1.35, mins / 32.0))
-    usage_adj = max(0.70, min(1.40, 0.85 + usage))
-    baseline = (0.55 * avg_last5) + (0.30 * avg_last10) + (0.15 * season)
-    if baseline <= 0:
-        baseline = season if season > 0 else (mins * scale.get(prop, 0.1))
-    projection = baseline * minutes_adj * usage_adj
-    if prop in scale:
-        projection = max(projection, mins * scale[prop] * (0.85 + usage * 0.6))
-    projection = float(max(0.1, projection))
-    fair_line = _ladder_line(prop, projection)
-    spread = max(0.3, abs(projection) * 0.16)
-    confidence_band = [round(max(0.0, projection - spread), 2), round(projection + spread, 2)]
-    return {
-        "player": player,
-        "sport": sport_u,
-        "prop_type": prop,
-        "fair_line": fair_line,
-        "projection": _to_half_step(projection),
-        "confidence_band": confidence_band,
-    }
+    generated = calculate_prop(player_stats, sport.upper(), prop_type.lower())
+    return {**generated, "player": player, "sport": sport.upper(), "prop_type": prop_type.lower()}
 
 
 @app.get("/health")
@@ -212,19 +187,22 @@ def predict(req: PredictRequest):
 
 @app.post("/predict-prop")
 def predict_prop(req: PropRequest):
-    generated = generate_internal_prop_line(req.player_stats or {}, req.sport, req.prop_type, req.player)
-    if req.real_line is not None:
-        generated["line_source"] = "real_odds"
-        generated["line"] = req.real_line
-    else:
-        generated["line_source"] = "internal_fair_line"
-        generated["line"] = generated["fair_line"]
-    return generated
+    try:
+        generated = calculate_prop(req.player_stats or {}, req.sport, req.prop_type, req.real_line)
+        return {**generated, "player": req.player, "player_id": req.player_id, "request_id": req.request_id,
+                "sport": req.sport.upper(), "prop_type": req.prop_type}
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 @app.post("/predict-props")
 def predict_props(req: PropBatchRequest):
     out = []
     for item in req.items:
-        out.append(predict_prop(item))
+        try:
+            out.append(predict_prop(item))
+        except HTTPException as error:
+            out.append({"player_id": item.player_id, "player": item.player, "prop_type": item.prop_type,
+                        "request_id": item.request_id,
+                        "available": False, "reason": error.detail})
     return {"count": len(out), "items": out}

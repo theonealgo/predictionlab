@@ -16,6 +16,20 @@
   {% endfor %}
 {% endif %}
 
+{% if post.kind == "sports_news" and post.provenance.facts %}
+<h2>All final scores</h2>
+<div style="overflow-x:auto">
+<table class="info-table news-final-scores">
+  <thead><tr><th>Away</th><th>Score</th><th>Home</th></tr></thead>
+  <tbody>
+    {% for fact in post.provenance.facts %}
+    <tr><td>{{ fact.away }}</td><td>{{ fact.away_score }}–{{ fact.home_score }}</td><td>{{ fact.home }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+
 {% if gi.away or gi.home or gi.date or gi.venue %}
 <h2>Game information</h2>
 <table class="info-table">
@@ -46,7 +60,7 @@
 {% endif %}
 
 {% if s.models %}
-<h2>Model moneyline</h2>
+<h2>Model win probabilities</h2>
 <table class="model-table">
   <thead>
     <tr><th>Model</th><th>Side</th><th>Prob</th></tr>
@@ -69,7 +83,7 @@
 {% endif %}
 
 {% if mk %}
-<h2>Markets &amp; projections</h2>
+<h2>Projected scores</h2>
 <table class="info-table">
   <tbody>
     {% if mk.pl_proj %}<tr><th>Prediction Lab proj</th><td>{{ mk.pl_proj }}</td></tr>{% endif %}

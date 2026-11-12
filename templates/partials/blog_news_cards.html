@@ -1,0 +1,22 @@
+{% if news_posts %}
+<section class="blog-section news-section" aria-label="Sports news" id="sports-news">
+  <h2 class="blog-section-title">Sports News</h2>
+  <div class="news-grid">
+    {% for post in news_posts %}
+    <article class="news-story" id="{{ post.slug }}">
+      <a class="news-story-link" href="{{ post.article_url }}">
+        <div class="news-story-image">
+          <img src="{{ post.image }}" alt="" width="1200" height="630" loading="lazy">
+        </div>
+        <div class="news-story-copy">
+          <p class="news-story-meta">{{ post.sport_tag }} · <time datetime="{{ post.date_published or post.date }}">{{ post.display_date }}</time></p>
+          <h3>{{ post.title }}</h3>
+          <p class="news-story-excerpt">{{ post.card_excerpt }}</p>
+          <span class="news-story-more">Read article <span aria-hidden="true">→</span></span>
+        </div>
+      </a>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}

@@ -8,7 +8,21 @@
   function setDropdown(menu, open) {
     var list = menu.querySelector('.pl-menu-list');
     var button = menu.querySelector(':scope > button');
-    if (list) list.hidden = !open;
+    if (list) {
+      list.hidden = !open;
+      ['position', 'left', 'right', 'top', 'minWidth', 'maxHeight'].forEach(function (name) {
+        list.style[name] = '';
+      });
+      if (open && button && window.innerWidth <= 900) {
+        var top = Math.round(button.getBoundingClientRect().bottom + 8);
+        list.style.position = 'fixed';
+        list.style.left = '12px';
+        list.style.right = '12px';
+        list.style.top = top + 'px';
+        list.style.minWidth = '0';
+        list.style.maxHeight = Math.max(80, window.innerHeight - top - 16) + 'px';
+      }
+    }
     if (button) button.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
@@ -73,4 +87,17 @@
       setDrawer(false);
     }
   });
+
+  var menuWidth = window.innerWidth;
+  window.addEventListener('resize', function () {
+    if (window.innerWidth !== menuWidth) {
+      closeAll(null);
+      menuWidth = window.innerWidth;
+    }
+  });
+  // The install action is shared by desktop, mobile, and the React shell.
+  var installer = document.createElement('script');
+  installer.src = '/static/js/pl-install.js';
+  installer.defer = true;
+  document.head.appendChild(installer);
 })();

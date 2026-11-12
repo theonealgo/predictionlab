@@ -1,6 +1,10 @@
 /* Shared site chrome: the header and footer every page shows. Flask pages load this file through
    base.html and the picks chrome; the React front end loads it too. Selectors start at
    header.pl2-header and footer.site-directory-footer so they win over research-theme.css. */
+/* Cached report/auth pages paint a fixed body background above static links. */
+body::before {
+  pointer-events: none;
+}
 
 header.pl2-header {
   position: static;

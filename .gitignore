@@ -109,3 +109,4 @@ LOCAL_TEST_LOGIN.txt
 !ufc_pipeline/database/ufc_sandbox.db
 .checkpoints/
 data/ladder_last_pass.json
+data/sports_news_posts.lock

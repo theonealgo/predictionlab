@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import axios from 'axios';
 import pg from 'pg';
 import Redis from 'ioredis';
+import { readPropHistory } from './prop_history.js';
 
 const app = Fastify({ logger: true });
 
@@ -179,12 +180,6 @@ const getOrCreateOdds = async (game, bypassCache = false) => {
   return odds;
 };
 
-const hashString = (v) => {
-  let h = 0;
-  const s = String(v || '');
-  for (let i = 0; i < s.length; i += 1) h = ((h << 5) - h) + s.charCodeAt(i);
-  return Math.abs(h);
-};
 
 const SPORT_API_PATH = {
   NBA: 'basketball/nba',
@@ -198,11 +193,6 @@ const SPORT_API_PATH = {
   SOCCER: 'soccer/eng.1',
 };
 
-const parseAttemptString = (value) => {
-  if (!value || typeof value !== 'string') return 0;
-  if (!value.includes('-')) return Number(value) || 0;
-  return Number(value.split('-')[0]) || 0;
-};
 
 const fetchExternalPlayerStats = async (sport, playerId, propType) => {
   const key = (sport || '').toUpperCase();
@@ -211,48 +201,7 @@ const fetchExternalPlayerStats = async (sport, playerId, propType) => {
   try {
     const url = `https://site.web.api.espn.com/apis/common/v3/sports/${path}/athletes/${playerId}/gamelog`;
     const { data } = await axios.get(url, { timeout: 7000 });
-    const labels = data?.labels || [];
-    const index = {};
-    labels.forEach((k, i) => { index[k] = i; });
-    const seasonTypes = data?.seasonTypes || [];
-    let events = [];
-    for (const s of seasonTypes) {
-      const evs = s?.events || [];
-      if (evs.length) { events = evs; break; }
-    }
-    const recent = [];
-    const mins = [];
-    const usage = [];
-    for (const ev of events.slice(0, 10)) {
-      const stats = ev?.stats || [];
-      const min = Number(stats[index.MIN]) || 0;
-      mins.push(min);
-      const fga = parseAttemptString(stats[index.FG]);
-      const fta = parseAttemptString(stats[index.FT]);
-      const tov = Number(stats[index.TO]) || 0;
-      usage.push((fga + (0.44 * fta) + tov) / Math.max(min, 1));
-      let val = 0;
-      if (propType === 'points') val = Number(stats[index.PTS]) || 0;
-      else if (propType === 'rebounds') val = Number(stats[index.REB]) || 0;
-      else if (propType === 'assists') val = Number(stats[index.AST]) || 0;
-      else if (propType === 'threes') val = parseAttemptString(stats[index['3PT']]);
-      else if (propType === 'shots') val = Number(stats[index.SH]) || 0;
-      else if (propType === 'shots_on_goal') val = Number(stats[index.SOG]) || 0;
-      else if (propType === 'goals') val = Number(stats[index.G]) || 0;
-      else if (propType === 'passing_yards') val = Number(stats[index.PYDS]) || 0;
-      else if (propType === 'rushing_yards') val = Number(stats[index.RYDS]) || 0;
-      else if (propType === 'receiving_yards') val = Number(stats[index.RECYDS]) || 0;
-      else if (propType === 'receptions') val = Number(stats[index.REC]) || 0;
-      recent.push(val);
-    }
-    if (!recent.length) return null;
-    const avg = (arr) => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-    return {
-      [propType]: avg(recent),
-      minutes_played: avg(mins),
-      usage_rate: Math.max(0.05, Math.min(0.38, avg(usage) / 2)),
-      recent_form: recent,
-    };
+    return readPropHistory(data, propType);
   } catch (_) {
     return null;
   }
@@ -334,10 +283,13 @@ app.post('/player-props/batch', async (request, reply) => {
     const selectedItems = [];
     for (const it of items) {
       const propType = String(it.prop_type || 'points').toLowerCase();
-      const playerStats = await fetchExternalPlayerStats(String(sport).toUpperCase(), it.player_id, propType);
+      const playerStats = Array.isArray(it.player_stats?.recent_form) && it.player_stats.recent_form.length >= 5
+        ? it.player_stats : await fetchExternalPlayerStats(String(sport).toUpperCase(), it.player_id, propType);
       if (!playerStats) continue;
       modelItems.push({
         player: it.player_name || it.player_id,
+        player_id: String(it.player_id),
+        request_id: String(it.request_id ?? modelItems.length),
         sport: String(sport).toUpperCase(),
         prop_type: propType,
         player_stats: playerStats,
@@ -348,24 +300,30 @@ app.post('/player-props/batch', async (request, reply) => {
     if (!modelItems.length) return { sport: String(sport).toUpperCase(), count: 0, props: [] };
     const { data } = await axios.post(MODEL_PROP_URL, { items: modelItems }, { timeout: 10000 });
     const generated = data?.items || [];
-    const props = generated.map((g, idx) => {
-      const src = selectedItems[idx] || {};
+    const props = generated.filter(g => g.available !== false).map((g) => {
+      const src = selectedItems.find((item, index) => String(item.request_id ?? index) === String(g.request_id));
+      if (!src) return null;
       const line = Number(g.line);
-      const seed = hashString(`${src.player_id || g.player}:${g.prop_type}:${line}`);
-      const pricePool = [-130, -120, -110, 100, 110];
       return {
         player_id: src.player_id,
+        request_id: g.request_id,
         prop_type: g.prop_type,
         line,
         projection: g.projection,
         confidence_band: g.confidence_band,
-        // Always tag lines generated by this service as internal_odds_api so
-        // downstream UI can display them as engine-produced lines.
-        line_source: 'internal_odds_api',
-        odds_over: pricePool[seed % pricePool.length],
-        odds_under: pricePool[(seed + 2) % pricePool.length],
+        // Keep a calculated PL threshold distinct from a supplied market threshold.
+        line_source: g.line_source === 'provided_market' ? 'provided_market' : 'pl_model',
+        model_version: g.model_version,
+        model_forecasts: g.model_forecasts,
+        probabilities: g.probabilities,
+        input_hash: g.input_hash,
+        input_values: g.input_values,
+        sample: g.sample,
+        strong_pick: g.strong_pick,
+        odds_over: g.odds_over ?? null,
+        odds_under: g.odds_under ?? null,
       };
-    });
+    }).filter(Boolean);
     return { sport: String(sport).toUpperCase(), count: props.length, props };
   } catch (err) {
     request.log.error(err);

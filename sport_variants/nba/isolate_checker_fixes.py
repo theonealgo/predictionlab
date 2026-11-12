@@ -429,6 +429,81 @@ def _chart_lists_no_finals(html: str) -> bool:
     return bool(m and int(m.group(1)) > 0)
 
 
+def _nba_results_snapshot_incomplete(key: str, html: str) -> bool:
+    """Read-only completeness check: the date alone cannot validate an early snapshot."""
+    parts = (key.split("|") + [""] * 6)[:6]
+    if parts[0].strip().upper() != "NBA" or any(parts[3:]):
+        return False
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    import sqlite3
+
+    yesterday = (datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
+    path = _app_db_path()
+    if not path.is_file():
+        return False
+    conn = None
+    try:
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=2)
+        rows = conn.execute(
+            "SELECT game_id, date(game_date), away_score, home_score FROM games "
+            "WHERE sport='NBA' AND COALESCE(league, '') != 'NBA Preseason' "
+            "AND home_score IS NOT NULL AND away_score IS NOT NULL "
+            "AND date(game_date) = (SELECT MAX(date(game_date)) FROM games "
+            "WHERE sport='NBA' AND COALESCE(league, '') != 'NBA Preseason' "
+            "AND home_score IS NOT NULL AND away_score IS NOT NULL AND date(game_date) <= ?)",
+            (yesterday,),
+        ).fetchall()
+    except sqlite3.Error:
+        # Do not replace a usable page with an error when storage is temporarily unavailable.
+        return False
+    finally:
+        if conn is not None:
+            conn.close()
+    if not rows:
+        return False
+    expected = {str(row[0]): (float(row[2]), float(row[3])) for row in rows}
+    latest = rows[0][1]
+    from html import unescape
+
+    for heading in re.findall(r"<h2\b[^>]*>([\s\S]*?)</h2>", html, flags=re.I):
+        plain = " ".join(unescape(re.sub(r"<[^>]*>", " ", heading)).split())
+        if re.search(r"\bLast Night\b", plain, flags=re.I):
+            stamp = re.search(r"\d{4}-\d{2}-\d{2}", plain)
+            count = re.search(r"\((\d+)\s+games?\)", plain, flags=re.I)
+            if stamp and stamp.group() != latest:
+                return True
+            if count and int(count.group(1)) != len(expected):
+                return True
+            break
+    # Chart views may show only graded market rows. Their slate count is checked above.
+    if parts[1]:
+        return False
+    from html_blocks import blocks
+
+    sections = blocks(html, lambda tag, attrs: attrs.get("id") == f"date-{latest}")
+    if not sections:
+        return True
+    observed = {}
+    for section in sections:
+        chunk = html[section.start:section.end]
+        for card in blocks(chunk, lambda tag, attrs:
+                           "game-card" in (attrs.get("class") or "").split()):
+            game_id = card.attrs.get("data-game-id")
+            fragment = chunk[card.start:card.end]
+            scores = []
+            for score in blocks(fragment, lambda tag, attrs:
+                                "final-score" in (attrs.get("class") or "").split()):
+                raw = unescape(re.sub(r"<[^>]*>", "", fragment[score.start:score.end])).strip()
+                try:
+                    scores.append(float(raw))
+                except ValueError:
+                    pass
+            if game_id:
+                observed[game_id] = tuple(scores)
+    return any(observed.get(game_id) != scores for game_id, scores in expected.items())
+
+
 def _served_results_are_stale(key: str, html: str) -> bool:
     """The cards page is stale when its today stamp or Last Night slate is behind."""
     parts = (key.split("|") + [""] * 6)[:6]
@@ -436,6 +511,8 @@ def _served_results_are_stale(key: str, html: str) -> bool:
     view = (parts[1] or "").strip().lower()
     if not sport or not html:
         return False
+    if sport == "NBA" and _nba_results_snapshot_incomplete(key, html):
+        return True
     if view:
         if _chart_lists_no_finals(html):
             return True

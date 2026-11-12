@@ -137,6 +137,7 @@ button {
 
 .pl-live-box {
   min-width: 270px;
+  width: 340px;
   scroll-snap-align: start;
   padding: 14px 16px;
   border: 1px solid var(--line);
@@ -152,9 +153,9 @@ button {
 }
 
 .pl-live-team {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px 82px;
+  gap: 8px;
   padding: 4px 0;
   font-size: 15px;
 }
@@ -169,6 +170,23 @@ button {
 .pl-live-team b {
   flex: none;
   font-weight: 700;
+  color: #1765d1;
+}
+
+.pl-live-team b,
+.pl-live-team strong,
+.pl-live-columns span:not(:first-child) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pl-live-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 36px 82px;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-size: 10px;
+  color: var(--muted);
 }
 
 /* Two columns: the sports list, then the centre of the page (games and results side by side). */
@@ -998,6 +1016,101 @@ button {
   font-weight: 700;
 }
 
+.pl-home-preview {
+  display: block;
+  padding: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  color: #111827;
+  text-decoration: none;
+}
+
+.pl-home-preview:hover,
+.pl-home-preview:focus-visible {
+  border-color: #86c9aa;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.1);
+}
+
+.pl-home-preview h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.pl-home-preview-meta {
+  margin: 4px 0 16px;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.pl-home-preview-teams {
+  display: grid;
+  gap: 16px;
+}
+
+.pl-home-preview-team {
+  --preview-color: #15803d;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.pl-home-preview-team:nth-child(2) {
+  --preview-color: #1d4ed8;
+}
+
+.pl-home-preview-team img {
+  object-fit: contain;
+}
+
+.pl-home-preview-name {
+  min-width: 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.pl-home-preview-track {
+  display: block;
+  height: 3px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+
+.pl-home-preview-track > span {
+  display: block;
+  height: 100%;
+  background: var(--preview-color);
+}
+
+.pl-home-preview-percent {
+  min-width: 58px;
+  padding: 7px 10px;
+  border: 1px solid #dcebe3;
+  border-radius: 999px;
+  color: var(--preview-color);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.pl-home-preview-confidence {
+  --preview-color: #15803d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 13px;
+  color: #475569;
+}
+
 /* Header search results under the search box. */
 .pl-search-results {
   position: absolute;
@@ -1362,6 +1475,24 @@ button {
 .pl-chip-locked a {
   color: #00529b;
   font-weight: 700;
+}
+
+/* All Sports' results column scrolls independently; leave other results panes unchanged. */
+.pl-stage > .pl-right.pl-all-results {
+  max-height: min(68dvh, calc(100dvh - var(--pl-header-h, 72px) - 32px));
+  overflow-y: scroll;
+  overflow-x: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+.pl-all-results::-webkit-scrollbar { width: 12px; height: 10px; }
+.pl-all-results::-webkit-scrollbar-track { background: #f3f4f6; border-radius: 8px; }
+.pl-all-results::-webkit-scrollbar-thumb { background: #9ca3af; border: 3px solid #f3f4f6; border-radius: 8px; }
+.pl-all-results:focus-visible { outline: 2px solid var(--blue-text); outline-offset: 3px; }
+@media (max-width: 760px) {
+  .pl-stage > .pl-right.pl-all-results { max-height: 65dvh; }
 }
 
 /* Left menu: sport groups that open into lists. */

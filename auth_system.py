@@ -164,10 +164,11 @@ class User(UserMixin):
         if not self.premium_expires:
             return True  # lifetime or no expiry set
         try:
-            exp = datetime.fromisoformat(self.premium_expires)
-            return datetime.now() < exp
-        except Exception:
-            return True
+            exp = datetime.fromisoformat(self.premium_expires.replace('Z', '+00:00'))
+            now = datetime.now(exp.tzinfo) if exp.tzinfo else datetime.now()
+            return now < exp
+        except (TypeError, ValueError, AttributeError):
+            return False
 
 
 def _get_db():
@@ -570,15 +571,7 @@ def init_auth(app, db_path=None):
     # Inject is_premium into all templates
     @app.context_processor
     def inject_auth():
-        is_prem = current_user.premium_active if current_user.is_authenticated else False
-        # Local dev: full premium preview on localhost so picks pages are testable without Stripe login
-        if not is_prem:
-            try:
-                host = (request.host or '').split(':')[0].lower()
-                if host in ('127.0.0.1', 'localhost'):
-                    is_prem = True
-            except Exception:
-                pass
+        is_prem = bool(is_premium_user())
         return {
             'user': current_user,
             'is_premium': is_prem,
@@ -4793,12 +4786,6 @@ def _deactivate_premium_by_customer(stripe_customer_id):
 
 def is_premium_user():
     """Check if current request is from a premium user."""
-    try:
-        host = (request.host or "").split(":")[0].lower()
-        if host in ("127.0.0.1", "localhost"):
-            return True
-    except Exception:
-        pass
     if not current_user.is_authenticated:
         return False
     active = current_user.premium_active

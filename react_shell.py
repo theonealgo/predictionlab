@@ -47,13 +47,15 @@ _SPORT_PAGE = re.compile(r'^/(%s)-(picks|projections|predictions)/?$' % '|'.join
 _OLD_SPORT_PAGE = re.compile(r'^/(%s|all-sports)-(picks|projections)/?$' % '|'.join(SPORT_NAMES))
 _NEW_SPORT_PAGE = re.compile(r'^/(%s|all-sports)-predictions(/?)$' % '|'.join(SPORT_NAMES))
 _OTHER_PAGES = {
+    '/sports-props': ('Sports Props | Prediction Lab',
+                      'Explore player props by sport and review recorded results by model and prop type.'),
     '/all-sports-predictions': ('All Sports Predictions Today | Prediction Lab',
                                 "Every sport's AI predictions on one page, with each prediction type's recent record."),
-    '/': ('Prediction Lab | AI Sports Predictions for Every Sport',
-          "Today's AI predictions and win probabilities for the NFL, NBA, NHL, MLB, college sports, "
-          'soccer, tennis, UFC and golf, with every model graded in public.'),
-    '/player-props': ('Player Props Predictions | Prediction Lab',
-                      'AI player prop projections with each model graded in public.'),
+    '/': ('Quantitative sports forecasting model | PredictionLab',
+          'Statistical probability engine for Straight-Up (SU) forecasts, historical accuracy, '
+          'and quantitative sports research across multiple sports.'),
+    '/player-props': ('Players | Prediction Lab',
+                      'AI player forecasts with each model graded in public.'),
     '/all-sports-picks': ('All Sports Predictions Today | Prediction Lab',
                           "Every sport's AI predictions on one page, with each prediction type's recent record."),
     '/all-sports-projections': ('All Sports Predictions Today | Prediction Lab',
@@ -215,6 +217,7 @@ class ReactShell:
         start_response('200 OK', [
             ('Content-Type', 'text/html; charset=utf-8'),
             ('Content-Length', str(len(body))),
-            ('Cache-Control', 'no-cache'),
+            ('Cache-Control', 'private, no-store'),
+            ('Vary', 'Cookie'),
         ])
         return [b''] if environ.get('REQUEST_METHOD') == 'HEAD' else [body]

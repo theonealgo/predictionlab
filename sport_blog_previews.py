@@ -1470,7 +1470,8 @@ def sitemap_article_entries(posts: list[dict], site_domain: str = SITE_DOMAIN) -
             continue
         if str(p.get("status") or "published").lower() != "published":
             continue
-        path = p.get("canonical_path") or p.get("article_url")
+        from blog_urls import public_article_path
+        path = public_article_path(p)
         if not path:
             slug = p.get("slug")
             if not slug:
@@ -1499,17 +1500,20 @@ def article_json_ld(post: dict, site_domain: str = SITE_DOMAIN) -> list[dict]:
         image = OG_IMAGE_PATH
     if image.startswith("/"):
         image = domain + image
-    published = _iso_datetime(post.get("date_published") or post.get("date") or "")
-    modified = _iso_datetime(post.get("date_modified") or post.get("date_published") or post.get("date") or "")
+    from blog_urls import publication_dates
+    published, modified = publication_dates(post)
     headline = post.get("seo_title") or post.get("title") or ""
     description = post.get("meta_description") or post.get("excerpt") or ""
     article = {
         "@context": "https://schema.org",
-        "@type": "Article",
+        "@type": "NewsArticle" if post.get("kind") == "sports_news" else "Article",
+        "url": canonical,
+        "inLanguage": "en",
+        "articleSection": sport_display_name(post.get("sport_tag") or "Sports"),
         "headline": headline,
         "description": description,
-        "datePublished": published,
-        "dateModified": modified,
+        **({"datePublished": published} if published else {}),
+        **({"dateModified": modified} if modified else {}),
         "author": {"@type": "Organization", "name": AUTHOR_NAME, "url": domain},
         "publisher": {
             "@type": "Organization",

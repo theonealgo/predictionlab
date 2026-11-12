@@ -5,6 +5,8 @@ import sys as _sys
 import time
 from typing import Dict, List, Optional
 import requests
+import hashlib
+import json
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -14,6 +16,8 @@ from .config import CACHE_TTL_SECONDS, DEBUG_PLAYER_VALIDATION, LEAGUE_CONFIG
 _PROJECT_ROOT = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), '..', '..', '..'))
 if _PROJECT_ROOT not in _sys.path:
     _sys.path.insert(0, _PROJECT_ROOT)
+from odds_engine.model.prop_math import VERSION as PROP_SCHEMA_VERSION, calculate as calculate_pl_prop
+from prop_forecast_store import _aware as _aware_model
 try:
     from prop_odds_engine import PropOddsEngine as _PropOddsEngine
     _ODDS_ENGINE = _PropOddsEngine(
@@ -378,12 +382,57 @@ def _parse_made(value: str) -> float:
         return 0.0
 
 
-def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] = None) -> Dict:
+def _pl_forecast_row(league, player, prop, schedule):
+    result = None
+    if player.get("history_verified"):
+        try:
+            result = calculate_pl_prop({"stat_history": player.get("stat_history") or {}},
+                                       league, prop["prop_type"], prop.get("line"))
+        except ValueError:
+            return None
+    elif prop.get("model_version") == PROP_SCHEMA_VERSION and prop.get("model_forecasts"):
+        result = dict(prop)
+        result["fair_line"] = prop.get("pl_line") if prop.get("pl_line") is not None else prop["line"]
+        over, under = prop["probabilities"]["over"], prop["probabilities"]["under"]
+        result["pick"] = "OVER" if over > under else "UNDER" if under > over else None
+        result["pick_probability"] = 100 * max(over, under)
+    if result is None:
+        return None
+    game = player.get("next_game") or {}
+    matches = [g for g in schedule if str(player.get("team_id") or "") in
+               (str(g.get("home_team_id") or ""), str(g.get("away_team_id") or ""))]
+    if not game and len(matches) == 1:
+        game = {"event_id": str(matches[0].get("event_id") or ""), "start_time": matches[0].get("start_time")}
+    probs, forecasts = result["probabilities"], result["model_forecasts"]
+    return {"player_id": player["player_id"], "player_name": player["name"], "team": player.get("team"),
+            "league": league, "position": player.get("position"), "role": player.get("role"),
+            "depth_rank": player.get("depth_rank"), "prop_type": prop["prop_type"],
+            "line": float(prop["line"]), "_calc_line": float(prop["line"]),
+            "line_source": prop["line_source"], "line_type": "pl" if prop["line_source"] == "pl_model" else "market",
+            "event_id": prop.get("event_id") or game.get("event_id"),
+            "event_start": prop.get("event_start") or game.get("start_time"),
+            "odds_over": prop.get("odds_over"), "odds_under": prop.get("odds_under"),
+            "projection": round(result["projection"], 2), "pl_line": result["fair_line"],
+            "over_probability": 100*probs["over"], "under_probability": 100*probs["under"],
+            "push_probability": 100*probs["push"], "probabilities": probs,
+            "model_forecasts": forecasts, "picked_side": result.get("pick"),
+            "pick_probability": result.get("pick_probability"), "strong_pick": result.get("strong_pick", False),
+            "input_hash": result.get("input_hash"), "sample": result.get("sample"),
+            "input_values": result.get("input_values"),
+            "history_before": player.get("history_before"), "schema_version": PROP_SCHEMA_VERSION,
+            "model_confidence": {}, "confidence_score": result.get("pick_probability"),
+            "model_agreement": sum(f["side"] == result.get("pick") for f in forecasts)/len(forecasts),
+            "model_variance": statistics.pvariance([f["probabilities"]["over"]*100 for f in forecasts]),
+            "pick_ev": None}
+
+
+def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] = None,
+                          allow_live_lines: bool = False) -> Dict:
     schedule = schedule_override if schedule_override is not None else fetch_schedule_and_teams(league)
     # Only pull real book lines for the LIVE slate. Historical rebuilds (grading)
     # pass a schedule_override: ESPN's prop feed only covers upcoming/live games,
     # so there are no past lines to fetch and grading uses snapshotted picks.
-    use_real = schedule_override is None
+    use_real = schedule_override is None or allow_live_lines
     excluded = []
     pool_audit: Dict = {}
     if league == "NBA":
@@ -417,6 +466,10 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             player_ids=[pl.get("player_id") for pl in prop_lines],
         )
     by_id = {p["player_id"]: p for p in players}
+    from prop_models import train_xgboost, forecast as named_forecast, observations as model_observations
+    as_of = datetime.now(ZoneInfo("America/New_York"))
+    model_context = {prop_type: train_xgboost(league, prop_type, players, as_of)
+                     for prop_type in sorted({row["prop_type"] for row in prop_lines})}
     matchups = {}
     for g in schedule:
         h = g.get("home_team_id", "")
@@ -432,221 +485,54 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         p = by_id.get(prop["player_id"])
         if not p:
             continue
-        _mkt_p_over = None
-        if league == "NBA":
-            opponent_id = matchups.get(p.get("team_id", ""), "")
-            proj, opp_factor = _calc_stat_projection(p, prop["prop_type"], opponent_id)
-            if proj <= 0.0:
-                excluded.append(
-                    {"player_id": p.get("player_id"), "name": p.get("name"), "team_id": p.get("team_id"), "reasons": ["insufficient_data"]}
-                )
-                continue
-            calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line")) or 0.0))
-            if calc_line <= 0.0:
-                calc_line = _generate_internal_prop_line(prop["prop_type"], proj)
-            model_confidence = _model_confidence_from_projection(p, proj, calc_line, prop["prop_type"])
-            confidence_vals = [model_confidence.get(m, 50.0) for m in _MODEL_ORDER]
-            agreement = _clamp(sum(1 for c in confidence_vals if c >= 55.0) / max(len(confidence_vals), 1), 0.0, 1.0)
-            variance = sum((c - (sum(confidence_vals) / len(confidence_vals))) ** 2 for c in confidence_vals) / max(len(confidence_vals), 1)
-            debug_variance.append({"player_id": p["player_id"], "variance": round(variance, 3), "opp_factor": round(opp_factor, 3)})
-        else:
-            calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line", 0.0)) or 0.0))
-            source_proj = prop.get("projection")
-            # MLB: projection from recent gamelog averages when available.
-            # Board shows that count (e.g. Hits 3) and only posts when OVER the line.
-            if league == "MLB":
-                weighted = p.get("stats_weighted") or {}
-                last5 = p.get("stats_last5") or {}
-                last10 = p.get("stats_last10") or {}
-                pt = prop["prop_type"]
-                # Pitchers: only project strikeouts from pitching logs.
-                if p.get("mlb_is_pitcher") and pt != "strikeouts":
-                    continue
-                if (not p.get("mlb_is_pitcher")) and pt == "strikeouts":
-                    continue
-                base = float(weighted.get(pt) or 0.0)
-                if base <= 0:
-                    a5 = float(last5.get(pt) or 0.0)
-                    a10 = float(last10.get(pt) or 0.0)
-                    if a5 > 0 or a10 > 0:
-                        base = (a5 * 0.7) + (a10 * 0.3)
-                if base <= 0:
-                    # No gamelog — skip rather than invent a fake 1.
-                    continue
-                proj = base
+        pl_row = _pl_forecast_row(league, p, prop, schedule)
+        if pl_row is not None:
+            available, unavailable = named_forecast(p, prop["prop_type"], float(prop["line"]), as_of,
+                                                    model_context.get(prop["prop_type"]))
+            history = model_observations(p, prop["prop_type"], as_of)
+            training = {key: value for key, value in (model_context.get(prop["prop_type"]) or {}).items()
+                        if key not in ("model", "training_snapshot")}
+            private = {"observations": history, "training": training}
+            pl_row.update(model_forecasts=available, model_unavailable=unavailable,
+                          input_values=private,
+                          input_hash=hashlib.sha256(json.dumps(private, sort_keys=True).encode()).hexdigest(),
+                          strong_pick=False, picked_side=None, pick_probability=None)
+            if available:
+                consensus = next((row for row in available if row["model_id"] == "ensemble"), None)
+                probs = consensus["probabilities"] if consensus else {
+                    key: statistics.mean(row["probabilities"][key] for row in available)
+                    for key in ("over", "under", "push")}
+                side = "OVER" if probs["over"] > probs["under"] else "UNDER" if probs["under"] > probs["over"] else None
+                recent = sum((as_of-_aware_model(row["date"])).days <= 60 for row in history)
+                pl_row.update(probabilities=probs, over_probability=100*probs["over"],
+                              under_probability=100*probs["under"], push_probability=100*probs["push"],
+                              picked_side=side, pick_probability=100*probs[side.lower()] if side else None,
+                              confidence_score=100*probs[side.lower()] if side else None,
+                              strong_pick=bool(consensus and side and recent >= 10
+                                               and training.get("brier", 1) <= training.get("baseline_brier", 0)
+                                               and probs[side.lower()] > .61
+                                               and all(row["side"] == side for row in available)))
             else:
-                # Prefer real market line + no-vig odds for other leagues.
-                if prop.get("line_source") == "espn_props" and calc_line > 0:
-                    _mkt_p_over = _novig_over_prob(prop.get("odds_over"), prop.get("odds_under"))
-                if _mkt_p_over is not None:
-                    proj = _projection_from_market(league, calc_line, _mkt_p_over)
-                elif source_proj is not None:
-                    proj = float(source_proj)
-                elif prop.get("line_source") == "espn_props" and calc_line > 0:
-                    # ESPN often posts the line without american prices. Do NOT
-                    # fall back to the NBA minutes proxy (that yields Pass Yds
-                    # projections like 14.5 vs a 253.5 book line). Anchor to
-                    # the posted line with a small depth-chart tilt instead.
-                    try:
-                        depth = int(p.get("depth_rank") or 2)
-                    except (TypeError, ValueError):
-                        depth = 2
-                    tilt = max(-0.05, min(0.05, (2.0 - float(depth)) * 0.015))
-                    proj = float(calc_line) * (1.0 + tilt)
-                else:
-                    xgb_mean = _xgboost_style_projection(p, prop, league)
-                    xsharp_mean = _xsharp_adjustment(league, xgb_mean)
-                    rating = _form_rating(p)
-                    proj = (xgb_mean * 0.55) + (xsharp_mean * 0.35) + ((rating / 100.0) * 0.10 * xgb_mean)
-            # Hard sanity cap — catches any path (including external source_proj)
-            _proj_cap = _SPORT_PROJ_CAPS.get(league, {}).get(prop["prop_type"])
-            if _proj_cap is not None:
-                proj = min(proj, _proj_cap)
-            proj = max(0.0, proj)
-            agreement = 0.5
-            variance = abs(proj) * 0.18
-            model_confidence = _non_nba_model_confidence(p, proj, calc_line, prop["prop_type"])
-        calc_line = _to_half_step(float(prop.get("line_for_calc", prop.get("line", 0.0)) or 0.0)) if league != "NBA" else float(calc_line)
-        std_dev = max(2.5, abs(proj) * 0.22)
-        p_over = _projection_to_prob(league, proj, calc_line, std_dev)
-        # For non-NBA/non-MLB rows with a real book line, trust market no-vig P(over).
-        if league not in ("NBA", "MLB") and _mkt_p_over is not None:
-            p_over = _mkt_p_over
-        p_under = 1.0 - p_over
-        # When ESPN posts a line without prices, assume -110 for EV math only.
-        _oo = prop.get("odds_over")
-        _ou = prop.get("odds_under")
-        _oo_ev = -110 if _oo is None else _oo
-        _ou_ev = -110 if _ou is None else _ou
-        ev_over = _ev_percent(p_over, _oo_ev)
-        ev_under = _ev_percent(p_under, _ou_ev)
-        confidence = min(99.0, max(50.0, (max(p_over, p_under) * 100.0 + agreement * 12.0 - variance * 0.4)))
-        picked_side = "OVER" if (p_over >= p_under and agreement >= 0.5) else ("UNDER" if p_under > p_over else ("OVER" if ev_over >= ev_under else "UNDER"))
-
-        # MLB: if the model is not OVER the book line, do not post. When posted,
-        # UI shows the projected count (Hits 3) instead of Over/Under.
-        _mlb_over_only = False
-        _mlb_proj_display = None
-        if league == "MLB":
-            if not ((float(proj) > float(calc_line)) and (p_over > 0.50)):
-                continue
-            picked_side = "OVER"  # grading still keys off the book line
-            _mlb_over_only = bool(prop.get("mlb_over_only")) or float(calc_line) <= 1.0
-            _rp = float(proj)
-            if prop["prop_type"] in ("hits", "runs", "rbis", "home_runs", "walks", "strikeouts", "stolen_bases"):
-                _mlb_proj_display = max(1, int(round(_rp)))
-            else:
-                _mlb_proj_display = _to_half_step(_rp)
-
-        # NOTE: a blanket MLB inversion for hits/runs/rbis/home_runs used to live
-        # here. It was a band-aid over a broken grader (which compared the
-        # projection to the internal line — a circular test that forced those
-        # categories toward 0% once inverted). Real box-score grading now lives
-        # in get_league_results(), so the inversion has been removed and picks
-        # follow the projection-vs-line signal directly for every league.
-        inverse_signal = False
-
-        line_source = prop.get("line_source", "")
-        # Expose the line to the UI for real book lines and internal dev lines
-        # (real lines are the whole point of grading; internal keeps dev usable).
-        public_line = _to_half_step(float(prop["line"])) if (line_source in ("internal_odds_api", "the_odds_api", "espn_props") and prop.get("line") is not None) else None
-
-        # Poisson fair-odds overlay (NBA only)
-        poisson_fields: Dict = {}
-        if _ODDS_ENGINE and league == "NBA":
-            try:
-                metrics = {
-                    "stats_last5":  p.get("stats_last5"),
-                    "stats_last10": p.get("stats_last10"),
-                    "usage_rate":   p.get("usage_rate", 0.20),
-                    "projected_minutes": p.get("projected_minutes_weighted") or p.get("projected_minutes"),
-                    "avg_minutes":  p.get("avg_minutes"),
-                    "last_10_games_minutes": p.get("last_10_games_minutes", []),
-                }
-                opponent_id = matchups.get(p.get("team_id", ""), "")
-                odds_result = _ODDS_ENGINE.generate(
-                    metrics,
-                    prop["prop_type"],
-                    calc_line,
-                    picked_side,
-                    opponent_team=opponent_id,
-                    is_home=True,
-                    is_back_to_back=False,
-                    market_over_odds=prop.get("odds_over"),
-                    market_under_odds=prop.get("odds_under"),
-                )
-                poisson_fields = {
-                    "poisson_lam":        odds_result.get("lam"),
-                    "fair_over_odds":     odds_result.get("fair_over_odds"),
-                    "fair_under_odds":    odds_result.get("fair_under_odds"),
-                    "edge_pct":           odds_result.get("edge_pct"),
-                    "pick_ev":            odds_result.get("pick_ev"),
-                    "tier":               odds_result.get("tier"),
-                    "model_name":         odds_result.get("model"),
-                    "model_description":  odds_result.get("model_description"),
-                }
-            except Exception:
-                pass
-
-        # EV + edge overlay for non-NBA leagues
-        if league != "NBA":
-            _edge = (proj - calc_line) / max(calc_line, 1.0) * 100.0
-            _pick_ev = ev_over if picked_side == "OVER" else ev_under
-            if _pick_ev >= 5.0 and confidence >= 60:
-                _tier = "gold"
-            elif _pick_ev >= 2.0:
-                _tier = "green"
-            elif _pick_ev < 0:
-                _tier = "red"
-            else:
-                _tier = "neutral"
-            poisson_fields.update({
-                "edge_pct":   round(_edge, 1),
-                "pick_ev":    round(_pick_ev, 1),
-                "tier":       _tier,
-                "model_name": f"{league} Projection Model",
-                "fair_over_odds":  _prob_to_american(p_over),
-                "fair_under_odds": _prob_to_american(p_under),
-            })
-
-        row = {
-            "player_id": p["player_id"],
-            "player_name": p["name"],
-            "team": p["team"],
-            "league": league,
-            "position": p.get("position") or "",
-            "role": p.get("role") or "",
-            "depth_rank": p.get("depth_rank"),
-            "prop_type": prop["prop_type"],
-            "line": public_line,
-            "line_source": line_source,
-            "_calc_line": calc_line,
-            "odds_over": prop["odds_over"],
-            "odds_under": prop.get("odds_under"),
-            "projection": _to_half_step(proj),
-            "over_probability": round(p_over * 100.0, 1),
-            "under_probability": (
-                None if (league == "MLB" or _mlb_over_only) else round(p_under * 100.0, 1)
-            ),
-            "ev_over_percent": round(ev_over, 2),
-            "ev_under_percent": round(ev_under, 2) if prop.get("odds_under") is not None else None,
-            "confidence_score": round(confidence, 1),
-            "picked_side": picked_side,
-            "model_confidence": {m: model_confidence.get(m) for m in _MODEL_ORDER},
-            "model_agreement": round(agreement, 3),
-            "model_variance": round(variance, 3),
-            "inverse_signal": inverse_signal,
-            "inverse_signal_label": "Inverse Signal Mode (Experimental)" if inverse_signal else None,
-        }
-        if league == "MLB" and _mlb_proj_display is not None:
-            row["display_mode"] = "projection"
-            row["pick_display"] = str(_mlb_proj_display)
-            row["projection"] = float(_mlb_proj_display)
-            row["mlb_over_only"] = True
-        elif _mlb_over_only:
-            row["mlb_over_only"] = True
-        row.update(poisson_fields)
-        projections.append(row)
+                pl_row["model_reason"] = "Verified dated player observations are unavailable for these prop models."
+            projections.append(pl_row)
+            continue
+        # A market can exist without a supported forecast. Never turn missing
+        # observations into a minutes proxy or named-model confidence offsets.
+        game = p.get("next_game") or {}
+        projections.append({
+            "player_id": p["player_id"], "player_name": p["name"], "team": p.get("team"),
+            "league": league, "position": p.get("position"), "role": p.get("role"),
+            "prop_type": prop["prop_type"], "line": float(prop["line"]),
+            "line_source": prop.get("line_source"), "line_type": "pl" if prop.get("line_source") == "pl_model" else "market",
+            "event_id": prop.get("event_id") or game.get("event_id"),
+            "event_start": prop.get("event_start") or game.get("start_time"),
+            "odds_over": prop.get("odds_over"), "odds_under": prop.get("odds_under"),
+            "projection": None, "picked_side": None, "pick_probability": None,
+            "strong_pick": False, "model_forecasts": [], "model_confidence": {},
+            "schema_version": PROP_SCHEMA_VERSION,
+            "model_reason": "At least five verified recent player appearances are required for this prop.",
+        })
+        continue
     _line_sources = {pl.get("line_source") for pl in prop_lines}
     # Real book lines can come from ESPN's free DraftKings feed (default) or the
     # optional Odds API path; either counts as "real" for grading + UI labeling.
@@ -680,6 +566,11 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             )
         )
     payload = {
+        "schema_version": PROP_SCHEMA_VERSION,
+        "model_registry_version": "player-props-v1",
+        "model_validation": {key: {name: value for name, value in artifact.items() if name not in ("model", "training_snapshot")}
+                             for key, artifact in model_context.items()},
+        "schedule": schedule,
         "players": players,
         "props": projections,
         "lines_real": lines_real,
@@ -705,7 +596,7 @@ def get_league_data(league: str) -> Dict:
     key = league.upper()
     now = time.time()
     cached = _CACHE.get(key)
-    if cached and (now - cached["ts"]) < CACHE_TTL_SECONDS:
+    if cached and (now - cached["ts"]) < CACHE_TTL_SECONDS and cached["payload"].get("schema_version") == PROP_SCHEMA_VERSION:
         return cached["payload"]
     payload = _build_league_payload(key)
     _CACHE[key] = {"ts": now, "payload": payload}
@@ -990,22 +881,19 @@ def filter_props(
     for r in props:
         if prop_type and r["prop_type"].lower() != prop_type.lower():
             continue
-        if side and r["picked_side"].lower() != side.lower():
-            continue
-        # MLB posts projection overs only — never surface Under rows.
-        if (r.get("league") or "").upper() == "MLB" and r.get("picked_side") == "UNDER":
+        if side and str(r.get("picked_side") or "").lower() != side.lower():
             continue
         sel_ev = _prop_side_ev(r)
         if min_ev is not None and sel_ev < min_ev:
             continue
         # Keep one row per player+prop to avoid duplicate cards/rows.
-        key = (r.get("player_id"), r.get("prop_type"))
+        key = (r.get("player_id"), r.get("prop_type"), r.get("event_id"), r.get("line_type"))
         cur = deduped.get(key)
         if cur is None:
             deduped[key] = r
             continue
         cur_ev = _prop_side_ev(cur)
-        if (sel_ev, r.get("confidence_score", 0.0)) > (cur_ev, cur.get("confidence_score", 0.0)):
+        if (sel_ev, float(r.get("confidence_score") or 0.0)) > (cur_ev, float(cur.get("confidence_score") or 0.0)):
             deduped[key] = r
     out = list(deduped.values())
     out.sort(
@@ -1015,7 +903,8 @@ def filter_props(
             -_prop_pick_prob(x),
         )
     )
-    return out
+    return [{key: value for key, value in row.items()
+             if key not in ("input_values", "input_hash", "model_validation")} for row in out]
 
 
 def get_diagnostics(league: str = "NBA") -> Dict:

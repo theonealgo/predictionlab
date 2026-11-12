@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Header from './components/Header.jsx';
 import LiveStrip from './components/LiveStrip.jsx';
 import Footer from './components/Footer.jsx';
@@ -19,7 +19,7 @@ function appRoute(pathname) {
   const clean = pathname.replace(/\/+$/, '') || '/';
   const match = clean.match(SPORT_PATH);
   if (match) return { page: 'sport', slug: `${match[1]}-picks`, sport: match[1] };
-  if (clean === '/player-props') return { page: 'props', slug: null };
+  if (clean === '/player-props' || clean === '/sports-props') return { page: 'props', slug: null };
   if (ALL_PATHS.includes(clean)) return { page: 'all', slug: null };
   if (clean === '/') return { page: 'home', slug: null };
   return null;
@@ -39,11 +39,11 @@ function pageMeta(route) {
       `Today's ${name} predictions from Prediction Lab: win probabilities from six models, model lines, and every result graded in public.`,
     ];
   }
-  if (route.page === 'props') return ['Player Props Predictions | Prediction Lab', 'AI player prop projections with each model graded in public.'];
+  if (route.page === 'props') return ['Sports Props | Prediction Lab', 'Explore player props by sport and review recorded results by model and prop type.'];
   if (route.page === 'all') return ['All Sports Predictions Today | Prediction Lab', "Every sport's AI predictions on one page, with each prediction type's recent record."];
   return [
-    'Prediction Lab | AI Sports Predictions for Every Sport',
-    "Today's AI predictions and win probabilities for the NFL, NBA, NHL, MLB, college sports, soccer, tennis, UFC and golf, with every model graded in public.",
+    'Quantitative sports forecasting model | PredictionLab',
+    'Statistical probability engine for Straight-Up (SU) forecasts, historical accuracy, and quantitative sports research across multiple sports.',
   ];
 }
 
@@ -80,7 +80,44 @@ function currentAddress() {
 
 export default function App() {
   const [address, setAddress] = useState(currentAddress);
+  const viewerRole = useRef(null);
   const route = routeFromPath(window.location.pathname);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let pending = false;
+    const checkViewer = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const response = await fetch('/api/web/me', {
+          credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
+          headers: { Accept: 'application/json' },
+        });
+        if (!response.ok) return;
+        const me = await response.json();
+        if (typeof me.loggedIn !== 'boolean' || typeof me.premium !== 'boolean') return;
+        const next = `${me.loggedIn}:${me.premium}`;
+        if (viewerRole.current !== null && viewerRole.current !== next) {
+          window.location.reload();
+          return;
+        }
+        viewerRole.current = next;
+      } catch {
+        // A failed check is not a logout; the server enforces every data request.
+      } finally {
+        pending = false;
+      }
+    };
+    checkViewer();
+    window.addEventListener('focus', checkViewer);
+    window.addEventListener('pageshow', checkViewer);
+    return () => {
+      controller.abort();
+      window.removeEventListener('focus', checkViewer);
+      window.removeEventListener('pageshow', checkViewer);
+    };
+  }, [address]);
 
   // Links to the React pages switch the page in place: no reload, the header, live row and
   // sports list stay, and the new page paints from what is already loaded.

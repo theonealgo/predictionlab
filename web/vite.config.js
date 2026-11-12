@@ -6,7 +6,7 @@ import { SPORT_SLUGS } from './src/data/sportSlugs.js';
 // path (the API, static files, and the older pages such as The Ladder, Results, Blog, Pricing,
 // Login) goes to the preview forwarder on port 5141, so those links open the real pages.
 const SPORT_ROUTE = new RegExp(`^/(${SPORT_SLUGS.join('|')})-(picks|projections)/?(\\?.*)?$`);
-const PROPS_ROUTE = /^\/(player-props|all-sports-(picks|projections))\/?(\?.*)?$/;
+const PROPS_ROUTE = /^\/(sports-props|player-props|all-sports-(picks|projections))\/?(\?.*)?$/;
 const LOCAL_ASSET = /^\/(@|src\/|node_modules\/|index\.html$)/;
 const PREVIEW = process.env.PL_PREVIEW || 'http://127.0.0.1:5141';
 // The site treats every localhost request as paid. PL_PREVIEW_HOST sends another host name so the
@@ -16,6 +16,7 @@ const PREVIEW_HOST = process.env.PL_PREVIEW_HOST || '';
 // Dev server for the React sports front end. /api calls go to the local test copy
 // through the logged-out preview forwarder (port 5141), so visitors see the public view.
 export default defineConfig(({ command }) => ({
+  cacheDir: '.vite-cache',
   // The build goes to static/web/, which Flask serves at /static/web/ (see react_shell.py).
   base: command === 'build' ? '/static/web/' : '/',
   // Older bundles stay, so a page served just before a deploy still loads its files.

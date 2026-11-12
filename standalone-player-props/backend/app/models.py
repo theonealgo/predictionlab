@@ -30,15 +30,20 @@ class PropProjection(BaseModel):
     league: str
     prop_type: str
     line: Optional[float] = None
-    odds_over: float
-    odds_under: float
+    odds_over: Optional[float] = None
+    odds_under: Optional[float] = None
     projection: float
     over_probability: float
     under_probability: float
-    ev_over_percent: float
-    ev_under_percent: float
-    confidence_score: float
-    picked_side: str
+    ev_over_percent: Optional[float] = None
+    ev_under_percent: Optional[float] = None
+    confidence_score: Optional[float] = None
+    picked_side: Optional[str] = None
+    model_forecasts: Optional[List[dict]] = None
+    probabilities: Optional[dict] = None
+    event_id: Optional[str] = None
+    event_start: Optional[str] = None
+    line_type: Optional[str] = None
     model_confidence: Optional[dict] = None
     model_agreement: Optional[float] = None
     model_variance: Optional[float] = None

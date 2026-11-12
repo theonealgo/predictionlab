@@ -7,20 +7,22 @@ import PlayerProps from './PlayerProps.jsx';
 export default function PlayersPanel({ sport }) {
   const [me, setMe] = useState(null);
   const [leagues, setLeagues] = useState(null);
+  const [identityError, setIdentityError] = useState(false);
 
   useEffect(() => {
-    getJson('/api/web/me')
+    getJson('/api/web/me', { maxAge: 0 })
       .then(setMe)
-      .catch(() => setMe({ loggedIn: false, premium: false }));
+      .catch(() => setIdentityError(true));
   }, []);
 
   useEffect(() => {
-    if (!me || !me.loggedIn) return;
+    if (!me || !me.loggedIn || !me.premium) return;
     getJson('/player-props-api/leagues')
       .then((body) => setLeagues(body.leagues || []))
       .catch(() => setLeagues([]));
   }, [me]);
 
+  if (identityError) return <p className="pl-empty" role="alert">Could not verify your membership. Please reload to retry.</p>;
   if (!me) {
     return <p className="pl-empty">Loading…</p>;
   }
@@ -31,6 +33,10 @@ export default function PlayersPanel({ sport }) {
         Player props are for members. <a href="/login">Log in</a> to see them, or <a href="/plans">see plans</a>.
       </div>
     );
+  }
+
+  if (!me.premium) {
+    return <div className="pl-login-prompt">Players requires an active premium membership. <a href="/plans">View premium plans</a>.</div>;
   }
 
   if (leagues === null) {

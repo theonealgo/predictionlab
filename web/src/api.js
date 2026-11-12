@@ -10,7 +10,7 @@ const KEEP_MS = 30 * 60 * 1000;
 
 function remember(path, data) {
   // A "still building" answer is not kept: the next ask must reach the server.
-  if (data && typeof data === 'object' && data.building) return;
+  if (data && typeof data === 'object' && (data.building || data.refreshing)) return;
   memory.set(path, { ts: Date.now(), data });
 }
 

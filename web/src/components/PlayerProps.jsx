@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getJson } from '../api.js';
+import { modelPropCounts } from '../propsView.js';
 
 // Player props for one league, in the site's look. The data and the access rules come from the
 // /player-props-api routes (the same ones the old props page used). Locked rows come back from the
@@ -14,9 +15,9 @@ const TABS = [
 const MODELS = [
   ['glicko2', 'Grinder2'],
   ['trueskill', 'Takedown'],
-  ['xgboost', 'Edge'],
-  ['xsharp', 'XSharp'],
-  ['sharp_consensus', 'Sharp Consensus'],
+  ['elo', 'Edge'],
+  ['xgboost', 'XSharp'],
+  ['ensemble', 'Sharp Consensus'],
 ];
 
 const PROP_LABELS = {
@@ -32,11 +33,11 @@ function propLabel(propType) {
 
 function pct(wins, losses) {
   const total = wins + losses;
-  return total > 0 ? Math.round((wins / total) * 100) : 0;
+  return total > 0 ? Math.round((wins / total) * 100) : null;
 }
 
 function rateClass(rate) {
-  return rate >= 60 ? 'great' : rate >= 50 ? 'ok' : 'poor';
+  return rate == null ? '' : rate >= 60 ? 'great' : rate >= 50 ? 'ok' : 'poor';
 }
 
 // The expected value of the side the model picked (falls back to the over or under number).
@@ -47,9 +48,10 @@ function evOf(row) {
 
 // Local calendar day (YYYY-MM-DD) for an offset from today.
 function dayIso(offset) {
-  const d = new Date();
-  d.setDate(d.getDate() + offset);
-  return d.toLocaleDateString('en-CA');
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  const value = type => Number(parts.find(part => part.type === type).value);
+  return new Date(Date.UTC(value('year'), value('month')-1, value('day')+offset)).toISOString().slice(0, 10);
 }
 
 function dayLabel(iso) {
@@ -64,7 +66,7 @@ function sortValue(row, key) {
   if (key === 'projection') return Number(row.projection) || 0;
   if (key === 'pick') return String(row.picked_side || '').toLowerCase();
   if (key === 'ev') return evOf(row) ?? -Infinity;
-  return row.model_confidence?.[key] ?? -Infinity;
+  return (row.model_forecasts || []).find(model => model.model_id === key)?.probability ?? -Infinity;
 }
 
 const PROP_HEAD = [
@@ -85,7 +87,7 @@ export default function PlayerProps({ league }) {
   const [market, setMarket] = useState('all');
   const [side, setSide] = useState('all');
   const [minEv, setMinEv] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('player') || '');
   const [role, setRole] = useState('all');
   const [sort, setSort] = useState({ key: null, dir: 'desc' });
 
@@ -100,7 +102,7 @@ export default function PlayerProps({ league }) {
     const query = new URLSearchParams({ league });
     if (requestDay) query.set('date', requestDay);
     const load = () => {
-      getJson(`/player-props-api/${tab}?${query.toString()}`)
+      getJson(`${tab === 'results' ? '/api/web/props-results' : `/player-props-api/${tab}`}?${query.toString()}`)
         .then((body) => {
           if (!alive) return;
           setData(body);
@@ -213,7 +215,7 @@ export default function PlayerProps({ league }) {
           )}
           {data.lines_real === false && (
             <div className="pp-banner warn">
-              Live sportsbook odds are unavailable right now, so these are simulated lines. They are not graded into Results or Streaks.
+              Market lines are unavailable right now. PL lines are shown separately from market lines.
             </div>
           )}
           {data.eligibility_audit && (
@@ -334,7 +336,13 @@ function PropRow({ r }) {
         {ev == null ? '—' : `${ev > 0 ? '+' : ''}${Number(ev).toFixed(1)}%`}
       </td>
       {MODELS.map(([key]) => (
-        <td key={key}>{r.model_confidence?.[key] != null ? `${r.model_confidence[key]}%` : '—'}</td>
+        <td key={key}>{(() => {
+          const forecast = (r.model_forecasts || []).find(model => model.model_id === key);
+          const reason = (r.model_unavailable || []).find(model => model.model_id === key)?.reason;
+          return forecast?.probability != null
+            ? <><span>{forecast.side || 'PASS'} </span><strong className="pp-hub-percentage">{Number(forecast.probability).toFixed(1)}%</strong></>
+            : <span title={reason || 'A separate player-stat forecast is unavailable.'}>N/A</span>;
+        })()}</td>
       ))}
     </tr>
   );
@@ -414,7 +422,12 @@ function StreaksView({ data, league }) {
 
 function ResultsView({ data, league }) {
   const items = data.items || [];
-  const overall = data.summary?.overall || {};
+  const forecastRows = items.filter(row => row.model_id);
+  const overall = data.summary?.overall || {
+    wins: forecastRows.filter(row => row.result === 'Win').length,
+    losses: forecastRows.filter(row => row.result === 'Loss').length,
+  };
+  const byModelType = modelPropCounts(items);
   const week = data.week_summary || {};
   const season = data.season_summary || {};
   const seasonByProp = Object.entries(data.season_by_prop || {});
@@ -423,8 +436,8 @@ function ResultsView({ data, league }) {
     : 'All tracked';
   const tallies = [
     { label: data.result_date === dayIso(0) ? 'Today' : dayLabel(data.result_date), w: overall.wins || 0, l: overall.losses || 0 },
-    { label: 'Last 7 days', w: week.wins || 0, l: week.losses || 0 },
-    { label: sinceLabel, w: season.wins || 0, l: season.losses || 0 },
+    ...(data.week_summary ? [{ label: 'Last 7 days', w: week.wins || 0, l: week.losses || 0 }] : []),
+    ...(data.season_summary ? [{ label: sinceLabel, w: season.wins || 0, l: season.losses || 0 }] : []),
   ];
   const graded = tallies.reduce((sum, t) => sum + t.w + t.l, 0);
   if (graded === 0 && items.length === 0) {
@@ -438,12 +451,21 @@ function ResultsView({ data, league }) {
           return (
             <div key={t.label} className="pp-stat">
               <div className="pp-stat-label">{t.label}</div>
-              <div className={`pp-stat-pct ${rateClass(rate)}`}>{rate}%</div>
+              <div className={`pp-stat-pct ${rateClass(rate)}`}>{rate == null ? 'N/A' : `${rate}%`}</div>
               <div className="pp-muted">{t.w}–{t.l} · {t.w + t.l} graded</div>
             </div>
           );
         })}
       </div>
+      <p className="pp-muted">Model records use saved pregame forecasts. Older unassigned selections do not count toward a model’s record.
+        {' '}<a href={`/sports-props?league=${league}&results_date=${data.result_date || ''}`}>View model records and longer periods</a>.</p>
+      {byModelType.length > 0 && <div className="pp-table-wrap"><table className="pp-table">
+        <thead><tr><th>Model</th><th>Prop</th><th>Wins</th><th>Losses</th><th>Pushes</th><th>Decided</th><th>Win rate</th></tr></thead>
+        <tbody>{byModelType.map(row => <tr key={`${row.model_id}-${row.prop_type}-${row.league}`}>
+          <td>{row.model_name}</td><td>{propLabel(row.prop_type)}</td><td>{row.wins}</td><td>{row.losses}</td>
+          <td>{row.pushes}</td><td>{row.decided}</td><td className="pp-hub-percentage">{row.win_rate == null ? 'N/A' : `${row.win_rate.toFixed(1)}%`}</td>
+        </tr>)}</tbody>
+      </table></div>}
       {seasonByProp.length > 0 && (
         <div className="pp-table-wrap">
           <table className="pp-table">
@@ -454,7 +476,7 @@ function ResultsView({ data, league }) {
               {seasonByProp.map(([pt, s]) => (
                 <tr key={pt}>
                   <td className="pp-player">{propLabel(pt)}</td>
-                  <td><span className={`pp-rate ${rateClass(pct(s.wins, s.losses))}`}>{pct(s.wins, s.losses)}%</span></td>
+                  <td><span className={`pp-rate ${rateClass(pct(s.wins, s.losses))}`}>{pct(s.wins, s.losses) == null ? 'N/A' : `${pct(s.wins, s.losses)}%`}</span></td>
                   <td>{s.wins}–{s.losses}</td>
                   <td className="pp-muted">{s.wins + s.losses}</td>
                 </tr>
@@ -467,7 +489,7 @@ function ResultsView({ data, league }) {
         <div className="pp-table-wrap">
           <table className="pp-table">
             <thead>
-              <tr><th>Player</th><th>Prop</th><th>Prediction</th><th>Line</th><th>Actual</th><th>Result</th></tr>
+              <tr><th>Player</th><th>Prop</th><th>Model</th><th>Prediction</th><th>Line</th><th>Actual</th><th>Result</th></tr>
             </thead>
             <tbody>
               {items.map((r, index) => (
@@ -477,10 +499,11 @@ function ResultsView({ data, league }) {
                     <span className="pp-team">{r.team}</span>
                   </td>
                   <td>{propLabel(r.prop_type)}</td>
+                  <td>{r.model_id ? r.model_name : 'Not recorded'}</td>
                   <td className={r.pick === 'OVER' ? 'pp-pick-over' : r.pick === 'UNDER' ? 'pp-pick-under' : ''}>{r.pick}</td>
                   <td>{r.line}</td>
-                  <td>{r.actual}</td>
-                  <td><span className={`pp-result ${String(r.result || '').toLowerCase()}`}>{r.result}</span></td>
+                  <td>{r.actual ?? 'N/A'}</td>
+                  <td><span className={`pp-result ${String(r.result || '').toLowerCase()}`}>{r.model_id ? r.result : r.selection_result || 'N/A'}</span></td>
                 </tr>
               ))}
             </tbody>
