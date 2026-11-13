@@ -37,6 +37,9 @@ def _app_db_path():
 
 
 def _persist_cards_html(sport: str, html: str) -> None:
+    from card_pagination import active
+    if active():
+        return
     if not html or html.count("game-card") < 3:
         return
     try:
@@ -277,6 +280,9 @@ def _served_picks_path(sport: str) -> Path:
 
 def lookup_served_picks(sport: str, schedule: bool = True) -> str:
     """Last rendered picks page. The request the checker times must not rebuild it."""
+    from card_pagination import active
+    if active():
+        return ""
     if _viewer_tier() != "paid":
         return ""
     if picks_refresh_forced():
@@ -318,6 +324,9 @@ def lookup_served_picks(sport: str, schedule: bool = True) -> str:
 
 
 def store_served_picks(sport: str, html: str) -> None:
+    from card_pagination import active
+    if active():
+        return
     if _viewer_tier() != "paid":
         return
     if "const IS_PREMIUM = false" in (html or ""):

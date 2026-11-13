@@ -36,7 +36,12 @@ export default function HomePage() {
           while (!cancelled && next < list.length) {
             const item = list[next++];
             try {
-              const payload = await getJson(item.key === 'GOLF' ? '/api/web/golf' : `/api/web/sports/${item.slug}/cards?limit=${CARDS_SHOWN}`);
+              const path = item.key === 'GOLF' ? '/api/web/golf' : `/api/web/sports/${item.slug}/cards?limit=5`;
+              let payload = await getJson(path);
+              while (!cancelled && payload.building) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                payload = await getJson(path, { maxAge: 0 });
+              }
               if (cancelled) return;
               setFeeds((current) => ({
                 ...current,
@@ -48,7 +53,7 @@ export default function HomePage() {
           }
         };
         // Original feeds may need a full render: do not start every sport at once.
-        return Promise.all([load(), load()]);
+        return load();
       })
       .catch(() => {
         if (!cancelled) setSportsError(true);
@@ -151,7 +156,7 @@ export default function HomePage() {
         )}
       </main>
       <aside className={mobilePane === 'results' ? 'pl-right' : 'pl-right pl-mobile-hidden'}>
-        <AllSportsResults />
+        <AllSportsResults enabled={Object.keys(feeds).length > 0 || mobilePane === 'results'} />
       </aside>
     </>
   );

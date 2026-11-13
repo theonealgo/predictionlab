@@ -37,9 +37,9 @@ def real_source(value):
         word in source for word in ("espn", "pl_book_odds", "draftkings", "odds_api"))
 
 
-def repair_card(card, row):
+def repair_card(card, row, allow_final=False):
     html = card.get("html") or ""
-    if re.search(r'class="game-time"[^>]*>[^<]*\bFINAL\b', html, re.I):
+    if not allow_final and re.search(r'class="game-time"[^>]*>[^<]*\bFINAL\b', html, re.I):
         return card
     original = html
     prices = [number(row.get("away_moneyline")), number(row.get("home_moneyline"))]
@@ -81,7 +81,7 @@ def repair_card(card, row):
     return {**card, "html": html} if html != original else card
 
 
-def refresh(payload, sport, database):
+def refresh(payload, sport, database, allow_final=False, fetch_missing=True):
     if sport not in SPORTS or not payload.get("cards"):
         return payload
     ids = {}
@@ -109,5 +109,28 @@ def refresh(payload, sport, database):
     except sqlite3.Error:
         logging.getLogger(__name__).warning("Stored market refresh unavailable for %s", sport)
         return payload
-    return {**payload, "cards": [repair_card(card, latest[ids[id(card)]])
-                                if ids.get(id(card)) in latest else card for card in payload["cards"]]}
+    if fetch_missing and sport == "NCAAB":
+        needs = []
+        for card in payload["cards"]:
+            gid = ids.get(id(card))
+            row = latest.get(gid) or {}
+            if gid and not card.get("isFinal") and any(number(row.get(k)) is None for k in
+                    ("spread", "total", "home_moneyline", "away_moneyline")):
+                needs.append({"game_id": gid, "home_team_id": card.get("home"),
+                              "away_team_id": card.get("away"), "game_date": card.get("date"),
+                              "home_score": None})
+        if needs:
+            try:
+                from NHL77FINAL import _start_background_book_refresh
+                _start_background_book_refresh(sport, needs[:5])
+            except Exception:
+                logging.getLogger(__name__).warning("Background market refresh unavailable for %s", sport)
+    cards = []
+    for card in payload["cards"]:
+        if ids.get(id(card)) in latest:
+            card = repair_card(card, latest[ids[id(card)]], allow_final=allow_final)
+        reason = "No historical sportsbook line was recorded." if allow_final else "No posted sportsbook line is available yet."
+        html = CELL.sub(lambda m: m[1]+'<span title="'+reason+'">N/A</span>'+m[3]
+                        if blank(m[2]) else m[0], card.get("html") or "")
+        cards.append({**card, "html": html} if sport == "NCAAB" else card)
+    return {**payload, "cards": cards}

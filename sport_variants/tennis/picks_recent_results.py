@@ -366,6 +366,9 @@ def _build_block(sport: str) -> str:
 
 
 def inject_picks_recent_results(html: str, sport: str) -> str:
+    from card_pagination import active as _cards_api_window
+    if _cards_api_window():
+        return html
     if not html:
         return html
     has_section = 'id="picks-recent-results"' in html

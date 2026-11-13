@@ -467,6 +467,9 @@ def refresh_existing_block(html: str, sport: str) -> str:
 
 
 def inject_picks_recent_results(html: str, sport: str) -> str:
+    from card_pagination import active as _cards_api_window
+    if _cards_api_window():
+        return html
     sport_u = (sport or "").strip().upper()
     if sport_u == "NHL" and html and 'id="picks-recent-results"' in html:
         return refresh_existing_block(html, sport_u)

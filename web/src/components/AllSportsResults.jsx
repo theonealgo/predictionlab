@@ -1,10 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import useVisibleOnce from '../hooks/useVisibleOnce.js';
 import '../../../static/css/all-sports-results.css';
 
-export default function AllSportsResults() {
+export default function AllSportsResults({ enabled = true }) {
   const [html, setHtml] = useState('');
   const [error, setError] = useState(false);
+  const section = useRef(null);
+  const active = useVisibleOnce(section, enabled);
   useEffect(() => {
+    if (!active) return undefined;
     const controller = new AbortController();
     let timer;
     let attempts = 0;
@@ -26,9 +30,9 @@ export default function AllSportsResults() {
     }
     load();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, []);
+  }, [active]);
   return (
-    <section aria-label="All sports results">
+    <section ref={section} aria-label="All sports results">
       <div className="pl-home-results-title">
         <h2>All sports results</h2>
         <a href="/all-sports-results">Open results page</a>

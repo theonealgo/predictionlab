@@ -709,7 +709,8 @@ def _build_row_from_odds_api_nhl(
 ) -> Optional[dict[str, Any]]:
     events: list[dict] = []
     seen = set()
-    for sport_key in _NHL_ODDS_API_KEYS:
+    keys = {"NHL": _NHL_ODDS_API_KEYS, "NCAAB": ("basketball_ncaab",), "NCAAW": ("basketball_wncaab",)}.get(sport, ())
+    for sport_key in keys:
         for ev in _fetch_odds_api_events(sport_key):
             eid = ev.get('id') or (ev.get('home_team'), ev.get('away_team'), ev.get('commence_time'))
             if eid in seen:
@@ -973,6 +974,51 @@ def _build_row_from_odds_api(
     }
 
 
+_SUMMARY_QUOTES = {}
+
+
+def _summary_odds(sport, event_id, home_team, away_team):
+    if sport not in ("NHL", "NCAAB", "NCAAW"):
+        return None
+    key = (sport, event_id)
+    cached = _SUMMARY_QUOTES.get(key)
+    if cached and time.time()-cached[0] < 300:
+        return cached[1]
+    family, league = CORE_API_SPORT_PATHS[sport]
+    try:
+        response = requests.get(
+            f"https://site.api.espn.com/apis/site/v2/sports/{family}/{league}/summary",
+            params={"event": event_id}, timeout=8)
+        response.raise_for_status()
+        payload = response.json()
+        header = payload.get("header") or {}
+        competition = (header.get("competitions") or [{}])[0]
+        teams = {row.get("homeAway"): row.get("team", {}).get("displayName")
+                 for row in competition.get("competitors") or []}
+        if str(header.get("id")) != str(event_id) or any(
+                _normalize_team_key(teams.get(side)) != _normalize_team_key(name)
+                for side, name in (("home", home_team), ("away", away_team))):
+            return None
+        quotes = payload.get("pickcenter") or []
+        item = dict(next((quote for quote in quotes if "draftkings" in
+                         str((quote.get("provider") or {}).get("name", "")).lower()),
+                        quotes[0] if quotes else {}))
+        if not item:
+            _SUMMARY_QUOTES[key] = (time.time(), None)
+            return None
+        spread = _to_float(item.get("spread"))
+        if spread is not None:
+            if (item.get("homeTeamOdds") or {}).get("favorite") is True:
+                item["spread"] = -abs(spread)
+            elif (item.get("awayTeamOdds") or {}).get("favorite") is True:
+                item["spread"] = abs(spread)
+        item["_real_book_only"] = True
+        _SUMMARY_QUOTES[key] = (time.time(), item)
+        return item
+    except (requests.RequestException, ValueError, TypeError):
+        return None
+
+
 def build_pl_book_odds(
     sport: str,
     game_id: str,
@@ -994,11 +1040,13 @@ def build_pl_book_odds(
         item = _fetch_core_odds_item(
             sport, event_id, game_id=game_id, league_name=league_name,
         )
+        if not item and sport == "NCAAB":
+            item = _summary_odds(sport, event_id, home_team, away_team)
     if not item and sport == 'SOCCER':
         return _build_row_from_odds_api(
             sport, game_id, home_team, away_team, game_date, league_name,
         )
-    if not item and sport == 'NHL':
+    if not item and sport in ('NHL', 'NCAAB'):
         return _build_row_from_odds_api_nhl(
             sport, game_id, home_team, away_team, game_date,
         )
@@ -1018,14 +1066,14 @@ def build_pl_book_odds(
             return _build_row_from_odds_api(
                 sport, game_id, home_team, away_team, game_date, league_name,
             )
-        if sport == 'NHL':
+        if sport in ('NHL', 'NCAAB'):
             return _build_row_from_odds_api_nhl(
                 sport, game_id, home_team, away_team, game_date,
             )
         return None
 
     ml_from_spread = False
-    if spread is not None and (home_ml is None or away_ml is None):
+    if spread is not None and (home_ml is None or away_ml is None) and not item.get("_real_book_only"):
         h_fb, a_fb = _ml_from_spread_fallback(spread)
         ml_from_spread = True
         home_ml = home_ml if home_ml is not None else h_fb

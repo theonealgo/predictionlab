@@ -25,5 +25,6 @@ def current_payload(payload, day=None):
             suppressed += 1
             continue
         shown.append(card)
-    return {**payload, "cards": shown, "total": len(shown), "as_of_date": day,
+    total = max(len(shown), int(payload.get("total") or 0)-suppressed) if "offset" in payload else len(shown)
+    return {**payload, "cards": shown, "total": total, "as_of_date": day,
             "suppressed_stale_predictions": suppressed}

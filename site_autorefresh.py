@@ -217,6 +217,10 @@ def _rebuild_for_new_code(app, db: str, state: dict) -> None:
     code = _RUNNING_CODE
     if state.get("code") == code:
         return
+    if os.getenv("PL_EAGER_WARM", "0") != "1":
+        state["code"] = code
+        _save_state(state)
+        return
     started = time.time()
     try:
         stamps = _finals_stamp(db)
@@ -594,4 +598,5 @@ def start(app, db: str, sync_fns: dict) -> None:
         return
     _started = True
     threading.Thread(target=_loop, args=(app, db, sync_fns), daemon=True, name="site-autorefresh").start()
-    threading.Thread(target=_warm_loop, args=(app,), daemon=True, name="site-warm").start()
+    if os.getenv("PL_EAGER_WARM", "0") == "1":
+        threading.Thread(target=_warm_loop, args=(app,), daemon=True, name="site-warm").start()

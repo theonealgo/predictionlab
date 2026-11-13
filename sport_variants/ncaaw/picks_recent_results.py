@@ -310,6 +310,9 @@ def _build_block(sport: str) -> str:
 
 
 def inject_picks_recent_results(html: str, sport: str) -> str:
+    from card_pagination import active as _cards_api_window
+    if _cards_api_window():
+        return html
     if not html or 'id="picks-recent-results"' in html:
         return html
     if "How These AI Picks Are Generated" not in html and "seo-picks-footer" not in html:

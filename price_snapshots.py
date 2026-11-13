@@ -11,6 +11,7 @@ history even when nobody opens its page. Set PRICE_SNAPSHOTS=0 to turn both off.
 """
 from __future__ import annotations
 
+import itertools
 import logging
 import os
 import sqlite3
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 ET = ZoneInfo("America/New_York")
 SWEEP_EVERY = 2 * 3600
 SWEEP_DAYS = 2
-SWEEP_MAX_GAMES = 250
+SWEEP_MAX_GAMES = 500
 SWEEP_PAUSE = 0.5
 SWEEP_SPORTS = ("NFL", "NBA", "NHL", "MLB", "NCAAF", "NCAAB", "NCAAW", "WNBA", "SOCCER")
 PRICE_FIELDS = (
@@ -229,9 +230,11 @@ def sweep() -> int:
 
     conn = _connect()
     try:
-        games = [(s, g) for s in SWEEP_SPORTS for g in _upcoming(conn, s)]
+        by_sport = [[(s, g) for g in _upcoming(conn, s)] for s in SWEEP_SPORTS]
     finally:
         conn.close()
+    # Take turns between sports so a big college-football Saturday cannot use up every slot.
+    games = [pair for turn in itertools.zip_longest(*by_sport) for pair in turn if pair]
     fetched = failed = empty = lines = 0
     for sport, g in games[:SWEEP_MAX_GAMES]:
         try:

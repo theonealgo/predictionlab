@@ -689,24 +689,41 @@ _WARM_HOST = 'predictionlab.io'
 _WARM_EVERY = 10 * 60
 
 
-def _build_cards(slug, tier, app, host, cookie):
+def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
     sport = _sport_for(slug)
     path = '/' + slug.replace('-projections', '-picks')
     if sport == 'SOCCER':
         path += '?region=all'  # the soccer page redirects to its region view without this
-    html = _page_html(path, app, host, cookie)
+    if limit is None:
+        html = _page_html(path, app, host, cookie)
+        page = None
+    else:
+        from card_pagination import window
+        with window(offset, limit) as page:
+            html = _page_html(path, app, host, cookie)
+    if not html or 'upstream data/model dependency failed' in html.lower():
+        raise RuntimeError(f'Original sport renderer returned no page for {slug}')
     cards = _cards(html)
     if tier != 'member':
         for card in cards:
             card['html'] = _lock_member_chips(card['html'])
-    dates = _game_dates(sport)
+    dates = _game_dates(sport) if any(not card['date'] for card in cards) else {}
     for card in cards:
         if not card['date']:
             found = _GAME_ID.search(card['html'])
             card['date'] = dates.get(found.group(1), '') if found else ''
     cards.sort(key=_page_order)
-    return _reword_cards({'cards': cards, 'total': len(cards), 'css': _card_styles(html, app),
-                          'shareImage': _share_image(html)})
+    total = len(cards)
+    next_offset = None
+    if limit is not None:
+        if page['total'] is None:  # Existing specialized renderers retain their original path.
+            cards = cards[offset:offset+limit]
+            next_offset = offset+len(cards) if offset+len(cards) < total else None
+        else:
+            total, next_offset = page['total'], page['nextOffset']
+    return _reword_cards({'cards': cards, 'total': total, 'css': _card_styles(html, app),
+                          'shareImage': _share_image(html), 'offset': offset,
+                          'nextOffset': next_offset, 'hasMore': next_offset is not None})
 
 
 def _cards_file(slug, tier):
@@ -727,10 +744,10 @@ def _saved_cards(slug, tier):
         return None
 
 
-def _save_cards(slug, tier, payload):
+def _save_cards(slug, tier, payload, allow_empty=False):
     from slate_freshness import current_payload
     payload = current_payload(payload)
-    if not payload['cards']:
+    if not payload['cards'] and not allow_empty:
         return  # an empty page (a failed build) never replaces a good saved feed
     _CARDS[(slug, tier)] = (time.time(), payload)
     try:
@@ -778,10 +795,60 @@ _WARM_STARTED = False
 
 def start_cards_warmer(app):
     global _WARM_STARTED
-    if _WARM_STARTED or os.environ.get('PL_WEB_WARM') != '1':
+    if _WARM_STARTED or os.environ.get('PL_WEB_WARM') != '1' or os.environ.get('PL_EAGER_WARM', '0') != '1':
         return
     _WARM_STARTED = True
     threading.Thread(target=_warm_cards_loop, args=(app,), daemon=True, name='web-cards-warm').start()
+
+
+_CARD_ERRORS = {}
+
+
+def _start_full_cards(slug, tier, app):
+    """One full build per sport and tier; every page of cards is cut from it."""
+    with _CARDS_LOCK:
+        if (slug, tier) in _CARDS_BUILDING:
+            return True
+        _CARDS_BUILDING.add((slug, tier))
+    host, cookie = request.host, request.headers.get('Cookie')
+
+    def build():
+        try:
+            with app.app_context():
+                payload = _build_cards(slug, tier, app, host, cookie)
+                _save_cards(slug, tier, payload, allow_empty=not _saved_cards(slug, tier))
+            _CARD_ERRORS.pop((slug, tier), None)
+        except Exception:
+            _CARD_ERRORS[(slug, tier)] = time.time()
+            logging.getLogger(__name__).exception('[web cards] build failed for %s', slug)
+        finally:
+            with _CARDS_LOCK:
+                _CARDS_BUILDING.discard((slug, tier))
+
+    threading.Thread(target=build, daemon=True, name=f'cards-{slug}-{tier}').start()
+    return True
+
+
+def _card_page(slug, tier, app, offset, limit):
+    from slate_freshness import current_payload
+    saved = _saved_cards(slug, tier)
+    if saved and time.time()-saved[0] < _CARDS_KEEP:
+        payload = current_payload(saved[1])
+        running = (slug, tier) in _CARDS_BUILDING
+        if time.time()-saved[0] >= _CARDS_FRESH or payload.get('suppressed_stale_predictions'):
+            running = _start_full_cards(slug, tier, app)
+        cards = payload['cards'][offset:offset+limit]
+        total = len(payload['cards'])
+        next_offset = offset+len(cards) if offset+len(cards) < total else None
+        return {**payload, 'cards': cards, 'total': total, 'offset': offset,
+                'nextOffset': next_offset, 'hasMore': next_offset is not None,
+                'refreshing': running}, 200
+    if time.time()-_CARD_ERRORS.get((slug, tier), 0) < 15:
+        return {'error': 'Games could not be loaded. Please retry.', 'cards': []}, 503
+    _start_full_cards(slug, tier, app)
+    return {'cards': [], 'total': None, 'css': '', 'shareImage': '', 'offset': offset,
+            'nextOffset': offset, 'hasMore': True, 'building': True,
+            'refreshing': True, 'retryAfter': 1}, 202
 
 
 @api.route('/api/web/sports/<slug>/cards')
@@ -795,6 +862,27 @@ def api_cards(slug):
     else:
         tier = 'free' if current_user.is_authenticated else 'guest'
     app = current_app._get_current_object()
+    if 'limit' in request.args:
+        try:
+            limit = int(request.args['limit'])
+            offset = int(request.args.get('offset', '0'))
+            if not 1 <= limit <= 50 or not 0 <= offset <= 10000:
+                raise ValueError
+        except (ValueError, TypeError):
+            return jsonify(error='Choose a valid game page.'), 400
+        payload, status = _card_page(slug, tier, app, offset, limit)
+        if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB'}:
+            from market_card_refresh import refresh as refresh_market_cards
+            from NHL77FINAL import DATABASE
+            payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)
+            if _sport_for(slug) == 'NHL':
+                from pl_line_repair import refresh as refresh_pl_cards
+                payload = refresh_pl_cards(payload, DATABASE)
+        response = jsonify(payload)
+        response.status_code = status
+        response.headers['Cache-Control'] = 'private, no-store'
+        response.vary.add('Cookie')
+        return response
     saved = _saved_cards(slug, tier)
     age = time.time() - saved[0] if saved else None
     if saved and age < _CARDS_KEEP:
@@ -828,6 +916,9 @@ def api_cards(slug):
         from market_card_refresh import refresh as refresh_market_cards
         from NHL77FINAL import DATABASE
         payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)
+        if _sport_for(slug) == 'NHL':
+            from pl_line_repair import refresh as refresh_pl_cards
+            payload = refresh_pl_cards(payload, DATABASE)
     limit = request.args.get('limit', type=int)
     if limit:
         payload = dict(payload, cards=payload['cards'][:limit])
@@ -902,3 +993,26 @@ def api_golf():
     if event and not event.isdigit():
         return jsonify({'error': 'unknown tournament'}), 400
     return jsonify(_golf_payload(event))
+
+
+@api.after_request
+def _restore_college_rating_fields(response):
+    if (response.status_code != 200 or not response.is_json
+            or not re.fullmatch(r'/api/web/sports/ncaa[bw]-picks/cards', request.path)):
+        return response
+    from auth_system import is_premium_user
+    if not is_premium_user():
+        return response
+    try:
+        import NHL77FINAL as site
+        from published_rating_fields import refresh, model_values
+        def ratings(sport, home, away, game_date):
+            predictor = site.V2_PREDICTORS.get(site._v2_model_sport(sport))
+            return model_values(predictor, home, away) if predictor else {}
+        payload = refresh(response.get_json(), _sport_for(request.path.split('/')[-2]),
+                          site.DATABASE, ratings)
+        response.set_data(json.dumps(payload))
+    except Exception:
+        current_app.logger.exception('College rating field recovery unavailable')
+    return response
+

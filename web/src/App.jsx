@@ -73,7 +73,7 @@ function appLink(event) {
 
 // What a page needs first, loaded when the visitor points at its link.
 function preload(route) {
-  if (route.page === 'sport' && route.slug !== 'golf-picks') prefetchJson(`/api/web/sports/${route.slug}/cards`);
+  if (route.page === 'sport' && route.slug !== 'golf-picks') prefetchJson(`/api/web/sports/${route.slug}/cards?limit=5`);
   if (route.page === 'all') prefetchJson('/api/web/all-sports');
   if (route.page === 'blog') prefetchJson('/api/web/blog');
 }

@@ -11,7 +11,10 @@ from __future__ import annotations
 
 import re
 import gzip
+import hashlib
 import json
+import threading
+from collections import OrderedDict
 from contextlib import contextmanager
 from contextvars import ContextVar
 from html import escape, unescape
@@ -458,6 +461,25 @@ def install_access_policy(app):
         return _denied()
 
 
+_FREE_DONE = OrderedDict()
+_FREE_LOCK = threading.Lock()
+_FREE_BYTES_MAX = 48 * 1024 * 1024
+_UNCHANGED = b""
+_free_bytes = 0
+
+
+def _remember_free(key, data):
+    """Free copies are pure functions of the source body, so a repeat is served without re-parsing."""
+    global _free_bytes
+    with _FREE_LOCK:
+        if key in _FREE_DONE:
+            return
+        _FREE_DONE[key] = data
+        _free_bytes += len(data)
+        while _free_bytes > _FREE_BYTES_MAX or len(_FREE_DONE) > 400:
+            _free_bytes -= len(_FREE_DONE.popitem(last=False)[1])
+
+
 def enforce_response(response):
     """Final delivery boundary, including cached and compressed response bodies."""
     from flask import current_app, render_template, request
@@ -475,6 +497,19 @@ def enforce_response(response):
     try:
         encoding = response.headers.get("Content-Encoding", "")
         raw = response.get_data()
+        if not private:
+            key = (hashlib.blake2b(raw, digest_size=16).digest(), request.url, encoding,
+                   bool(current_user.is_authenticated), _RAW_PAGE_SOURCE.get())
+            with _FREE_LOCK:
+                kept = _FREE_DONE.get(key)
+                if kept is not None:
+                    _FREE_DONE.move_to_end(key)
+            if kept is not None:
+                if kept is not _UNCHANGED:
+                    response.set_data(kept)
+                    response.headers["Cache-Control"] = "private, no-store"
+                    response.vary.add("Cookie")
+                return response
         body = gzip.decompress(raw) if encoding == "gzip" else raw
         if private:
             if response.mimetype == "text/html":
@@ -522,6 +557,9 @@ def enforce_response(response):
             response.set_data(gzip.compress(out, compresslevel=5) if encoding == "gzip" else out)
             response.headers["Cache-Control"] = "private, no-store"
             response.vary.add("Cookie")
+            _remember_free(key, response.get_data())
+        else:
+            _remember_free(key, _UNCHANGED)
         return response
     except Exception:
         current_app.logger.exception("Premium delivery boundary failed; denying response")

@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import { getJson, peekJson } from '../api.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import useCardPages from '../hooks/useCardPages.js';
 import { CONFERENCES } from '../data/conferences.js';
 import { DEFAULT_NAV, SPORT_NAV } from '../data/sportNav.js';
-import { applyCardStyles } from '../cardStyles.js';
 import { useDragScroll } from '../hooks/useDragScroll.js';
 import collegeGroups from '../data/collegeGroups.json';
 import PlayersPanel from '../components/PlayersPanel.jsx';
@@ -119,15 +118,9 @@ export default function SportPage({ slug }) {
   const college = collegeGroups[sport] || null;
   const [todayIso, setTodayIso] = useState(() => todayET());
   const daysShownFirst = FOOTBALL.has(sport) ? 7 : 4;
-  const cardsPath = `/api/web/sports/${slug}/cards`;
   const [tab, setTab] = useState(nav.tabs[0]);
-  // The last copy of these cards (from an earlier visit or a preload) paints at once; a fresh one follows.
-  const [payload, setPayload] = useState(() => {
-    const kept = isGolf ? null : peekJson(cardsPath);
-    if (kept) applyCardStyles(kept.css);
-    return kept;
-  });
-  const [error, setError] = useState(null);
+  const { payload, error, loadingMore, loadMore } = useCardPages(slug, !isGolf);
+  const moreGames = useRef(null);
   // Phones show one column at a time; this switch flips between the games and the results.
   const [mobilePane, setMobilePane] = useState('predictions');
   const [filter, setFilter] = useState(() => {
@@ -143,47 +136,24 @@ export default function SportPage({ slug }) {
   const teamStrip = useDragScroll();
   const leagueStrip = useDragScroll();
 
-  useEffect(() => {
-    if (isGolf) return;
-    setError(null);
-    // A sport's first build after a restart can be slow: keep loading and try again before giving up.
-    let alive = true;
-    let timer = null;
-    let pending = false;
-    const load = (triesLeft) => {
-      if (pending) return;
-      pending = true;
-      setTodayIso(todayET());
-      getJson(cardsPath, { maxAge: 0 })
-        .then((data) => {
-          if (!alive) return;
-          applyCardStyles(data.css);
-          setPayload(data);
-          setError(null);
-        })
-        .catch((err) => {
-          if (!alive) return;
-          if (triesLeft > 0) timer = setTimeout(() => load(triesLeft - 1), 3000);
-          else setError(err.message);
-        }).finally(() => { pending = false; });
-    };
-    load(4);
-    const refresh = () => { if (document.visibilityState !== 'hidden') load(1); };
-    const interval = setInterval(refresh, 60000);
-    window.addEventListener('focus', refresh);
-    document.addEventListener('visibilitychange', refresh);
-    return () => {
-      alive = false;
-      clearTimeout(timer);
-      clearInterval(interval);
-      window.removeEventListener('focus', refresh);
-      document.removeEventListener('visibilitychange', refresh);
-    };
-  }, [cardsPath, isGolf]);
-
   const cards = payload?.cards || [];
   const [gameParam] = useState(() => new URLSearchParams(window.location.search).get('game'));
   const target = useMemo(() => targetCard(cards, gameParam), [cards, gameParam]);
+  useEffect(() => { setTodayIso(todayET()); }, [payload]);
+  useEffect(() => {
+    if (!payload?.hasMore || loadingMore || !moreGames.current) return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting) && document.visibilityState !== 'hidden') loadMore();
+    }, { rootMargin: '250px' });
+    observer.observe(moreGames.current);
+    return () => observer.disconnect();
+  }, [payload, loadingMore, loadMore]);
+  useEffect(() => {
+    if (!payload?.hasMore || loadingMore) return;
+    const missingTarget = gameParam && !target;
+    const missingTeam = teamFilter && !cards.some((card) => card.home === teamFilter || card.away === teamFilter);
+    if (missingTarget || missingTeam) loadMore();
+  }, [payload, loadingMore, gameParam, target, teamFilter, cards, loadMore]);
 
   // Opened from a live box: show every day so the game is on the page, then scroll to it.
   useEffect(() => {
@@ -416,7 +386,7 @@ export default function SportPage({ slug }) {
             </div>
             {error && <p className="pl-empty">Could not load games: {error}</p>}
             {!error && !payload && <p className="pl-empty">Loading games…</p>}
-            {!error && payload && shownUpcoming.length === 0 && shownRecent.length === 0 && (
+            {!error && payload && !payload.hasMore && shownUpcoming.length === 0 && shownRecent.length === 0 && (
               <p className="pl-empty">No games scheduled right now.</p>
             )}
             {visibleDays.map(([day, list]) => (
@@ -453,6 +423,13 @@ export default function SportPage({ slug }) {
                 ))}
               </div>
             )}
+            {payload?.hasMore && (
+              <div ref={moreGames}>
+                <button type="button" className="pl-show-more" disabled={loadingMore} onClick={loadMore}>
+                  {loadingMore ? 'Loading more games…' : 'Load more games'}
+                </button>
+              </div>
+            )}
             {payload && payload.shareImage && (
               <div className="pl-share-image" dangerouslySetInnerHTML={{ __html: payload.shareImage }} />
             )}
@@ -466,6 +443,7 @@ export default function SportPage({ slug }) {
       <aside className={mobilePane === 'results' ? 'pl-right' : 'pl-right pl-mobile-hidden'}>
         <div className="pl-right-title">Results</div>
         <ResultsPanel
+          enabled={isGolf || Boolean(payload) || mobilePane === 'results'}
           src={`/${slug.replace('-picks', '-results')}`}
           picksPath={`/${slug.replace('-projections', '-picks')}`}
           onPredictions={() => { chooseTab(nav.tabs[0]); setMobilePane('predictions'); }}

@@ -5171,6 +5171,7 @@ def _start_background_book_refresh(sport, predictions, today_date=None, prioriti
 import threading as _preds_thr
 _PREDICTIONS_REFRESH_INFLIGHT: set = set()
 _PREDICTIONS_REFRESH_LOCK = _preds_thr.Lock()
+_PREDICTIONS_BUILD_GATE = _preds_thr.Semaphore(1)
 
 
 def _start_background_predictions_refresh(sport, days=365):
@@ -5187,7 +5188,8 @@ def _start_background_predictions_refresh(sport, days=365):
 
     def _run():
         try:
-            get_upcoming_predictions(sport, days=days, _force_rebuild=True)
+            with _PREDICTIONS_BUILD_GATE:
+                get_upcoming_predictions(sport, days=days, _force_rebuild=True)
         except Exception as _bg_pred:
             logger.debug(f"[{sport}] background predictions refresh failed: {_bg_pred}")
         finally:
@@ -31176,7 +31178,8 @@ def _prewarm_espn_odds_cache():
         _time.sleep(720)   # re-warm every 12 min — before the 15-min TTL expires
 
 try:
-    threading.Thread(target=_prewarm_espn_odds_cache, daemon=True, name='odds-prewarm').start()
+    if _os.environ.get('PL_EAGER_WARM', '0') == '1':
+        threading.Thread(target=_prewarm_espn_odds_cache, daemon=True, name='odds-prewarm').start()
 except Exception as _owe:
     logger.debug(f"[odds-prewarm] failed to start: {_owe}")
 
@@ -31436,7 +31439,7 @@ def _prewarm_predictions_cache():
         # Disk seed already put a usable slate in memory — do NOT force-rebuild
         # on the boot path. Stale-while-revalidate refreshes on the first sport
         # page hit. Only cold-build sports that have nothing cached.
-        _ck = f"{_sport}_upcoming_predictions_v8"
+        _ck = f"{_sport}_upcoming_predictions_v10"
         _entry = _PREDICTIONS_CACHE.get(_ck)
         if isinstance(_entry, dict) and _entry.get('data'):
             logger.info(f"[preds-prewarm] {_sport} already seeded — skip force rebuild")
@@ -31472,7 +31475,8 @@ except Exception as _sde:
     logger.debug(f"[soccer-results-disk] startup seed failed: {_sde}")
 
 try:
-    threading.Thread(target=_prewarm_predictions_cache, daemon=True, name='preds-prewarm').start()
+    if _os.environ.get('PL_EAGER_WARM', '0') == '1':
+        threading.Thread(target=_prewarm_predictions_cache, daemon=True, name='preds-prewarm').start()
 except Exception as _ppe:
     logger.debug(f"[preds-prewarm] failed to start: {_ppe}")
 
@@ -31492,7 +31496,8 @@ def _prewarm_nba_results_memo():
 
 
 try:
-    threading.Thread(target=_prewarm_nba_results_memo, daemon=True, name='nba-results-warm').start()
+    if _os.environ.get('PL_EAGER_WARM', '0') == '1':
+        threading.Thread(target=_prewarm_nba_results_memo, daemon=True, name='nba-results-warm').start()
 except Exception as _npe:
     logger.debug(f"[nba-results-warm] failed to start: {_npe}")
 
@@ -86884,17 +86889,20 @@ def _web_game_counts():
         # Game dates are US (Eastern) dates; the live server clock is UTC.
         from zoneinfo import ZoneInfo as _ZI
         today_et = datetime.now(_ZI('America/New_York')).date()
-        conn = get_db_connection()
-        rows = conn.execute(
-            "SELECT sport, "
-            "SUM(CASE WHEN date(game_date) = ? THEN 1 ELSE 0 END), "
-            "SUM(CASE WHEN date(game_date) BETWEEN ? AND ? THEN 1 ELSE 0 END) "
-            "FROM predictions GROUP BY sport",
-            (today_et.isoformat(), today_et.isoformat(), (today_et + timedelta(days=6)).isoformat()),
-        ).fetchall()
+        conn = sqlite3.connect(f'file:{DATABASE}?mode=ro', uri=True, timeout=.1)
+        try:
+            _deadline = _time.monotonic()+.15
+            conn.set_progress_handler(lambda: int(_time.monotonic()>_deadline), 1000)
+            rows = conn.execute(
+                "SELECT sport,SUM(CASE WHEN game_date<? THEN 1 ELSE 0 END),COUNT(*) "
+                "FROM predictions WHERE game_date>=? AND game_date<? GROUP BY sport",
+                ((today_et+timedelta(days=1)).isoformat(), today_et.isoformat(),
+                 (today_et+timedelta(days=7)).isoformat()),
+            ).fetchall()
+        finally:
+            conn.close()
         for row in rows:
             counts[row[0]] = (int(row[1] or 0), int(row[2] or 0))
-        conn.close()
     except Exception as exc:
         logger.debug(f"[web] game counts failed: {exc}")
     _WEB_COUNTS['ts'] = now
@@ -93541,6 +93549,9 @@ def _inject_mlb_blog_hub(html):
 
 def _inject_sport_blog_hub(html, sport, filter_date=None):
     """Crawlable preview links on a sport picks page. No model changes."""
+    from card_pagination import active as _cards_api_window
+    if _cards_api_window():
+        return html
     if not html or not isinstance(html, str):
         return html
     try:
@@ -98273,7 +98284,8 @@ def sport_predictions__ncaaf(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -98794,6 +98806,10 @@ def sport_predictions__ncaaf(sport, filter_date=None):
                 sorted_dates = []
                 default_pick_date = filter_date
 
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
+
     _book_priority = []
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
@@ -99142,7 +99158,8 @@ def sport_predictions__mlb(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -99693,6 +99710,10 @@ def sport_predictions__mlb(sport, filter_date=None):
                 sorted_dates = []
                 default_pick_date = filter_date
 
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
+
     _book_priority = []
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
@@ -100039,7 +100060,8 @@ def sport_predictions__nhl(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -100570,6 +100592,10 @@ def sport_predictions__nhl(sport, filter_date=None):
                 sorted_dates = []
                 default_pick_date = filter_date
 
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
+
     _book_priority = []
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
@@ -100916,7 +100942,8 @@ def sport_predictions__nba(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -101433,6 +101460,10 @@ def sport_predictions__nba(sport, filter_date=None):
                 sorted_dates = []
                 default_pick_date = filter_date
 
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
+
     _book_priority = []
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
@@ -101779,7 +101810,8 @@ def sport_predictions__ncaab(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -102294,6 +102326,10 @@ def sport_predictions__ncaab(sport, filter_date=None):
                 grouped_predictions = {}
                 sorted_dates = []
                 default_pick_date = filter_date
+
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
 
     _book_priority = []
     for _dk in sorted_dates:
@@ -102641,7 +102677,8 @@ def sport_predictions__ncaaw(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -103156,6 +103193,10 @@ def sport_predictions__ncaaw(sport, filter_date=None):
                 grouped_predictions = {}
                 sorted_dates = []
                 default_pick_date = filter_date
+
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
 
     _book_priority = []
     for _dk in sorted_dates:
@@ -103514,7 +103555,8 @@ def sport_predictions__wnba(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -104036,6 +104078,10 @@ def sport_predictions__wnba(sport, filter_date=None):
                 sorted_dates = []
                 default_pick_date = filter_date
 
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
+
     _book_priority = []
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
@@ -104382,7 +104428,8 @@ def sport_predictions__cfl(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -104898,6 +104945,10 @@ def sport_predictions__cfl(sport, filter_date=None):
                 sorted_dates = []
                 default_pick_date = filter_date
 
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
+
     _book_priority = []
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
@@ -105273,7 +105324,8 @@ def sport_predictions__soccer(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -105872,6 +105924,10 @@ def sport_predictions__soccer(sport, filter_date=None):
                 sorted_dates = []
                 default_pick_date = filter_date
 
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
+
     _book_priority = []
     for _dk in sorted_dates:
         _book_priority.extend(grouped_predictions.get(_dk, []))
@@ -106222,7 +106278,8 @@ def sport_predictions__tennis(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -106736,6 +106793,10 @@ def sport_predictions__tennis(sport, filter_date=None):
                 grouped_predictions = {}
                 sorted_dates = []
                 default_pick_date = filter_date
+
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
 
     _book_priority = []
     for _dk in sorted_dates:
@@ -107083,7 +107144,8 @@ def sport_predictions__ufc(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -107597,6 +107659,10 @@ def sport_predictions__ufc(sport, filter_date=None):
                 grouped_predictions = {}
                 sorted_dates = []
                 default_pick_date = filter_date
+
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
 
     _book_priority = []
     for _dk in sorted_dates:
@@ -107946,7 +108012,8 @@ def sport_predictions__golf(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -108460,6 +108527,10 @@ def sport_predictions__golf(sport, filter_date=None):
                 grouped_predictions = {}
                 sorted_dates = []
                 default_pick_date = filter_date
+
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
 
     _book_priority = []
     for _dk in sorted_dates:
@@ -108811,7 +108882,8 @@ def sport_predictions(sport, filter_date=None):
     selected_slug = request.args.get('league', '') if sport == 'SOCCER' else ''
     selected_region = request.args.get('region', '') if sport == 'SOCCER' else ''
     _use_page_cache = str(sport or '').upper() in ('NFL', 'SOCCER', 'NCAAF')
-    if (not current_user.is_authenticated) or _use_page_cache:
+    from card_pagination import active as _card_window_active
+    if not _card_window_active() and ((not current_user.is_authenticated) or _use_page_cache):
         cache_key = (
             f"pred_page::v37::{sport}::{filter_date or 'all'}::"
             f"{selected_slug or 'default'}::{selected_region or 'allregions'}"
@@ -109336,6 +109408,10 @@ def sport_predictions(sport, filter_date=None):
                 grouped_predictions = {}
                 sorted_dates = []
                 default_pick_date = filter_date
+
+    from card_pagination import select as _select_card_window
+    predictions, grouped_predictions, sorted_dates, default_pick_date = _select_card_window(
+        predictions, grouped_predictions, sorted_dates, default_pick_date)
 
     _book_priority = []
     for _dk in sorted_dates:
@@ -130720,3 +130796,7 @@ if __name__ == '__main__':
 
     _warmup_isolate_pages()
     app.run(debug=False, host='0.0.0.0', port=port, use_reloader=False, threaded=True)
+
+# Recover only recorded NCAAB result fields; never invent historical forecasts.
+from result_field_recovery import install as _install_result_field_recovery
+_install_result_field_recovery(app)
