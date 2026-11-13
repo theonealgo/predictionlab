@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 from odds_engine.model.prop_math import VERSION
 from sports_props_hub import LEAGUES, preview
 from prop_models import VERSION as MODEL_VERSION
+from prop_player_pool import VERSION as PLAYER_POOL_VERSION
 
 ET = ZoneInfo("America/New_York")
 TTL = 600
@@ -119,7 +120,8 @@ def ensure(site, day, selected=None):
     for league in order:
         entry = cached.get(league)
         stamp = float((entry or {}).get("ts") or 0)
-        if not entry or time.time()-stamp >= TTL or ((entry.get("payload") or {}).get("model_registry_version") != MODEL_VERSION):
+        if not entry or time.time()-stamp >= TTL or ((entry.get("payload") or {}).get("model_registry_version") != MODEL_VERSION) \
+                or ((entry.get("payload") or {}).get("player_pool_version") != PLAYER_POOL_VERSION):
             _enqueue(site, league, day, 0 if league == selected else 10)
     with _LOCK:
         if _THREAD is None or not _THREAD.is_alive():
@@ -166,6 +168,7 @@ def build_one(site, league, day):
             pass
     payload["requested_date"] = day
     payload["model_registry_version"] = MODEL_VERSION
+    payload["player_pool_version"] = PLAYER_POOL_VERSION
     entry = {"ts": time.time(), "payload": payload}
     from prop_forecast_store import capture
     from prop_models import persist_training

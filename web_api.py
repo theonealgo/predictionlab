@@ -22,6 +22,28 @@ from flask import Blueprint, current_app, jsonify, render_template, request
 api = Blueprint('pl_web_api', __name__)
 
 
+@api.route('/api/web/blog')
+def api_blog():
+    from blog_feed import feed, PAGE_SIZE, MAX_PAGE_SIZE
+    import NHL77FINAL as site
+    try:
+        offset = int(request.args.get('offset', '0'))
+        limit = int(request.args.get('limit', str(PAGE_SIZE)))
+        section = request.args.get('section') or None
+        if section not in (None, 'news', 'latest') or offset < 0 or not 1 <= limit <= MAX_PAGE_SIZE:
+            raise ValueError
+    except (TypeError, ValueError):
+        return jsonify(error='Choose a valid article page.'), 400
+    try:
+        payload = feed(site._blog_template_posts(), section, offset, limit)
+    except Exception:
+        current_app.logger.exception('Published blog articles unavailable')
+        return jsonify(error='Articles could not be loaded. Please retry.'), 503
+    response = jsonify(payload)
+    response.headers['Cache-Control'] = 'public, max-age=30'
+    return response
+
+
 @api.record_once
 def _start_prop_workers(state):
     if state.app.testing:
@@ -799,6 +821,10 @@ def api_cards(slug):
                              args=(slug, tier, app, request.host, request.headers.get('Cookie')),
                              daemon=True).start()
     payload['refreshing'] = (slug, tier) in _CARDS_BUILDING
+    if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB'}:
+        from market_card_refresh import refresh as refresh_market_cards
+        from NHL77FINAL import DATABASE
+        payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)
     limit = request.args.get('limit', type=int)
     if limit:
         payload = dict(payload, cards=payload['cards'][:limit])

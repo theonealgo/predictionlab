@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getJson } from '../api.js';
 import './SportsProps.css';
-import { filterPropResults, modelPropCounts, modelCounts } from '../propsView.js';
+import { filterPropResults, modelPropCounts, modelCounts, matchesPropSide } from '../propsView.js';
 
 const SPORTS = ['NBA', 'NFL', 'NHL', 'MLB', 'NCAAB', 'NCAAW', 'NCAAF', 'WNBA', 'CFL', 'SOCCER', 'UFC', 'TENNIS', 'GOLF'];
 const nameOf = (code) => code === 'SOCCER' ? 'Soccer' : code;
@@ -37,9 +37,13 @@ export default function PropsPage() {
   const [market, setMarket] = useState('all');
   const [model, setModel] = useState('all');
   const [lineType, setLineType] = useState('all');
+  const [side, setSide] = useState(() => {
+    const requestedSide = (new URLSearchParams(window.location.search).get('side') || '').toUpperCase();
+    return ['OVER', 'UNDER'].includes(requestedSide) ? requestedSide : 'all';
+  });
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('player') || '');
   const [visibleResults, setVisibleResults] = useState(80);
-  useEffect(() => { setVisibleResults(80); }, [day, resultWindow, league, model, market, search, lineType]);
+  useEffect(() => { setVisibleResults(80); }, [day, resultWindow, league, model, market, search, lineType, side]);
 
   useEffect(() => {
     let alive = true;
@@ -87,8 +91,8 @@ export default function PropsPage() {
     ...(results?.items || []).map((row) => row.prop_type),
   ].filter(Boolean))].sort();
   const resultGame = day === propsDay && resultWindow === 'night' ? selectedGame : '';
-  const filtered = useMemo(() => filterPropResults(results?.items, { model, market, search, lineType, game: resultGame }),
-  [results, market, model, search, lineType, resultGame]);
+  const filtered = useMemo(() => filterPropResults(results?.items, { model, market, search, lineType, game: resultGame, side }),
+  [results, market, model, search, lineType, resultGame, side]);
   const typeSummaries = modelPropCounts(filtered);
   const modelSummaries = modelCounts(filtered, results?.models);
   const firstModelDate = (results?.models || [])
@@ -100,6 +104,7 @@ export default function PropsPage() {
     const query = new URLSearchParams({ date, results_date: resultDate, results_window: resultWindow });
     if (code) query.set('league', code);
     if (game) query.set('game', game);
+    if (side !== 'all') query.set('side', side);
     const link = document.createElement('a');
     link.href = `/sports-props?${query}`;
     document.body.appendChild(link);
@@ -152,6 +157,9 @@ export default function PropsPage() {
               <option value="all">All line types</option><option value="market">Market lines</option>
               <option value="pl">PL lines</option>
             </select></label>
+            <label>Over / Under<select aria-label="Prop pick side" value={side} onChange={e => setSide(e.target.value)}>
+              <option value="all">Both</option><option value="OVER">Over</option><option value="UNDER">Under</option>
+            </select></label>
           </div>
           {feedError && <p className="pl-empty" role="alert">{feedError} <button onClick={() => setRetry((v) => v + 1)}>Retry</button></p>}
           {!feed && !feedError && <p className="pl-empty">Loading props…</p>}
@@ -161,11 +169,12 @@ export default function PropsPage() {
             const rows = (section.items || []).filter((row) => (!selectedGame || row.game_id === selectedGame)
               && (market === 'all' || market === row.prop_type)
               && (lineType === 'all' || row.line_type === lineType)
+              && matchesPropSide(row, side)
               && (!search || row.player_name.toLowerCase().includes(search.toLowerCase())));
             return <section key={section.league} className="pp-hub-section" data-props-sport={section.league}>
               <div className="pp-hub-section-head"><h2>{nameOf(section.league)}</h2>
-                {!league && <a href={`/sports-props?league=${section.league}&date=${propsDay}`}>Open {nameOf(section.league)} props →</a>}</div>
-              <p className="pp-hub-muted">{section.total == null ? 'Prop count unavailable' : `${section.total} ${section.count_kind || 'available'} props`} · {propsDay}</p>
+                {!league && <a href={`/sports-props?league=${section.league}&date=${propsDay}${side !== 'all' ? `&side=${side}` : ''}`}>Open {nameOf(section.league)} props →</a>}</div>
+              {side !== 'all' && <p className="pp-hub-muted">Showing {rows.length} {side === 'OVER' ? 'Over' : 'Under'} selections matching your filters. Individual models may favor the other side.</p>}
               {!league && section.total > (section.items || []).length && <p className="pp-hub-muted">
                 Previewing {(section.items || []).length} props. Open {nameOf(section.league)} to view all {section.total}.
               </p>}
@@ -173,7 +182,7 @@ export default function PropsPage() {
               {section.refresh_notice && <p className="pp-hub-muted">{section.refresh_notice}</p>}
               {!rows.length && !section.building && <p className="pl-empty">{section.reason || 'No props match these filters.'}</p>}
               {!rows.length && section.next_date && <p className="pp-hub-muted">
-                <a href={`/sports-props?league=${section.league}&date=${section.next_date}`}>Next scheduled date: {section.next_date}</a>
+                <a href={`/sports-props?league=${section.league}&date=${section.next_date}${side !== 'all' ? `&side=${side}` : ''}`}>Next scheduled date: {section.next_date}</a>
               </p>}
               {rows.map((row, index) => <article className="pp-hub-card" key={`${row.player_id}-${row.prop_type}-${row.line}-${index}`}>
                 <h3>{row.player_name}</h3><p className="pp-hub-muted">{row.team}</p>
@@ -183,7 +192,6 @@ export default function PropsPage() {
                   <strong>{row.strong_pick ? 'PL pick' : 'PL lean'}: {row.pick} {row.line}</strong>
                   <strong className="pp-hub-probability">{percentOf(row.pick_probability)}</strong>
                 </div>}
-                {!row.strong_pick && row.pick && <p className="pp-hub-muted">Strong picks require over 61%, at least 10 recent appearances, and model agreement.</p>}
                 {row.recorded_side && <p>Recorded selection: {row.recorded_side} {row.line}</p>}
                 {(row.model_forecasts || []).length ? row.model_forecasts.map((forecast) =>
                   <p className="pp-hub-forecast" key={forecast.model_id}><span>{forecast.model_name}: {forecast.side || 'PASS'} {forecast.side ? row.line : ''}</span>
@@ -208,6 +216,9 @@ export default function PropsPage() {
             <label>Model<select value={model} onChange={(e) => setModel(e.target.value)}>
               <option value="all">All models</option>{(results?.models || []).map((item) =>
                 <option key={item.id} value={item.id}>{item.name}</option>)}
+            </select></label>
+            <label>Over / Under<select aria-label="Prop results pick side" value={side} onChange={e => setSide(e.target.value)}>
+              <option value="all">Both</option><option value="OVER">Over</option><option value="UNDER">Under</option>
             </select></label>
           </div>
           {resultsError && <p className="pl-empty" role="alert">{resultsError} <button onClick={() => setRetry((v) => v + 1)}>Retry</button></p>}

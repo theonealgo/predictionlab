@@ -1,5 +1,6 @@
 (function () {
   'use strict';
+  if (window.self !== window.top) return;
   if (window.plInstallReady) return;
   window.plInstallReady = true;
   var pending = null;

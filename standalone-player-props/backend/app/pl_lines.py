@@ -4,8 +4,50 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import time
 import re
+import hashlib
+import json
+import os
+import threading
 
 _HISTORY_CACHE = {}
+_HISTORY_LOCK = threading.Lock()
+
+
+def _remember_history(key, entry):
+    with _HISTORY_LOCK:
+        _HISTORY_CACHE[key] = entry
+        while len(_HISTORY_CACHE) > 512:
+            _HISTORY_CACHE.pop(next(iter(_HISTORY_CACHE)), None)
+
+
+def _history_snapshot(key):
+    from served_cache import cache_dir
+    identity = hashlib.sha256(json.dumps(key).encode()).hexdigest()
+    return cache_dir() / "props_player_history" / f"{identity}.json"
+
+
+def hydrate_market_histories(league, players, markets, allowed, max_workers=8):
+    """Load each candidate at bounded concurrency before category ranking."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    def hydrate(player):
+        for prop_type in markets:
+            if not allowed(player, prop_type):
+                continue
+            existing = (player.get("stat_observations") or {}).get(prop_type) or []
+            if player.get("history_verified") and len(existing) >= 10:
+                continue
+            stats = history_stats(league, player["player_id"], prop_type)
+            if stats.get("observations"):
+                player.setdefault("stat_observations", {})[prop_type] = stats["observations"]
+                player.setdefault("stat_history", {})[prop_type] = stats["recent_form"]
+                player["history_verified"] = True
+        return player
+
+    if not players:
+        return []
+    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(players)))) as pool:
+        return list(pool.map(hydrate, players))
 
 
 def _history(league, player_id, season=None):
@@ -20,6 +62,14 @@ def _history(league, player_id, season=None):
     cached = _HISTORY_CACHE.get(key)
     if cached and time.time()-cached["ts"] < 21600:
         return cached["body"]
+    snapshot = _history_snapshot(key)
+    try:
+        cached = json.loads(snapshot.read_text())
+        if 0 <= now.timestamp()-cached["ts"] < 21600 and isinstance(cached["body"], dict):
+            _remember_history(key, cached)
+            return cached["body"]
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
     try:
         url = f"https://site.web.api.espn.com/apis/common/v3/sports/{cfg['espn_sport']}/{cfg['espn_league']}/athletes/{player_id}/gamelog"
         response = requests.get(url, params={"season": season} if season else None, timeout=8)
@@ -27,7 +77,15 @@ def _history(league, player_id, season=None):
         body = response.json()
     except Exception:
         body = {}
-    _HISTORY_CACHE[key] = {"ts": time.time(), "body": body}
+    _remember_history(key, {"ts": time.time(), "body": body})
+    if body:
+        try:
+            snapshot.parent.mkdir(parents=True, exist_ok=True)
+            temporary = snapshot.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+            temporary.write_text(json.dumps(_HISTORY_CACHE.get(key) or {"ts": time.time(), "body": body}))
+            temporary.replace(snapshot)
+        except OSError:
+            pass
     return body
 
 

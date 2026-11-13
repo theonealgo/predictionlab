@@ -324,8 +324,8 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
     """Eligible prop-player pool for a league slate.
 
     Pulls ESPN rosters for scheduled teams, attaches depth-chart ranks,
-    keeps only position-eligible players, then caps to top ~35 per role
-    by relevance (not EV).
+    keeps position-eligible players. Category-specific ranking happens only
+    after verified stat histories are loaded; do not truncate this roster pool.
     """
     cfg = LEAGUE_CONFIG.get(league, {})
     espn_sport = cfg.get("espn_sport", "")
@@ -536,16 +536,14 @@ def build_top_players(league: str, schedule_rows: List[Dict]) -> List[Dict]:
                 pid = str(game.get(f"{side}_team_id") or "")
                 if name:
                     _add_player(pid, name, "UFC", position="Fighter", depth_rank=1)
-        kept, _audit = select_top_pool(players, league=league)
-        return kept
+        return players
 
     for game in schedule_rows:
         _fetch_roster(game.get("home_team_id", ""), game["home_team"])
         _fetch_roster(game.get("away_team_id", ""), game["away_team"])
 
     if players:
-        kept, _audit = select_top_pool(players, league=league)
-        return kept[:TOP_PLAYER_POOL]
+        return players
 
     # Fallback: do not invent named players — empty pool (page shows no props).
     return []
@@ -825,6 +823,20 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
             roster_resp.raise_for_status()
             roster = roster_resp.json()
             athletes = roster.get("athletes") or []
+            # Removing the overall-name whitelist expands this pool. Load each
+            # team's real metrics with bounded concurrency, not serial fan-out.
+            from concurrent.futures import ThreadPoolExecutor
+            def prefetch(athlete):
+                identity = str(athlete.get("id") or "")
+                status = str((athlete.get("status") or {}).get("type") or "").lower()
+                injury = " ".join(str(value).lower() for value in athlete.get("injuries") or [])
+                if not identity or (status and status != "active") or any(
+                    flag in injury for flag in ("out", "doubtful", "questionable", "injured", "inactive")
+                ):
+                    return identity, None
+                return identity, _fetch_nba_player_metrics(identity, athlete=athlete)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                team_metrics = dict(pool.map(prefetch, athletes))
             for a in athletes:
                 player_id = str(a.get("id") or "")
                 player_name = (a.get("fullName") or a.get("displayName") or "").strip()
@@ -840,8 +852,6 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
                 reasons = []
                 if status and status != "active":
                     reasons.append("inactive_status")
-                if player_key not in _NBA_CONSENSUS_RANK:
-                    reasons.append("not_consensus_top100")
                 if "g league" in player_name.lower() or "g-league" in player_name.lower():
                     reasons.append("g_league_flag")
                 if injuries:
@@ -849,15 +859,16 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
                     if any(flag in injury_blob for flag in ("out", "doubtful", "questionable", "injured", "inactive")):
                         reasons.append("injury_or_not_available")
                 # Fast path: skip expensive gamelog calls for obvious excludes.
-                if any(r in reasons for r in ("not_consensus_top100", "inactive_status", "injury_or_not_available", "g_league_flag")):
+                if any(r in reasons for r in ("inactive_status", "injury_or_not_available", "g_league_flag")):
                     excluded.append({"player_id": player_id, "name": player_name, "team_id": team_id, "reasons": reasons})
                     log_lines.append(f"DROP {player_name} ({team_name}) -> {','.join(reasons)}")
                     continue
 
-                # Keep request-time latency low: by default we avoid per-player live calls.
-                metrics = _fetch_nba_player_metrics(player_id, athlete=a)
+                metrics = team_metrics.get(player_id) or {}
                 if metrics.get("insufficient_data", True):
                     reasons.append("insufficient_data")
+                    excluded.append({"player_id": player_id, "name": player_name, "team_id": team_id, "reasons": reasons})
+                    continue
                 avg_minutes = _clamp(metrics["avg_minutes"], 5.0, 40.0)
                 usage_rate = _clamp(metrics["usage_rate"], 0.05, 0.38)
                 last_10 = metrics["last_10_games_minutes"]
@@ -936,9 +947,9 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
             log_lines.append(f"DROP {p['name']} ({p['team']}) -> team_mismatch")
             continue
         cleaned.append(p)
-    cleaned.sort(key=lambda x: (x.get("consensus_rank", 999), -x["top50_score"]))
+    cleaned.sort(key=lambda x: (x["name"].casefold(), x["player_id"]))
     _append_filter_log(log_lines)
-    return {"players": cleaned[:100], "excluded": excluded}
+    return {"players": cleaned, "excluded": excluded}
 
 
 def _synthetic_prop_lines(league: str, players: List[Dict]) -> List[Dict]:
@@ -1477,8 +1488,9 @@ def fetch_prop_lines(league: str, players: List[Dict], use_real: bool = True) ->
     from .pl_lines import lines_from_players
     fallback = lines_from_players(
         league, players, _LEAGUE_PROP_TYPES.get(league, []),
-        lambda p, pt: market_allowed(league, p.get("role") or position_to_role(league, p.get("position")),
-                                     pt, line_source="pl_model"),
+        lambda p, pt: ("market_rankings" not in p or pt in p["market_rankings"])
+                     and market_allowed(league, p.get("role") or position_to_role(league, p.get("position")),
+                                        pt, line_source="pl_model"),
         endpoint=ODDS_ENGINE_URL, post=requests.post, market_lines=real,
     )
     def key(row):

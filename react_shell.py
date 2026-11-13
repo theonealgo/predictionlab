@@ -47,6 +47,8 @@ _SPORT_PAGE = re.compile(r'^/(%s)-(picks|projections|predictions)/?$' % '|'.join
 _OLD_SPORT_PAGE = re.compile(r'^/(%s|all-sports)-(picks|projections)/?$' % '|'.join(SPORT_NAMES))
 _NEW_SPORT_PAGE = re.compile(r'^/(%s|all-sports)-predictions(/?)$' % '|'.join(SPORT_NAMES))
 _OTHER_PAGES = {
+    '/blog': ('Prediction Lab Blog | predictionlab.io',
+              'Original sports roundups, verified final scores, and the latest from Prediction Lab.'),
     '/sports-props': ('Sports Props | Prediction Lab',
                       'Explore player props by sport and review recorded results by model and prop type.'),
     '/all-sports-predictions': ('All Sports Predictions Today | Prediction Lab',
@@ -205,9 +207,16 @@ class ReactShell:
             f'    <meta property="og:url" content="{CANONICAL}{_esc(path.rstrip("/") or "/")}" />'
         )
         html = re.sub(r'<title>.*?</title>', head, shell, count=1, flags=re.S)
+        if path.rstrip('/') == '/blog':
+            html = html.replace('</head>',
+                                '<meta name="robots" content="index,follow" />'
+                                '<meta property="og:type" content="website" />'
+                                f'<meta property="og:image" content="{CANONICAL}/static/apple-touch-icon.png" />\n</head>', 1)
         chrome = self._visitor_chrome(environ)
         if chrome:
             html = html.replace('</head>', f'<script>window.__PL_CHROME__={chrome}</script>\n</head>', 1)
+        if path.rstrip('/') == '/blog':
+            html = self._blog_index(environ, html)
         if self.add_site_tags:
             try:
                 html = self.add_site_tags(html)
@@ -221,3 +230,28 @@ class ReactShell:
             ('Vary', 'Cookie'),
         ])
         return [b''] if environ.get('REQUEST_METHOD') == 'HEAD' else [body]
+
+    def _blog_index(self, environ, html):
+        import io
+        import json
+        from blog_feed import initial_html
+        sub = {key: value for key, value in environ.items() if key not in ('wsgi.input', 'HTTP_ACCEPT_ENCODING')}
+        sub.update(PATH_INFO='/api/web/blog', QUERY_STRING='', REQUEST_METHOD='GET',
+                   CONTENT_LENGTH='0', HTTP_ACCEPT='application/json')
+        sub['wsgi.input'] = io.BytesIO(b'')
+        status = []
+        fallback = '<div id="root"><a href="/classic/blog">Read the PredictionLab Blog</a></div>'
+        try:
+            chunks = self.wsgi_app(sub, lambda s, h, exc_info=None: status.append(s) or (lambda _b: None))
+            try:
+                payload = json.loads(b''.join(chunks))
+            finally:
+                if hasattr(chunks, 'close'):
+                    chunks.close()
+            if not status or not status[0].startswith('200') or not all(key in payload for key in ('news', 'latest')):
+                return html.replace('<div id="root"></div>', fallback, 1)
+            bootstrap = json.dumps(payload).replace('</', '<\\/').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
+            html = html.replace('</head>', f'<script>window.__PL_BLOG__={bootstrap}</script>\n</head>', 1)
+            return html.replace('<div id="root"></div>', '<div id="root">' + initial_html(payload) + '</div>', 1)
+        except Exception:
+            return html.replace('<div id="root"></div>', fallback, 1)

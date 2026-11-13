@@ -459,6 +459,10 @@ def filter_props_by_eligibility(
             suppressed += 1
             reasons["market_not_for_role"] += 1
             continue
+        if "market_rankings" in p and pt not in p["market_rankings"]:
+            suppressed += 1
+            reasons["outside_category_top100"] += 1
+            continue
         # Synthetic props: when depth rank is known, require featured depth
         # for that role (WR goes deeper than QB). Depth 99 = not on chart.
         if not is_real_line_source(src) and lg in ("NFL", "NCAAF", "CFL"):

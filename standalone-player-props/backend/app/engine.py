@@ -42,6 +42,10 @@ from .player_eligibility import (
     roles_for_league,
     select_top_pool,
 )
+from prop_player_pool import VERSION as PLAYER_POOL_VERSION, select_market_players
+from .pl_lines import hydrate_market_histories
+from .data_sources import _LEAGUE_PROP_TYPES
+from .player_eligibility import market_allowed
 
 
 _CACHE: Dict[str, Dict] = {}
@@ -442,7 +446,6 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         for p in players:
             if not p.get("role"):
                 p["role"] = position_to_role(league, p.get("position") or p.get("role") or "G") or "G"
-        players, pool_audit = select_top_pool(players, league=league)
     else:
         players = build_top_players(league, schedule)
         pool_audit = {
@@ -454,6 +457,12 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             r = p.get("role") or ""
             pool_audit.setdefault("roles", {})
             pool_audit["roles"][r] = pool_audit["roles"].get(r, 0) + 1
+    markets = _LEAGUE_PROP_TYPES.get(league, [])
+    def ranking_allowed(player, prop_type):
+        return market_allowed(league, player.get("role") or position_to_role(league, player.get("position")),
+                              prop_type, line_source="espn_props")
+    players = hydrate_market_histories(league, players, markets, ranking_allowed)
+    players, pool_audit = select_market_players(players, league, markets, ranking_allowed)
     prop_lines = fetch_prop_lines(league, players, use_real=use_real)
     # Drop lines that violate position/market rules before EV ranking.
     by_id_pre = {str(p["player_id"]): p for p in players}
@@ -546,28 +555,18 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     projections, prop_audit = filter_props_by_eligibility(
         projections, by_id, league=league
     )
-    if league == "NBA":
-        projections.sort(
-            key=lambda x: (
-                -(x.get("projection") or 0),
-                -(x.get("confidence_score") or 0),
-                -(x.get("model_agreement") or 0),
-            )
-        )
-    else:
-        # Rank display by pick EV among already-eligible props; depth chart
-        # breaks ties so starters (Gibbs) outrank depth names when EV is flat.
-        projections.sort(
-            key=lambda x: (
-                -(x.get("pick_ev") if x.get("pick_ev") is not None else x.get("ev_over_percent") or -999),
-                -(x.get("confidence_score") or 0),
-                int(x.get("depth_rank") or 99),
-                x.get("player_name") or "",
-            )
-        )
+    for row in projections:
+        row["category_ranking"] = by_id[row["player_id"]]["market_rankings"][row["prop_type"]]
+    for market, coverage in pool_audit["by_market"].items():
+        coverage["published_players"] = len({str(row["player_id"]) for row in projections if row["prop_type"] == market})
+    projections.sort(key=lambda row: (
+        row["prop_type"], row["category_ranking"]["rank"],
+        row.get("player_name") or "", str(row.get("event_id") or ""),
+    ))
     payload = {
         "schema_version": PROP_SCHEMA_VERSION,
         "model_registry_version": "player-props-v1",
+        "player_pool_version": PLAYER_POOL_VERSION,
         "model_validation": {key: {name: value for name, value in artifact.items() if name not in ("model", "training_snapshot")}
                              for key, artifact in model_context.items()},
         "schedule": schedule,
@@ -596,7 +595,8 @@ def get_league_data(league: str) -> Dict:
     key = league.upper()
     now = time.time()
     cached = _CACHE.get(key)
-    if cached and (now - cached["ts"]) < CACHE_TTL_SECONDS and cached["payload"].get("schema_version") == PROP_SCHEMA_VERSION:
+    if cached and (now - cached["ts"]) < CACHE_TTL_SECONDS and cached["payload"].get("schema_version") == PROP_SCHEMA_VERSION \
+            and cached["payload"].get("player_pool_version") == PLAYER_POOL_VERSION:
         return cached["payload"]
     payload = _build_league_payload(key)
     _CACHE[key] = {"ts": now, "payload": payload}
@@ -903,6 +903,9 @@ def filter_props(
             -_prop_pick_prob(x),
         )
     )
+    if any(row.get("category_ranking") for row in out):
+        out.sort(key=lambda row: (row["prop_type"], (row.get("category_ranking") or {}).get("rank", 101),
+                                  str(row.get("player_id") or "")))
     return [{key: value for key, value in row.items()
              if key not in ("input_values", "input_hash", "model_validation")} for row in out]
 

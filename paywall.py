@@ -244,6 +244,7 @@ _PUBLIC_API = frozenset({
     "/api/web/tennis-events", "/api/web/golf", "/api/web/all-sports", "/api/sports",
     "/api/web/results-summary",
     "/api/web/props-navigation",
+    "/api/web/blog",
 })
 _PUBLIC_PAGES = frozenset({
     "/", "/healthz", "/favicon.ico", "/robots.txt", "/sitemap.xml", "/llms.txt", "/ai.txt",

@@ -94,7 +94,17 @@ def preview(league, entry, limit=3, day=None):
                          "Forecasts are updating or verified recent stats are unavailable."})
     exact = payload.get("requested_date") == target_day if isinstance(payload, dict) else False
     known = current and exact and payload.get("availability") in {"ready", "no_fixtures", "no_verified_props", "slate_started"}
-    return {"league": league, "date": target_day, "items": rows[:limit] if limit is not None else rows,
+    items = rows
+    if limit is not None:
+        if payload.get("player_pool_version"):
+            counts, items = Counter(), []
+            for row in rows:
+                if counts[row["prop_type"]] < limit:
+                    items.append(row)
+                    counts[row["prop_type"]] += 1
+        else:
+            items = rows[:limit]
+    return {"league": league, "date": target_day, "items": items,
             "total": len(rows) if dated or known else None, "count_kind": "available",
             "status": payload.get("availability") if exact else ("ready" if dated else "not_loaded"),
             "refresh_notice": payload.get("refresh_notice"),

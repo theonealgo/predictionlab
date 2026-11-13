@@ -7,6 +7,7 @@ import SportPage from './pages/SportPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import PropsPage from './pages/PropsPage.jsx';
 import AllSportsPage from './pages/AllSportsPage.jsx';
+import BlogPage from './pages/BlogPage.jsx';
 import { SPORT_SLUGS } from './data/sportSlugs.js';
 import { prefetchJson } from './api.js';
 
@@ -20,6 +21,7 @@ function appRoute(pathname) {
   const match = clean.match(SPORT_PATH);
   if (match) return { page: 'sport', slug: `${match[1]}-picks`, sport: match[1] };
   if (clean === '/player-props' || clean === '/sports-props') return { page: 'props', slug: null };
+  if (clean === '/blog') return { page: 'blog', slug: null };
   if (ALL_PATHS.includes(clean)) return { page: 'all', slug: null };
   if (clean === '/') return { page: 'home', slug: null };
   return null;
@@ -40,6 +42,7 @@ function pageMeta(route) {
     ];
   }
   if (route.page === 'props') return ['Sports Props | Prediction Lab', 'Explore player props by sport and review recorded results by model and prop type.'];
+  if (route.page === 'blog') return ['Prediction Lab Blog | predictionlab.io', 'Original sports roundups, verified final scores, and the latest from Prediction Lab.'];
   if (route.page === 'all') return ['All Sports Predictions Today | Prediction Lab', "Every sport's AI predictions on one page, with each prediction type's recent record."];
   return [
     'Quantitative sports forecasting model | PredictionLab',
@@ -72,6 +75,7 @@ function appLink(event) {
 function preload(route) {
   if (route.page === 'sport' && route.slug !== 'golf-picks') prefetchJson(`/api/web/sports/${route.slug}/cards`);
   if (route.page === 'all') prefetchJson('/api/web/all-sports');
+  if (route.page === 'blog') prefetchJson('/api/web/blog');
 }
 
 function currentAddress() {
@@ -166,6 +170,7 @@ export default function App() {
         <SportsList activeSlug={route.slug} address={address} />
         <div className="pl-stage">
           {route.page === 'props' && <PropsPage key={address} />}
+          {route.page === 'blog' && <BlogPage />}
           {route.page === 'sport' && <SportPage key={address} slug={route.slug} />}
           {route.page === 'all' && <AllSportsPage key={address} />}
           {route.page === 'home' && <HomePage key={address} />}

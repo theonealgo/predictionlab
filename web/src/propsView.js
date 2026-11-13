@@ -1,8 +1,16 @@
-export function filterPropResults(items, { model = 'all', market = 'all', search = '', lineType = 'all', game = '' } = {}) {
+export function matchesPropSide(row, side = 'all') {
+  if (side === 'all') return true;
+  const selection = row.pick || row.recorded_side;
+  if (selection) return String(selection).toUpperCase() === side;
+  return (row.model_forecasts || []).some(forecast => String(forecast.side || '').toUpperCase() === side);
+}
+
+export function filterPropResults(items, { model = 'all', market = 'all', search = '', lineType = 'all', game = '', side = 'all' } = {}) {
   const query = search.trim().toLowerCase();
   return (items || []).filter(row => (model === 'all' || row.model_id === model)
     && (market === 'all' || row.prop_type === market)
     && (lineType === 'all' || row.line_type === lineType)
+    && matchesPropSide(row, side)
     && (!game || row.game_id === game || String(row.event_id) === game || `${row.league}_${row.event_id}` === game)
     && (!query || String(row.player_name || '').toLowerCase().includes(query)));
 }
