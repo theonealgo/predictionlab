@@ -87130,7 +87130,9 @@ def player_props_api_players():
         supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
         if league not in supported:
             return jsonify({'detail': f'Unsupported league: {league}'}), 400
-        data = engine_mod.get_league_data(league)
+        data = _props_league_data(engine_mod, config_mod, league)
+        if data is None:
+            return jsonify({'league': league, 'building': True, 'count': 0, 'items': []})
         resp = {'league': league, 'count': len(data.get('players', [])), 'items': data.get('players', [])}
         if 'excluded_players' in data:
             resp['excluded_players'] = data['excluded_players']
@@ -87179,24 +87181,12 @@ def _props_disk_save(league, entry):
 
 
 def _props_rebuild(engine_mod, league):
-    try:
-        engine_mod.get_league_data(league)
-        entry = getattr(engine_mod, '_CACHE', {}).get(league)
-        if entry and entry.get('payload') is not None:
-            _props_disk_save(league, entry)
-    except Exception:
-        logger.exception('[props] rebuild failed for %s', league)
-    finally:
-        with _PROPS_LOCK:
-            _PROPS_BUILDING.discard(league)
+    from props_service import ensure
+    ensure(sys.modules[__name__], datetime.now(ZoneInfo('America/New_York')).date().isoformat(), league)
 
 
 def _props_rebuild_in_background(engine_mod, league):
-    with _PROPS_LOCK:
-        if league in _PROPS_BUILDING:
-            return
-        _PROPS_BUILDING.add(league)
-    threading.Thread(target=_props_rebuild, args=(engine_mod, league), daemon=True, name=f'props-{league}').start()
+    _props_rebuild(engine_mod, league)
 
 
 def _props_warm_loop(engine_mod, config_mod):
@@ -87219,12 +87209,8 @@ def _props_warm_loop(engine_mod, config_mod):
 
 
 def _start_props_warm(engine_mod, config_mod):
-    global _PROPS_WARM_STARTED
-    with _PROPS_LOCK:
-        if _PROPS_WARM_STARTED:
-            return
-        _PROPS_WARM_STARTED = True
-    threading.Thread(target=_props_warm_loop, args=(engine_mod, config_mod), daemon=True, name='props-warm').start()
+    from props_service import start_daily
+    start_daily(sys.modules[__name__])
 
 
 def _props_league_data(engine_mod, config_mod, league):
@@ -87232,46 +87218,18 @@ def _props_league_data(engine_mod, config_mod, league):
 
     Returns None only when nothing was ever saved; the build then runs in the background.
     """
-    _PROPS_VIEWED[league] = _time.time()
-    _start_props_warm(engine_mod, config_mod)
-    cache = getattr(engine_mod, '_CACHE', {})
-    cached = cache.get(league)
-    if not (cached and cached.get('payload') is not None):
-        saved = _props_disk_load(league)
-        if saved:
-            cached = {'ts': float(saved['ts']), 'payload': saved['payload']}
-            cache[league] = cached
-    ttl = int(getattr(config_mod, 'CACHE_TTL_SECONDS', 600) or 600)
-    if cached and cached.get('payload') is not None:
-        if _time.time() - cached['ts'] >= ttl:
-            _props_rebuild_in_background(engine_mod, league)
-        return cached['payload']
-    _props_rebuild_in_background(engine_mod, league)
-    return None
+    from props_service import ensure, entries
+    site = sys.modules[__name__]
+    day = datetime.now(ZoneInfo('America/New_York')).date().isoformat()
+    ensure(site, day, league)
+    saved = entries(site, day).get(league)
+    return saved.get('payload') if saved else None
 
 
 def _props_preload():
-    """After a start or deploy: build, one at a time, the in-season leagues that have no saved props on disk.
-
-    Leagues with a saved copy are left alone (a visitor's view refreshes them in the background), and
-    nothing here joins the 10-minute warm loop: each build is ~40 s of CPU on the single worker.
-    """
-    _time.sleep(180)
-    try:
-        engine_mod, config_mod = _load_props_modules()
-    except Exception:
-        return
-    for league in getattr(config_mod, 'SUPPORTED_LEAGUES', []):
-        if _props_offseason_payload(league) is not None or _props_disk_load(league):
-            continue
-        if getattr(engine_mod, '_CACHE', {}).get(league):
-            continue
-        with _PROPS_LOCK:
-            if league in _PROPS_BUILDING:
-                continue
-            _PROPS_BUILDING.add(league)
-        _props_rebuild(engine_mod, league)
-        _time.sleep(30)
+    """Compatibility entry point for the shared delayed, isolated publication queue."""
+    from props_service import start_daily
+    start_daily(sys.modules[__name__])
 
 
 @app.route('/player-props-api/props')
@@ -87574,7 +87532,7 @@ def _query_prop_results(league: str, for_date: str | None = None):
 
 
 if _os.environ.get('PL_SNAPSHOT_BUILD') != '1' and _os.environ.get('PL_PROPS_PRELOAD', '1') != '0':
-    threading.Thread(target=_props_preload, daemon=True, name='props-preload').start()
+    _props_preload()
 
 
 @app.route('/player-props-api/results')
@@ -87613,7 +87571,10 @@ def player_props_api_diagnostics():
         supported = set(getattr(config_mod, 'SUPPORTED_LEAGUES', []))
         if league not in supported:
             return jsonify({'detail': f'Unsupported league: {league}'}), 400
-        return jsonify(engine_mod.get_diagnostics(league))
+        data = _props_league_data(engine_mod, config_mod, league)
+        if data is None:
+            return jsonify({'league': league, 'building': True, 'count': 0, 'items': []})
+        return jsonify(engine_mod.get_diagnostics(league, data=data))
     except Exception as exc:
         return jsonify({'detail': str(exc)}), 500
 

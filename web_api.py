@@ -50,8 +50,8 @@ def _start_prop_workers(state):
         return
     import NHL77FINAL as site
     if os.getenv('PL_PROP_SETTLEMENT', '1') == '1':
-        from prop_settlement import start_worker
-        start_worker(site.DATABASE)
+        from props_service import start_settlement
+        start_settlement(site)
     if os.getenv('PL_PROP_PUBLICATION', '1') == '1':
         from props_service import start_daily
         start_daily(site)
@@ -138,17 +138,20 @@ def api_props_hub():
         if not selected or selected == league:
             sections.append(section)
     from prop_forecast_store import capture
-    from prop_settlement import start_worker
     recorded = 0
     try:
-        recorded = capture(site.DATABASE, sections)
-        if recorded and not current_app.testing:
-            start_worker(site.DATABASE)
         from prop_forecast_store import _aware
         now = datetime.now(ZoneInfo('UTC'))
         expected = sum(bool(forecast.get('side')) for section in sections for row in section.get('items') or []
                        if _aware(row.get('event_start')) and _aware(row['event_start']) > now
                        for forecast in row.get('model_forecasts') or [])
+        published = bool(sections) and all(
+            ((entries.get(section['league']) or {}).get('payload') or {}).get('publication_captured')
+            for section in sections if section.get('items'))
+        recorded = expected if published else capture(site.DATABASE, sections)
+        if recorded and not current_app.testing:
+            from props_service import start_settlement
+            start_settlement(site)
         tracking_available = recorded >= expected
     except Exception:
         current_app.logger.exception('Prospective prop capture failed')

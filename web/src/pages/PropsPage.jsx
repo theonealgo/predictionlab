@@ -131,7 +131,7 @@ export default function PropsPage() {
             <option value="">All sports</option>
             {SPORTS.map(code => {
               const count = sportCounts[code];
-              const suffix = !me?.premium ? '' : !count ? ' — Loading…' : count.count == null ? ' — Unavailable'
+              const suffix = !me?.premium ? '' : !count || ['not_loaded', 'queued', 'building'].includes(count.status) ? ' — Updating…' : count.count == null ? ' — Unavailable'
                 : ` (${count.count} ${count.kind} props)`;
               return <option key={code} value={code}>{nameOf(code)}{suffix}</option>;
             })}

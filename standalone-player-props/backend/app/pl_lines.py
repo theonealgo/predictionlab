@@ -27,10 +27,18 @@ def _history_snapshot(key):
 
 
 def hydrate_market_histories(league, players, markets, allowed, max_workers=8):
+    return list(iter_market_histories(league, players, markets, allowed, max_workers))
+
+
+def iter_market_histories(league, players, markets, allowed, max_workers=None):
     """Load each candidate at bounded concurrency before category ranking."""
     from concurrent.futures import ThreadPoolExecutor
+    from itertools import islice
+    max_workers = max(1, int(max_workers or os.getenv("PL_PROPS_HISTORY_WORKERS", "8")))
 
     def hydrate(player):
+        player = {**player, "stat_observations": dict(player.get("stat_observations") or {}),
+                  "stat_history": dict(player.get("stat_history") or {})}
         for prop_type in markets:
             if not allowed(player, prop_type):
                 continue
@@ -44,10 +52,10 @@ def hydrate_market_histories(league, players, markets, allowed, max_workers=8):
                 player["history_verified"] = True
         return player
 
-    if not players:
-        return []
-    with ThreadPoolExecutor(max_workers=max(1, min(max_workers, len(players)))) as pool:
-        return list(pool.map(hydrate, players))
+    source = iter(players)
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        while batch := list(islice(source, max_workers)):
+            yield from pool.map(hydrate, batch)
 
 
 def _history(league, player_id, season=None):

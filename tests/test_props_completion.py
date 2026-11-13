@@ -154,7 +154,8 @@ class CompletionTests(unittest.TestCase):
             "requested_date": "2030-11-10", "availability": "no_fixtures", "props": []}}
         with patch.object(props_service, "_QUEUE", queue), \
              patch.object(props_service, "entries", return_value={"NBA": previous}), \
-             patch.object(props_service, "build_one", side_effect=RuntimeError("offline")), \
+             patch.object(props_service, "run_isolated", side_effect=RuntimeError("offline")), \
+             patch.object(props_service, "_NOT_BEFORE", 0), \
              patch.dict(props_service._CACHE, clear=True), patch.dict(props_service._STATE, clear=True):
             with self.assertLogs(props_service.logger, level="ERROR"), self.assertRaises(StopIteration):
                 props_service._loop()

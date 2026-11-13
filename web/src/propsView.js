@@ -1,3 +1,10 @@
+export function propsAvailabilityBadge(items = []) {
+  const known = items.map(item => item?.count).filter(Number.isInteger);
+  if (known.length) return `(${known.reduce((sum, value) => sum + value, 0)}${known.length < items.length ? '+' : ''} props)`;
+  if (!items.length || items.some(item => !item || ['not_loaded', 'queued', 'building'].includes(item.status))) return 'Updating…';
+  return 'N/A';
+}
+
 export function matchesPropSide(row, side = 'all') {
   if (side === 'all') return true;
   const selection = row.pick || row.recorded_side;

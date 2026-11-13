@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 from pathlib import Path
 import statistics
 import sqlite3
@@ -138,7 +139,7 @@ def train_xgboost(league, prop_type, players, as_of):
         from xgboost import XGBClassifier
         def classifier():
             return XGBClassifier(n_estimators=100, max_depth=2, learning_rate=0.05, min_child_weight=5,
-                                 reg_lambda=10, random_state=42, n_jobs=2, objective="binary:logistic",
+                                 reg_lambda=10, random_state=42, n_jobs=int(os.getenv("PL_PROP_MODEL_THREADS", "2")), objective="binary:logistic",
                                  eval_metric="logloss", monotone_constraints=(0, 0, 0, 0, 0, -1, -1, 0))
         model = classifier()
         model.fit(np.asarray([row[1] for row in train]), np.asarray([row[2] for row in train]))

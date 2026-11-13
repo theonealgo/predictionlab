@@ -43,7 +43,7 @@ from .player_eligibility import (
     select_top_pool,
 )
 from prop_player_pool import VERSION as PLAYER_POOL_VERSION, select_market_players
-from .pl_lines import hydrate_market_histories
+from .pl_lines import iter_market_histories as hydrate_market_histories
 from .data_sources import _LEAGUE_PROP_TYPES
 from .player_eligibility import market_allowed
 
@@ -910,14 +910,14 @@ def filter_props(
              if key not in ("input_values", "input_hash", "model_validation")} for row in out]
 
 
-def get_diagnostics(league: str = "NBA") -> Dict:
+def get_diagnostics(league: str = "NBA", data=None) -> Dict:
     """
     NBA Props ML pipeline audit.
     Returns: feature_importance, distribution_stability, ev_vs_hitrate divergence.
     Uses the already-cached payload so no extra API calls are needed.
     """
     key = league.upper()
-    data = get_league_data(key)
+    data = get_league_data(key) if data is None else data
     props_list = data.get("props") or []
 
     if not props_list:

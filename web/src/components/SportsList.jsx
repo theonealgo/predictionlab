@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getJson } from '../api.js';
 import { SOCCER_LEAGUES } from '../data/sportNav.js';
 import { publicPath } from '../data/sportSlugs.js';
+import { propsAvailabilityBadge } from '../propsView.js';
 
 // The left menu: every sport with its status, then a line, then the sports grouped by kind
 // (Football, Basketball, ...). A group with more than one entry opens into a list; the group holding
@@ -92,11 +93,9 @@ export default function SportsList({ activeSlug, address }) {
     date: propsDate, ...(key ? { league: key } : {}), ...(game ? { game } : {}),
   })}`;
   const propsBadge = (keys) => {
-    const known = keys.map(key => propsByKey[key]?.count).filter(value => Number.isInteger(value));
     const reasons = keys.filter(key => propsByKey[key]?.count == null)
       .map(key => `${key}: ${propsByKey[key]?.reason || 'Availability has not loaded.'}`).join(' ');
-    if (!known.length) return <span className="pl-nav-count" title={reasons}>N/A</span>;
-    return <span className="pl-nav-count" title={reasons || undefined}>({known.reduce((sum, value) => sum + value, 0)}{known.length < keys.length ? '+' : ''} props)</span>;
+    return <span className="pl-nav-count" title={reasons || undefined}>{propsAvailabilityBadge(keys.map(key => propsByKey[key]))}</span>;
   };
 
   return (
