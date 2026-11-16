@@ -207,6 +207,11 @@ def run_commit(sha: str, port: int, rounds: int, min_seconds: int, timeout: floa
 
     log_path = log_dir / f"gunicorn_{sha[:8]}.log"
     env = dict(os.environ, PORT=str(port), PYTHONUNBUFFERED="1")
+    # Gate must exercise cold card builds; production sets PL_BOOT_GRACE_S via render_start.
+    env.setdefault("PL_BOOT_GRACE_S", "0")
+    # macOS gate hosts: avoid ObjC-initialize-after-fork SIGKILL (see gunicorn.conf.py).
+    if sys.platform == "darwin":
+        env.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
     env.pop("RENDER", None)
     log = open(log_path, "w")
     master = subprocess.Popen(

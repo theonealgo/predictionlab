@@ -4,6 +4,13 @@ Dashboard start commands that omit `--worker-class` still pick up gthread here.
 Prefer `bash render_start.sh` on Render so /data DB seeding and 8 threads apply.
 """
 import os
+import sys
+
+# macOS + gunicorn: ObjC can initialize on a background thread before fork(); the
+# child then SIGKILLs itself (prepush gate mis-labels that as OOM). Linux/Render
+# is unaffected. Set before workers fork.
+if sys.platform == "darwin":
+    os.environ.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
 
 # Local only: the project folder (it holds .pushgit) serves just the 5122 site via
 # ./run_local.sh. Test servers run from a copy (qa/test_copy.py) and never take 5122.
