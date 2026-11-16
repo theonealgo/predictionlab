@@ -210,8 +210,9 @@ def run_commit(sha: str, port: int, rounds: int, min_seconds: int, timeout: floa
     # Gate must exercise cold card builds; production sets PL_BOOT_GRACE_S via render_start.
     env.setdefault("PL_BOOT_GRACE_S", "0")
     # macOS gate hosts: avoid ObjC-initialize-after-fork SIGKILL (see gunicorn.conf.py).
+    # Force-assign — setdefault is not enough if the parent exported an empty value.
     if sys.platform == "darwin":
-        env.setdefault("OBJC_DISABLE_INITIALIZE_FORK_SAFETY", "YES")
+        env["OBJC_DISABLE_INITIALIZE_FORK_SAFETY"] = "YES"
     env.pop("RENDER", None)
     log = open(log_path, "w")
     master = subprocess.Popen(

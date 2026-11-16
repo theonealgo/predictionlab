@@ -1,0 +1,34 @@
+# Local Render-shaped smoke test (Docker Desktop).
+# Usage:
+#   docker compose -f docker-compose.render.yml up --build
+# Then open http://127.0.0.1:10000/
+#
+# /data persists across restarts like Render's disk (XGB pickle cache, served pages).
+services:
+  site:
+    build:
+      context: .
+      dockerfile: Dockerfile.render
+    ports:
+      - "10000:10000"
+    environment:
+      PORT: "10000"
+      RENDER: "1"
+      PL_EAGER_WARM: "0"
+      PL_WEB_WARM: "0"
+      PL_BOOT_GRACE_S: "180"
+      PL_BUILD_SLOTS: "1"
+      GUNICORN_THREADS: "4"
+      # Optional: point at real secrets if you need login/paywall locally
+      # DATABASE: /data/sports_predictions_original.db
+    volumes:
+      - pl_render_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+volumes:
+  pl_render_data:
