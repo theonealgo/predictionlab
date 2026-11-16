@@ -256,7 +256,8 @@ _MANUAL_BANNER_ITEMS = [
 ]
 _SHARE_IMAGE_CACHE_DIR = _os_v2.path.join(_os_v2.path.dirname(_os_v2.path.abspath(__file__)), '.cache', 'share_images')
 _SHARE_TOKEN_RE = re.compile(r'^[a-f0-9]{32}$')
-_SHARE_IMAGE_TTL_SECONDS = 3600
+# Align with web_cards keep window — a 1h TTL left React feeds pointing at 410 jpgs.
+_SHARE_IMAGE_TTL_SECONDS = 7 * 24 * 3600
 _SHARE_IMAGE_TTL_SECONDS__wnba = 7 * 24 * 3600
 
 

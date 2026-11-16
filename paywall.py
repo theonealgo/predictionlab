@@ -391,8 +391,10 @@ def free_card(source, metadata=None, logged_in=False):
 def free_cards_payload(payload, logged_in=False):
     cards = [free_card(card.get("html") or "", card, logged_in)
              for card in payload.get("cards") or [] if isinstance(card, dict)]
+    paging = {k: payload[k] for k in ("offset", "nextOffset", "hasMore", "building", "refreshing", "retryAfter")
+              if k in payload}
     return {"cards": cards, "total": payload.get("total", len(cards)), "css": PUBLIC_CARD_CSS,
-            "shareImage": "", "sport": payload.get("sport", "")}
+            "shareImage": "", "sport": payload.get("sport", ""), **paging}
 
 
 def _prediction_path(path):
@@ -401,9 +403,25 @@ def _prediction_path(path):
 
 def _results_path(path):
     return (bool(_RESULT_PATH.match(path) or _RESULT_ALIAS.match(path))
-            or path.startswith(("/historic-results/", "/share/results/", "/share/daily-report/"))
-            or path in ("/daily-report", "/last-season-results", "/all-sports-results",
-                        "/historic-results", "/cfl/results-share.jpg", "/ufc/api/results")
+            or path.startswith((
+                "/historic-results/",
+                "/share/results/",
+                "/share/daily-report/",
+                "/share/predictions/",  # picks social jpg + /view/ (same as results share)
+            ))
+            or path in (
+                "/daily-report",
+                "/last-season-results",
+                "/all-sports-results",
+                "/historic-results",
+                "/cfl/results-share.jpg",
+                "/cfl/share.jpg",
+                "/tennis/share.jpg",
+                "/tennis-picks/share.jpg",
+                "/ufc/share.jpg",
+                "/ufc-picks/share.jpg",
+                "/ufc/api/results",
+            )
             or bool(re.fullmatch(rf"/sport/{_SPORT_RE}/spreads/results", path, re.I))
             or bool(re.match(r"^/api/web/sports/[^/]+/results/?$", path)))
 

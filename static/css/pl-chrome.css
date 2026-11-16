@@ -491,3 +491,56 @@ footer.site-directory-footer .pl-footer-social a {
 .pl-drawer-account {
   display: contents;
 }
+
+/* Fixed left jump control — long picks/results pages */
+.pl-page-jump {
+  position: fixed;
+  left: 12px;
+  bottom: 22px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  width: 44px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.12);
+}
+
+.pl-page-jump button {
+  appearance: none;
+  margin: 0;
+  padding: 0;
+  width: 44px;
+  height: 34px;
+  border: 0;
+  background: #fff;
+  color: #111827;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.pl-page-jump button + button {
+  border-top: 1px solid #e5e7eb;
+}
+
+.pl-page-jump button:hover,
+.pl-page-jump button:focus-visible {
+  background: #f3f4f6;
+  outline: none;
+}
+
+@media (max-width: 720px) {
+  .pl-page-jump {
+    left: 8px;
+    bottom: 16px;
+    width: 40px;
+  }
+
+  .pl-page-jump button {
+    width: 40px;
+    height: 34px;
+  }
+}

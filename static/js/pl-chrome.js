@@ -100,4 +100,47 @@
   installer.src = '/static/js/pl-install.js';
   installer.defer = true;
   document.head.appendChild(installer);
+
+  // Left-corner jump control for long picks/results pages.
+  function ensurePageJump() {
+    if (document.getElementById('plPageJump')) return;
+    var wrap = document.createElement('div');
+    wrap.id = 'plPageJump';
+    wrap.className = 'pl-page-jump';
+    wrap.setAttribute('role', 'navigation');
+    wrap.setAttribute('aria-label', 'Jump to top, middle, or bottom');
+    wrap.innerHTML =
+      '<button type="button" data-pl-jump="top" aria-label="Jump to top" title="Top">▲</button>' +
+      '<button type="button" data-pl-jump="middle" aria-label="Jump to middle" title="Middle">◆</button>' +
+      '<button type="button" data-pl-jump="bottom" aria-label="Jump to bottom" title="Bottom">▼</button>';
+    document.body.appendChild(wrap);
+  }
+
+  document.addEventListener('click', function (event) {
+    var btn = event.target.closest('[data-pl-jump]');
+    if (!btn) return;
+    var where = btn.getAttribute('data-pl-jump');
+    var docH = Math.max(
+      document.documentElement.scrollHeight,
+      document.body ? document.body.scrollHeight : 0
+    );
+    var viewH = window.innerHeight || document.documentElement.clientHeight || 0;
+    var top = 0;
+    if (where === 'bottom') {
+      top = docH;
+    } else if (where === 'middle') {
+      top = Math.max(0, Math.round((docH - viewH) / 2));
+    }
+    try {
+      window.scrollTo({ top: top, left: 0, behavior: 'smooth' });
+    } catch (err) {
+      window.scrollTo(0, top);
+    }
+  });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', ensurePageJump);
+  } else {
+    ensurePageJump();
+  }
 })();
