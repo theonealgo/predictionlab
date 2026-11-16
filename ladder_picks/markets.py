@@ -12,8 +12,15 @@ its bucket.
 """
 from __future__ import annotations
 
+import math
+
 POINT_SPORTS = {"NFL", "NCAAF", "NBA", "NCAAB", "NCAAW", "WNBA"}
 _SPREAD_NAME = {"NHL": "puck line", "MLB": "run line"}
+# Typical residual scale for converting projected edge-past-the-line → cover chance.
+_COVER_SCALE = {
+    "NFL": 13.0, "NCAAF": 14.0, "NBA": 11.0, "NCAAB": 11.0, "NCAAW": 11.0, "WNBA": 10.0,
+    "NHL": 1.6, "MLB": 1.8, "CFL": 13.0,
+}
 
 
 def _num(v) -> float | None:
@@ -22,6 +29,13 @@ def _num(v) -> float | None:
     except (TypeError, ValueError):
         return None
     return None if x != x else x
+
+
+def cover_prob(sport: str, gap: float) -> float:
+    """P(cover) from how far the projected margin clears the book line (0.5–0.99)."""
+    scale = _COVER_SCALE.get(sport, 10.0)
+    z = max(0.0, float(gap)) / max(scale, 0.1)
+    return min(0.99, 0.5 + 0.5 * math.tanh(z * 1.25))
 
 
 def gap_edges(sport: str, market: str) -> tuple[float, ...]:
@@ -65,12 +79,13 @@ def options(sport: str, model: dict, book: dict) -> list[dict]:
                 continue
             home = gap > 0
             line = spread if home else -spread
+            edge = abs(gap)
             out.append({
                 "market": "spread", "model": name, "side": "HOME" if home else "AWAY",
-                "side_class": "fav" if line < 0 else "dog", "gap": abs(gap), "line": line,
+                "side_class": "fav" if line < 0 else "dog", "gap": edge, "line": line,
                 "price": book.get("spread_price_home" if home else "spread_price_away"),
                 "other_price": book.get("spread_price_away" if home else "spread_price_home"),
-                "model_prob": None,
+                "model_prob": cover_prob(sport, edge),
             })
     total = _num(book.get("total"))
     if total is not None:

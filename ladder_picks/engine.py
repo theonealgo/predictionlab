@@ -1,36 +1,27 @@
 """Ladder rules: pick selection, settlement, and ladder lifecycle.
 
 Rules
-- A ladder starts at $10 and runs 10 ladder days. A ladder day is one pick, not
-  a calendar day: at most one pick per Eastern-time date, for an event on that
-  date that has not started. The next pick is chosen only after the previous
-  one settles.
-- Win: next stake = stake + profit at the published odds.
+- A ladder starts at $10 and runs 10 ladder days. A ladder day is one published
+  pick (now a 3-leg parlay), not a calendar day: at most one per Eastern-time
+  date. The next pick is chosen only after the previous one settles.
+- Win: next stake = stake + profit at the published (combined) odds.
 - Loss: the ladder ends (failed).
-- Push or void: not a loss. The stake carries to the next day unchanged and the
-  ladder day is used. A push or void on Day 10 completes the ladder.
-- No qualifying pick on a date: the date is recorded and nothing else changes.
-  A running ladder pauses until the next qualifying pick.
-- LADDER_MAX_CALENDAR_DAYS (default 0 = no limit) can cap how long a ladder may
-  run; one that runs out before Day 10 ends as expired.
+- Push or void: not a loss. The stake carries to the next day unchanged.
+- No qualifying parlay on a date: the date is recorded and the ladder waits.
+- LADDER_MAX_CALENDAR_DAYS (default 0 = no limit) can cap calendar length.
 
-Pick rule
-- Candidates are our moneyline, spread and total picks for today's games in
-  every sport with two-way picks (sources.SUPPORTED_SPORTS); the best one
-  across all sports is taken.
-- A pick qualifies only if its pick type (see markets.py) has, over our whole
-  graded history against pre-game book lines (LADDER_HISTORY_DAYS): at least
-  100 graded picks, a positive return at the prices it was graded at, and a hit
-  rate above the win rate the pick's own price needs to break even. A short hot
-  streak is not a record. Tennis and UFC store no past book price, so their
-  record counts picks we gave 60% or less (sources.UNPRICED_MAX_PROB).
-- Pick types that lose over the long run are never used (Config.excluded_types).
-- The posted price at pick time must be -150 to +150.
-- The biggest margin of that hit rate over the break-even rate wins, then the
-  larger sample, then return, then earliest start.
+Pick rule (from 2026-11-16)
+- Each ladder day is a 3-leg parlay: two moneylines at −300 or heavier
+  (american ≤ −300) plus one spread that is likely to cover.
+- Legs come from three different games on today's ET slate.
+- Heavy ML and spread legs are chosen by model win chance (likely to win /
+  cover). A −400 price needs ~80% just to break even, so the long-run type
+  lower is not required to clear that chalk bar — it only ranks legs.
+- Combined American odds are the product of the three leg prices.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -65,12 +56,20 @@ class Config:
     start_cents: int = field(default_factory=lambda: _env_int("LADDER_START_CENTS", 1000))
     days: int = field(default_factory=lambda: _env_int("LADDER_DAYS", 10))
     max_calendar_days: int = field(default_factory=lambda: _env_int("LADDER_MAX_CALENDAR_DAYS", 0))
-    select_hour: int = field(default_factory=lambda: _env_int("LADDER_SELECT_HOUR", 11))
+    select_hour: int = field(default_factory=lambda: _env_int("LADDER_SELECT_HOUR", 8))
     no_pick_hour: int = field(default_factory=lambda: _env_int("LADDER_NO_PICK_HOUR", 18))
     min_lead_minutes: int = field(default_factory=lambda: _env_int("LADDER_MIN_LEAD_MINUTES", 30))
-    # -150 to +150
+    # Legacy single-pick band (still used for graded-history filters on spreads)
     min_decimal: float = field(default_factory=lambda: _env_float("LADDER_MIN_DECIMAL_ODDS", 1.6666))
     max_decimal: float = field(default_factory=lambda: _env_float("LADDER_MAX_DECIMAL_ODDS", 2.50))
+    # Parlay: ML favorites this heavy or heavier (e.g. -300, -400)
+    heavy_ml_american: int = field(default_factory=lambda: _env_int("LADDER_HEAVY_ML_AMERICAN", -300))
+    # Spread leg: chalk / likely cover band
+    spread_min_decimal: float = field(default_factory=lambda: _env_float("LADDER_SPREAD_MIN_DECIMAL", 1.50))
+    spread_max_decimal: float = field(default_factory=lambda: _env_float("LADDER_SPREAD_MAX_DECIMAL", 2.20))
+    # "Very likely to win / cover" — model win chance for the ML and spread legs.
+    ml_min_model_prob: float = field(default_factory=lambda: _env_float("LADDER_ML_MIN_MODEL_PROB", 0.70))
+    spread_min_model_prob: float = field(default_factory=lambda: _env_float("LADDER_SPREAD_MIN_MODEL_PROB", 0.62))
     min_type_games: int = field(default_factory=lambda: _env_int("LADDER_MIN_TYPE_GAMES", 100))
     min_type_rate: float = field(default_factory=lambda: _env_float("LADDER_MIN_TYPE_HIT_RATE", 0.0))
     min_type_roi: float = field(default_factory=lambda: _env_float("LADDER_MIN_TYPE_ROI", 0.0))
@@ -159,18 +158,68 @@ class LadderEngine:
         return (row["d"] if row else None) or ""
 
     # ── Settlement ───────────────────────────────────────────────────────────
-    def _outcome(self, day, now: datetime) -> tuple[str, int | None, int | None, str] | None:
-        """(result, home_score, away_score, note) or None while the game is unresolved."""
+    def _leg_final(self, sport: str, game_id: str):
         final = None
         try:
-            final = self.predictions.final_score(day["sport"], day["game_id"])
+            final = self.predictions.final_score(sport, game_id)
         except Exception as exc:
-            logger.warning("ladder: final score lookup failed for %s: %s", day["game_id"], exc)
+            logger.warning("ladder: final score lookup failed for %s: %s", game_id, exc)
         status = None
         if not final or final.get("state") != "final":
-            status = self.event_fn(day["sport"], day["game_id"])
+            status = self.event_fn(sport, game_id)
             if status and status.get("state") == "final":
                 final = status
+        return final, status
+
+    def _outcome_parlay(self, day, now: datetime, legs: list[dict]) -> tuple[str, int | None, int | None, str] | None:
+        """Grade every leg. Parlay wins only if all legs win; any loss loses; push/void soft-fail."""
+        results = []
+        notes = []
+        latest_start = None
+        for i, leg in enumerate(legs):
+            sport, gid = leg.get("sport") or "", leg.get("game_id") or ""
+            final, status = self._leg_final(sport, gid)
+            start = _parse_iso(leg.get("event_start") or leg.get("start"))
+            if start and (latest_start is None or start > latest_start):
+                latest_start = start
+            if final and final.get("state") == "final":
+                hs, aw = int(final["home_score"]), int(final["away_score"])
+                results.append(markets.grade(leg.get("market") or "moneyline", leg.get("side"), leg.get("line"), hs, aw))
+                continue
+            if status and status.get("state") in ("postponed", "canceled"):
+                return "void", None, None, f"Leg {i + 1} postponed or canceled"
+            if start and now < start:
+                return None
+            results.append(None)
+        if any(r is None for r in results):
+            if latest_start and now - latest_start > timedelta(hours=self.cfg.void_after_hours):
+                return "void", None, None, "No final result on a parlay leg"
+            return None
+        if any(r == "loss" for r in results):
+            lost = [i + 1 for i, r in enumerate(results) if r == "loss"]
+            return "loss", None, None, f"Lost leg(s) {', '.join(map(str, lost))}"
+        if any(r == "push" for r in results):
+            return "push", None, None, "A parlay leg pushed"
+        if all(r == "win" for r in results):
+            return "win", None, None, ""
+        return "void", None, None, "Parlay leg unsettled"
+
+    def _outcome(self, day, now: datetime) -> tuple[str, int | None, int | None, str] | None:
+        """(result, home_score, away_score, note) or None while unresolved."""
+        legs_raw = None
+        try:
+            legs_raw = day["legs_json"]
+        except (KeyError, IndexError, TypeError):
+            legs_raw = None
+        if legs_raw:
+            try:
+                legs = json.loads(legs_raw)
+            except (TypeError, ValueError):
+                legs = None
+            if isinstance(legs, list) and legs:
+                return self._outcome_parlay(day, now, legs)
+
+        final, status = self._leg_final(day["sport"], day["game_id"])
         if final and final.get("state") == "final":
             hs, aw = int(final["home_score"]), int(final["away_score"])
             result = markets.grade(day["market"] or "moneyline", day["pick_side"], day["line"], hs, aw)
@@ -189,6 +238,7 @@ class LadderEngine:
         ).fetchall()
         for day in pending:
             start = _parse_iso(day["event_start"])
+            # Parlays may have a later leg; still attempt once the earliest tip has passed.
             if start and now < start:
                 continue
             outcome = self._outcome(day, now)
@@ -257,10 +307,41 @@ class LadderEngine:
         return None
 
     # ── Selection ────────────────────────────────────────────────────────────
-    def _price_ok(self, american) -> bool:
+    def _price_ok(self, american, market: str | None = None) -> bool:
+        """True when a graded/history price belongs in a pick-type record."""
         if american is None:
             return False
-        return self.cfg.min_decimal - 1e-9 <= float(money.american_to_decimal(american)) <= self.cfg.max_decimal + 1e-9
+        dec = float(money.american_to_decimal(american))
+        if self.cfg.min_decimal - 1e-9 <= dec <= self.cfg.max_decimal + 1e-9:
+            return True
+        # Heavy ML favorites used as parlay legs
+        if (market or "") == "moneyline" and int(american) <= self.cfg.heavy_ml_american:
+            return True
+        if (market or "") == "spread" and (
+                self.cfg.spread_min_decimal - 1e-9 <= dec <= self.cfg.spread_max_decimal + 1e-9):
+            return True
+        return False
+
+    def _ml_heavy_ok(self, american) -> bool:
+        return american is not None and int(american) <= self.cfg.heavy_ml_american
+
+    def _ml_likely_ok(self, american, model_prob) -> bool:
+        """Heavy favorite that the model also likes — not the type-vs-chalk bar."""
+        if not self._ml_heavy_ok(american):
+            return False
+        if model_prob is None:
+            return False
+        return float(model_prob) + 1e-9 >= self.cfg.ml_min_model_prob
+
+    def _spread_likely_ok(self, american, model_prob) -> bool:
+        if american is None:
+            return False
+        dec = float(money.american_to_decimal(american))
+        if not (self.cfg.spread_min_decimal - 1e-9 <= dec <= self.cfg.spread_max_decimal + 1e-9):
+            return False
+        if model_prob is None or float(model_prob) + 1e-9 < self.cfg.spread_min_model_prob:
+            return False
+        return True
 
     def excluded(self, sport: str, market: str, side: str) -> bool:
         return any(s == sport and m in (None, market) and d in (None, side)
@@ -281,7 +362,7 @@ class LadderEngine:
                 if price is None and rec["market"] != "moneyline" and not (
                         rec["market"] == "spread" and rec["sport"] in UNPRICED_SPREAD):
                     price = -110  # no stored price: standard -110
-                if not self._price_ok(price):
+                if not self._price_ok(price, rec.get("market")):
                     continue
                 dec = float(money.american_to_decimal(price))
             edges = markets.gap_edges(rec["sport"], rec["market"])
@@ -318,12 +399,28 @@ class LadderEngine:
         rows.sort(key=lambda r: -r["score"])
         return rows
 
-    def find_pick(self, now: datetime, exclude_games: set[str] | None = None) -> dict:
-        """Best qualifying pick for today's ET date.
+    def _used_game_ids(self, ladder_id: int) -> set[str]:
+        used: set[str] = set()
+        for r in self.conn.execute(
+            "SELECT game_id, legs_json FROM ladder_days WHERE ladder_id = ?", (ladder_id,)
+        ):
+            if r["game_id"]:
+                used.add(str(r["game_id"]))
+            raw = r["legs_json"] if "legs_json" in r.keys() else None
+            if not raw:
+                continue
+            try:
+                legs = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            for leg in legs or []:
+                gid = leg.get("game_id")
+                if gid:
+                    used.add(str(gid))
+        return used
 
-        Returns {'pick': dict|None, 'rejected': {reason: count}, 'prefiltered': int,
-        'remaining': bool} where remaining means a prefiltered game has not started yet.
-        """
+    def _collect_leg_candidates(self, now: datetime, exclude_games: set[str] | None = None) -> dict:
+        """Score open options that could become parlay legs."""
         exclude_games = exclude_games or set()
         today = now.astimezone(ET).date()
         rejected: dict[str, int] = {}
@@ -332,7 +429,6 @@ class LadderEngine:
             rejected[reason] = rejected.get(reason, 0) + 1
 
         stats = self.type_stats(today)
-        live_sports = {k[0] for k, s in stats.items() if s["qualifies"]}
         seen: set[str] = set()
         pre: list[dict] = []
         for cand in self.predictions.candidates(today.isoformat()):
@@ -344,13 +440,10 @@ class LadderEngine:
             if gid in exclude_games:
                 reject("already used in this ladder")
                 continue
-            if cand["sport"] not in live_sports:
-                reject("no qualifying pick type for this sport")
-                continue
             pre.append(cand)
 
         remaining = False
-        scored: list[dict] = []
+        legs: list[dict] = []
         lead = timedelta(minutes=self.cfg.min_lead_minutes)
         for cand in pre[: self.cfg.max_priced]:
             status = self.event_fn(cand["sport"], cand["game_id"])
@@ -372,51 +465,144 @@ class LadderEngine:
             if not book:
                 reject("missing or invalid odds")
                 continue
-            best, reason = None, "no pick type with a qualifying record"
+            reason = "no pick type with a qualifying record"
             for o in markets.options(cand["sport"], cand.get("model") or {}, book):
-                s = None
-                for edge in markets.gap_edges(cand["sport"], o["market"]):
-                    if o["gap"] < edge - 1e-9:
-                        continue
-                    t = stats.get((cand["sport"], o["market"], o["model"], o["side_class"], edge))
-                    if t and t["qualifies"] and (s is None or (t["score"], t["n"], t["roi"]) > (s["score"], s["n"], s["roi"])):
-                        s = t
-                if s is None:
+                if o["market"] not in ("moneyline", "spread"):
+                    continue
+                if self.excluded(cand["sport"], o["market"], o.get("side_class") or ""):
                     continue
                 price = money.parse_american(o["price"])
                 if price is None:
                     reason = "missing or invalid odds"
                     continue
-                if not self._price_ok(price):
-                    reason = "price outside -150 to +150"
-                    continue
+                model_p = o.get("model_prob")
+                if model_p is None and o["market"] == "spread":
+                    model_p = markets.cover_prob(cand["sport"], o.get("gap") or 0)
+                s = None
+                for edge in markets.gap_edges(cand["sport"], o["market"]):
+                    if o["gap"] < edge - 1e-9:
+                        continue
+                    t = stats.get((cand["sport"], o["market"], o["model"], o["side_class"], edge))
+                    if t and (s is None or (t["score"], t["n"], t["roi"]) > (s["score"], s["n"], s["roi"])):
+                        s = t
+                # ML legs: −300 or heavier + model says likely to win.
+                # Spread legs: chalk price + model says likely to cover.
+                # Type history ranks legs; it does not have to beat a −400 break-even.
+                if o["market"] == "moneyline":
+                    if not self._ml_likely_ok(price, model_p):
+                        reason = ("moneyline not −300 or heavier" if not self._ml_heavy_ok(price)
+                                  else "moneyline not likely enough")
+                        continue
+                    if s is None:
+                        mp = float(model_p)
+                        s = {"rate": mp, "n": 0, "score": mp, "roi": 0.0, "lower": mp, "qualifies": False}
+                else:
+                    if not self._spread_likely_ok(price, model_p):
+                        reason = "spread not a likely cover"
+                        continue
+                    if s is None:
+                        mp = float(model_p)
+                        s = {"rate": mp, "n": 0, "score": mp, "roi": 0.0, "lower": mp, "qualifies": False}
                 need = 1.0 / float(money.american_to_decimal(price))
-                if s["lower"] <= need:
-                    reason = "record does not beat the price"
-                    continue
                 other = money.parse_american(o["other_price"])
                 market_p = money.no_vig_prob(price, other) if other is not None else money.implied_prob(price)
-                pick = {
-                    **cand, **o, "start": start,
+                # Rank by model edge over the price, then by type history when present.
+                model_edge = float(model_p) - need
+                type_bonus = 0.05 if s.get("qualifies") else 0.0
+                legs.append({
+                    **cand, **o, "start": start, "model_prob": model_p,
                     "american_odds": price, "opponent_american_odds": other,
                     "decimal_odds": round(float(money.american_to_decimal(price)), 4),
                     "market_prob": round(market_p, 4) if market_p is not None else None,
                     "hist_hit_rate": round(s["rate"], 4), "hist_n": s["n"],
                     "credible_prob": round(s["score"], 4), "type_roi": s["roi"],
-                    "price_edge": s["lower"] - need,
+                    "price_edge": model_edge + type_bonus,
                     "pick_label": markets.label(o, cand["home_team"], cand["away_team"]),
                     "pick_type": markets.type_label(cand["sport"], o),
-                }
-                if best is None or (pick["price_edge"], pick["hist_n"], pick["type_roi"]) > (
-                        best["price_edge"], best["hist_n"], best["type_roi"]):
-                    best = pick
-            if best is None:
+                })
+            if not any(x["game_id"] == cand["game_id"] for x in legs):
                 reject(reason)
+        legs.sort(key=lambda c: (-c["price_edge"], -c["hist_n"], -c["type_roi"], c["start"]))
+        return {"legs": legs, "rejected": rejected, "prefiltered": len(pre), "remaining": remaining}
+
+    def find_parlay_pick(self, now: datetime, exclude_games: set[str] | None = None) -> dict:
+        """Build today's 3-leg parlay: 2 heavy ML + 1 likely spread, three games."""
+        found = self._collect_leg_candidates(now, exclude_games)
+        legs = found["legs"]
+        ml = [x for x in legs if x["market"] == "moneyline"]
+        spreads = [x for x in legs if x["market"] == "spread"]
+        chosen_ml: list[dict] = []
+        used: set[str] = set()
+        for leg in ml:
+            gid = str(leg["game_id"])
+            if gid in used:
                 continue
-            scored.append(best)
-        scored.sort(key=lambda c: (-c["price_edge"], -c["hist_n"], -c["type_roi"], c["start"]))
-        return {"pick": scored[0] if scored else None, "rejected": rejected,
-                "prefiltered": len(pre), "remaining": remaining}
+            chosen_ml.append(leg)
+            used.add(gid)
+            if len(chosen_ml) == 2:
+                break
+        spread = None
+        for leg in spreads:
+            gid = str(leg["game_id"])
+            if gid in used:
+                continue
+            spread = leg
+            break
+        if len(chosen_ml) < 2 or spread is None:
+            rejected = dict(found["rejected"])
+            if len(chosen_ml) < 2:
+                rejected["need 2 heavy ML legs"] = rejected.get("need 2 heavy ML legs", 0) + 1
+            if spread is None:
+                rejected["need 1 likely spread leg"] = rejected.get("need 1 likely spread leg", 0) + 1
+            return {"pick": None, "rejected": rejected, "prefiltered": found["prefiltered"],
+                    "remaining": found["remaining"]}
+
+        trio = chosen_ml + [spread]
+        americans = [int(x["american_odds"]) for x in trio]
+        combined_am, combined_dec = money.combine_american(americans)
+        starts = [x["start"] for x in trio]
+        leg_payload = []
+        for x in trio:
+            leg_payload.append({
+                "sport": x["sport"], "game_id": x["game_id"],
+                "home_team": x["home_team"], "away_team": x["away_team"],
+                "market": x["market"], "side": x["side"], "line": x.get("line"),
+                "model": x["model"], "pick_label": x["pick_label"],
+                "pick_type": x["pick_type"], "american_odds": x["american_odds"],
+                "decimal_odds": x["decimal_odds"], "model_prob": x.get("model_prob"),
+                "hist_hit_rate": x["hist_hit_rate"], "hist_n": x["hist_n"],
+                "event_start": _iso(x["start"]),
+                "event_label": f"{x['away_team']} @ {x['home_team']}",
+            })
+        labels = [x["pick_label"] for x in trio]
+        pick = {
+            "sport": "PARLAY",
+            "game_id": "+".join(str(x["game_id"]) for x in trio),
+            "home_team": "", "away_team": "",
+            "side": "PARLAY", "market": "parlay", "line": None,
+            "model": "Parlay", "model_prob": None,
+            "start": min(starts),
+            "american_odds": combined_am,
+            "opponent_american_odds": None,
+            "decimal_odds": round(combined_dec, 4),
+            "market_prob": None,
+            "hist_hit_rate": round(sum(x["hist_hit_rate"] for x in trio) / 3, 4),
+            "hist_n": min(x["hist_n"] for x in trio),
+            "credible_prob": round(sum(x["credible_prob"] for x in trio) / 3, 4),
+            "type_roi": min(x["type_roi"] for x in trio),
+            "price_edge": min(x["price_edge"] for x in trio),
+            "pick_label": " + ".join(labels),
+            "pick_type": "Parlay (2 ML ≤ −300 + 1 spread)",
+            "legs": leg_payload,
+            "event_label": "3-leg parlay · " + " · ".join(
+                f"{x['sport']}: {x['pick_label']}" for x in trio),
+        }
+        return {"pick": pick, "rejected": found["rejected"], "prefiltered": found["prefiltered"],
+                "remaining": found["remaining"]}
+
+    def find_pick(self, now: datetime, exclude_games: set[str] | None = None) -> dict:
+        """Compatibility wrapper — ladder days are 3-leg parlays."""
+        return self.find_parlay_pick(now, exclude_games)
 
     def select_today(self, now: datetime) -> dict:
         et_now = now.astimezone(ET)
@@ -434,15 +620,13 @@ class LadderEngine:
             if today > ladder["cycle_end_date"]:
                 return {"action": "cycle_over", "ladder_id": ladder["id"]}
             next_day = (last["day_number"] if last else 0) + 1
-            exclude = {r["game_id"] for r in self.conn.execute(
-                "SELECT game_id FROM ladder_days WHERE ladder_id = ? AND game_id IS NOT NULL",
-                (ladder["id"],))}
+            exclude = self._used_game_ids(ladder["id"])
         else:
             if self._last_pick_date() >= today:
                 return {"action": "already_picked"}
             next_day = 1
 
-        found = self.find_pick(now, exclude)
+        found = self.find_parlay_pick(now, exclude)
         pick = found["pick"]
         if not pick:
             final = et_now.hour >= self.cfg.no_pick_hour or (found["prefiltered"] and not found["remaining"])
@@ -496,21 +680,28 @@ class LadderEngine:
                     (today, self._cycle_end(start_date), self.cfg.start_cents, self.cfg.start_cents, _iso(now)),
                 )
                 ladder_id, stake = cur.lastrowid, self.cfg.start_cents
-            pick_team = {"HOME": pick["home_team"], "AWAY": pick["away_team"]}.get(pick["side"])
+            pick_team = {"HOME": pick.get("home_team"), "AWAY": pick.get("away_team")}.get(pick.get("side"))
+            if pick.get("market") == "parlay":
+                pick_team = "Parlay"
             model_p = pick.get("model_prob")
+            event_label = pick.get("event_label") or (
+                f"{pick.get('away_team', '')} @ {pick.get('home_team', '')}".strip(" @")
+            )
+            legs_json = json.dumps(pick["legs"]) if pick.get("legs") else None
             self.conn.execute(
                 """INSERT INTO ladder_days (ladder_id, day_number, pick_date, result, sport, game_id,
                        event_label, home_team, away_team, pick_team, pick_side, market, line, pick_label,
                        pick_type, model_name, model_prob, market_prob, credible_prob, hist_hit_rate, hist_n,
-                       american_odds, decimal_odds, opponent_american_odds, stake_cents, event_start, selected_at)
-                   VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       american_odds, decimal_odds, opponent_american_odds, stake_cents, event_start,
+                       selected_at, legs_json)
+                   VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (ladder_id, next_day, today, pick["sport"], pick["game_id"],
-                 f"{pick['away_team']} @ {pick['home_team']}", pick["home_team"], pick["away_team"],
-                 pick_team, pick["side"], pick["market"], pick.get("line"), pick["pick_label"],
-                 pick["pick_type"], pick["model"], round(model_p, 4) if model_p is not None else None,
-                 pick["market_prob"], pick["credible_prob"], pick["hist_hit_rate"], pick["hist_n"],
-                 pick["american_odds"], pick["decimal_odds"], pick["opponent_american_odds"], stake,
-                 _iso(pick["start"]), _iso(now)),
+                 event_label, pick.get("home_team") or "", pick.get("away_team") or "",
+                 pick_team, pick.get("side"), pick["market"], pick.get("line"), pick["pick_label"],
+                 pick["pick_type"], pick.get("model"), round(model_p, 4) if model_p is not None else None,
+                 pick.get("market_prob"), pick["credible_prob"], pick["hist_hit_rate"], pick["hist_n"],
+                 pick["american_odds"], pick["decimal_odds"], pick.get("opponent_american_odds"), stake,
+                 _iso(pick["start"]), _iso(now), legs_json),
             )
             self.conn.execute("DELETE FROM ladder_no_pick_dates WHERE pick_date = ?", (today,))
         logger.info("ladder: published ladder %s day %s: %s %s (%s)", ladder_id, next_day,

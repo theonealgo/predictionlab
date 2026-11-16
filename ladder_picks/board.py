@@ -172,8 +172,18 @@ def _open_picks(src: sources.PredictionSource, stats: dict, cfg: Config, today: 
         for o in markets.options(c["sport"], c.get("model") or {}, book):
             rec = _type_record(stats, c["sport"], o)
             price = money.parse_american(o["price"])
-            price_ok = price is None or (cfg.min_decimal - 1e-9 <= float(money.american_to_decimal(price))
-                                         <= cfg.max_decimal + 1e-9)
+            # Parlay leg tags: heavy ML (≤ −300) + model likely, or likely spread cover.
+            leg_ok = False
+            mp = o.get("model_prob")
+            if price is not None:
+                if (o["market"] == "moneyline" and price <= cfg.heavy_ml_american
+                        and mp is not None and float(mp) + 1e-9 >= cfg.ml_min_model_prob):
+                    leg_ok = True
+                elif o["market"] == "spread":
+                    dec = float(money.american_to_decimal(price))
+                    if (cfg.spread_min_decimal - 1e-9 <= dec <= cfg.spread_max_decimal + 1e-9
+                            and mp is not None and float(mp) + 1e-9 >= cfg.spread_min_model_prob):
+                        leg_ok = True
             picks.append({
                 "market": markets.market_name(c["sport"], o["market"]),
                 "model": o["model"],
@@ -183,7 +193,7 @@ def _open_picks(src: sources.PredictionSource, stats: dict, cfg: Config, today: 
                 "win_pct": _pct(o.get("model_prob")) if o.get("model_prob") is not None else "",
                 "edge": "" if o["market"] == "moneyline" else f"{o['gap']:g}",
                 "record": _rec(rec),
-                "ladder": bool(rec and rec["qualifies"] and price_ok),
+                "ladder": leg_ok,
                 "score": rec["score"] if rec else 0.0,
                 "n": rec["n"] if rec else 0,
             })

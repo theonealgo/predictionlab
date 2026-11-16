@@ -8,12 +8,38 @@ import HomePage from './pages/HomePage.jsx';
 import PropsPage from './pages/PropsPage.jsx';
 import AllSportsPage from './pages/AllSportsPage.jsx';
 import BlogPage from './pages/BlogPage.jsx';
+import ModelsPage from './pages/ModelsPage.jsx';
+import ToolsPage from './pages/ToolsPage.jsx';
 import { SPORT_SLUGS } from './data/sportSlugs.js';
+import { TOOL_BY_PATH } from './data/toolsCatalog.js';
 import { prefetchJson } from './api.js';
 
 // Sports pages live at /<sport>-picks and /<sport>-projections; both show the same page.
 const SPORT_PATH = new RegExp(`^/(${SPORT_SLUGS.join('|')})-(picks|projections|predictions)$`);
 const ALL_PATHS = ['/all-sports-picks', '/all-sports-projections', '/all-sports-predictions'];
+
+// Props & Models menu + Daily Results — classic page in the center, blog feed box on the right.
+// Include every public URL (and rename targets) so a 301 never lands on Home without the blogs box.
+const MODELS_PAGES = {
+  '/performance': 'Model Performance',
+  '/ladder-picks': 'The Ladder',
+  '/ladder': 'The Ladder',
+  '/daily-report': 'Daily Results',
+  '/our-model-vs-sportsbooks': 'Model vs Sportsbooks',
+  '/our-model-vs-market': 'Model vs Sportsbooks',
+  '/tutorial': 'Tutorial',
+  '/ai-sports-betting-picks-today': 'AI Predictions Today',
+  '/ai-sports-predictions-today': 'AI Predictions Today',
+  '/ai-sports-projections-today': 'AI Predictions Today',
+};
+
+// /classic iframe path: renamed addresses still need the Flask route that serves the HTML.
+const CLASSIC_IFRAME = {
+  '/ladder': '/ladder-picks',
+  '/ai-sports-predictions-today': '/ai-sports-betting-picks-today',
+  '/ai-sports-projections-today': '/ai-sports-betting-picks-today',
+  '/our-model-vs-market': '/our-model-vs-sportsbooks',
+};
 
 // The React page for an address, or null when the address is a server page.
 function appRoute(pathname) {
@@ -23,6 +49,17 @@ function appRoute(pathname) {
   if (clean === '/player-props' || clean === '/sports-props') return { page: 'props', slug: null };
   if (clean === '/blog') return { page: 'blog', slug: null };
   if (ALL_PATHS.includes(clean)) return { page: 'all', slug: null };
+  if (clean === '/tools' || TOOL_BY_PATH[clean]) {
+    return { page: 'tools', slug: null, path: clean, title: TOOL_BY_PATH[clean]?.title || 'Betting Tools' };
+  }
+  if (MODELS_PAGES[clean]) {
+    return {
+      page: 'models',
+      slug: null,
+      classicPath: CLASSIC_IFRAME[clean] || clean,
+      title: MODELS_PAGES[clean],
+    };
+  }
   if (clean === '/') return { page: 'home', slug: null };
   return null;
 }
@@ -44,9 +81,23 @@ function pageMeta(route) {
   if (route.page === 'props') return ['Sports Props | Prediction Lab', 'Explore player props by sport and review recorded results by model and prop type.'];
   if (route.page === 'blog') return ['Prediction Lab Blog | predictionlab.io', 'Original sports roundups, verified final scores, and the latest from Prediction Lab.'];
   if (route.page === 'all') return ['All Sports Predictions Today | Prediction Lab', "Every sport's AI predictions on one page, with each prediction type's recent record."];
+  if (route.page === 'models') {
+    return [
+      `${route.title} | Prediction Lab`,
+      `${route.title} on Prediction Lab, with Sports News and the latest from PredictionLab beside the page.`,
+    ];
+  }
+  if (route.page === 'tools') {
+    const tool = TOOL_BY_PATH[route.path];
+    if (tool) return [tool.metaTitle, tool.metaDescription];
+    return [
+      'Sports Betting Calculators & Tools | PredictionLab',
+      'Free sports betting calculators: odds conversion, parlays, hold, no-vig fair odds, CLV, and Kelly criterion — built for PredictionLab.',
+    ];
+  }
   return [
-    'Quantitative sports forecasting model | PredictionLab',
-    'Statistical probability engine for Straight-Up (SU) forecasts, historical accuracy, and quantitative sports research across multiple sports.',
+    'PredictionLab | Sports forecasting models',
+    'PredictionLab statistical probability engine for Straight-Up (SU) forecasts, historical accuracy, and sports research across multiple sports.',
   ];
 }
 
@@ -75,7 +126,7 @@ function appLink(event) {
 function preload(route) {
   if (route.page === 'sport' && route.slug !== 'golf-picks') prefetchJson(`/api/web/sports/${route.slug}/cards?limit=5`);
   if (route.page === 'all') prefetchJson('/api/web/all-sports');
-  if (route.page === 'blog') prefetchJson('/api/web/blog');
+  if (route.page === 'blog' || route.page === 'models' || route.page === 'tools') prefetchJson('/api/web/blog');
 }
 
 function currentAddress() {
@@ -162,15 +213,21 @@ export default function App() {
     };
   }, []);
 
+  const wideLayout = route.page === 'models' || route.page === 'blog' || route.page === 'tools';
+
   return (
     <div className="pl-app">
       <Header />
-      <LiveStrip />
-      <div className="pl-body">
-        <SportsList activeSlug={route.slug} address={address} />
+      {!wideLayout && <LiveStrip />}
+      <div className={wideLayout ? 'pl-body pl-body-wide' : 'pl-body'}>
+        {!wideLayout && <SportsList activeSlug={route.slug} address={address} />}
         <div className="pl-stage">
           {route.page === 'props' && <PropsPage key={address} />}
           {route.page === 'blog' && <BlogPage />}
+          {route.page === 'tools' && <ToolsPage key={address} path={route.path} />}
+          {route.page === 'models' && (
+            <ModelsPage key={address} classicPath={route.classicPath} title={route.title} />
+          )}
           {route.page === 'sport' && <SportPage key={address} slug={route.slug} />}
           {route.page === 'all' && <AllSportsPage key={address} />}
           {route.page === 'home' && <HomePage key={address} />}

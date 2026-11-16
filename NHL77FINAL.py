@@ -6232,6 +6232,7 @@ def _nfl_paint_independent_lines__ncaab(card: dict) -> None:
     )
     if pt is not None:
         card['disp_pl_total'] = _round_to_half(pt)
+    _fill_xsharp_from_efficiency_if_missing(card, 'NCAAB')
     xs = _safe_float(
         card.get('stored_lock_xs_spread')
         or card.get('lock_xs_spread')
@@ -6240,6 +6241,7 @@ def _nfl_paint_independent_lines__ncaab(card: dict) -> None:
     )
     if xs is not None:
         card['disp_xs_spread'] = _round_to_half(xs)
+        card['xgb_spread'] = card.get('xgb_spread') if card.get('xgb_spread') is not None else xs
     xt = _safe_float(
         card.get('stored_lock_xs_total')
         or card.get('lock_xs_total')
@@ -6248,6 +6250,7 @@ def _nfl_paint_independent_lines__ncaab(card: dict) -> None:
     )
     if xt is not None:
         card['disp_xs_total'] = _round_to_half(xt)
+        card['xgb_total'] = card.get('xgb_total') if card.get('xgb_total') is not None else xt
 
 
 def _nfl_paint_independent_lines__ncaaw(card: dict) -> None:
@@ -6264,6 +6267,7 @@ def _nfl_paint_independent_lines__ncaaw(card: dict) -> None:
     )
     if pt is not None:
         card['disp_pl_total'] = _round_to_half(pt)
+    _fill_xsharp_from_efficiency_if_missing(card, 'NCAAW')
     xs = _safe_float(
         card.get('stored_lock_xs_spread')
         or card.get('lock_xs_spread')
@@ -6272,6 +6276,7 @@ def _nfl_paint_independent_lines__ncaaw(card: dict) -> None:
     )
     if xs is not None:
         card['disp_xs_spread'] = _round_to_half(xs)
+        card['xgb_spread'] = card.get('xgb_spread') if card.get('xgb_spread') is not None else xs
     xt = _safe_float(
         card.get('stored_lock_xs_total')
         or card.get('lock_xs_total')
@@ -6280,6 +6285,7 @@ def _nfl_paint_independent_lines__ncaaw(card: dict) -> None:
     )
     if xt is not None:
         card['disp_xs_total'] = _round_to_half(xt)
+        card['xgb_total'] = card.get('xgb_total') if card.get('xgb_total') is not None else xt
 
 
 def _nfl_paint_independent_lines__wnba(card: dict) -> None:
@@ -8875,23 +8881,45 @@ def _attach_nba_efficiency_to_daily_results(sport, daily_results) -> None:
 
 def _fill_xsharp_from_efficiency_if_missing(g: dict, sport: str) -> None:
     """When XGB predict misses a team, use efficiency projection for XSharp display/grading."""
-    if sport not in ('NBA', 'WNBA') or (g.get('xgb_spread') is not None and g.get('xgb_total') is not None):
+    sport_u = (sport or '').upper()
+    if sport_u not in ('NBA', 'WNBA', 'NCAAB', 'NCAAW') or (
+        g.get('xgb_spread') is not None and g.get('xgb_total') is not None
+    ):
         return
-    h, a = g.get('home'), g.get('away')
+    h = g.get('home') or g.get('home_team_id')
+    a = g.get('away') or g.get('away_team_id')
     if not (h and a):
         return
     try:
         from team_efficiency import compute_efficiency_projection
     except ImportError:
-        return
+        compute_efficiency_projection = None
     try:
-        proj = compute_efficiency_projection(h, a, sport=sport, n_games=5)
-        if not proj:
-            return
-        if g.get('xgb_spread') is None and proj.get('projected_spread') is not None:
-            g['xgb_spread'] = _round_to_half(proj['projected_spread'])
-        if g.get('xgb_total') is None and proj.get('projected_total') is not None:
-            g['xgb_total'] = _round_to_half(proj['projected_total'])
+        proj = compute_efficiency_projection(h, a, sport=sport_u, n_games=5) if compute_efficiency_projection else None
+        if proj:
+            if g.get('xgb_spread') is None and proj.get('projected_spread') is not None:
+                g['xgb_spread'] = _round_to_half(proj['projected_spread'])
+            if g.get('xgb_total') is None and proj.get('projected_total') is not None:
+                g['xgb_total'] = _round_to_half(proj['projected_total'])
+        # Early-season / thin ESPN history: imply XSharp line from stored win %.
+        if g.get('xgb_spread') is None:
+            xp = _safe_float(g.get('xgb_prob') or g.get('xgboost_home_prob'))
+            if xp is not None:
+                if xp <= 1.0:
+                    xp *= 100.0
+                try:
+                    from sports.team_efficiency_attach import home_prob_pct_to_spread
+                    g['xgb_spread'] = _round_to_half(home_prob_pct_to_spread(xp, sport_u))
+                except Exception:
+                    pass
+        if g.get('xgb_total') is None:
+            pt = _safe_float(g.get('our_total') or g.get('lock_pl_total') or g.get('disp_pl_total'))
+            if pt is not None:
+                g['xgb_total'] = _round_to_half(pt)
+        if g.get('home') is None:
+            g['home'] = h
+        if g.get('away') is None:
+            g['away'] = a
     except Exception as _xfe:
         logger.debug(f"[eff] xsharp fallback failed {h} vs {a}: {_xfe}")
 
@@ -16579,6 +16607,30 @@ def _chart_market_scope(response):
             response.set_data(out)
     except Exception:
         logger.exception("chart market scope failed")
+    return response
+
+
+@app.after_request
+def _recent_blog_rail(response):
+    """Classic Models pages: Blogs box (Sports News + Latest). Skip /classic iframes —
+    those pages sit beside the React BlogFeedBox instead."""
+    try:
+        if response.status_code != 200 or response.direct_passthrough:
+            return response
+        if "html" not in (response.mimetype or ""):
+            return response
+        if request.environ.get("pl.classic"):
+            return response
+        from recent_blog_sidebar import inject_recent_blog_rail, path_wants_rail
+        path = (request.path or "").rstrip("/") or "/"
+        if not path_wants_rail(path):
+            return response
+        html = response.get_data(as_text=True)
+        out = inject_recent_blog_rail(html, path)
+        if out != html:
+            response.set_data(out)
+    except Exception:
+        logger.exception("recent blog rail inject failed")
     return response
 
 
@@ -71012,7 +71064,7 @@ def _align_roi_moneyline_to_season_perf(roi_total, season_perf):
 def build_roi_cards(roi_daily, roi_weekly, roi_total, *, win_pct_primary: bool = False):
     if not win_pct_primary:
         try:
-            win_pct_primary = _sport_variant.current_sport() in ('nfl', 'ncaab', 'ncaaw')
+            win_pct_primary = _sport_variant.current_sport() in ('nfl', 'ncaaf', 'ncaab', 'ncaaw', 'nba', 'nhl', 'mlb', 'wnba', 'cfl')
         except Exception:
             pass
 
@@ -71981,7 +72033,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
             <div class="rpt-sou-row" style="margin-top:10px;">
                 {% if sp.total > 0 %}
                 <div>
-                    <div class="rpt-cat-label">Spread</div>
+                    <div class="rpt-cat-label">Prediction Lab Spread</div>
                     <div class="rpt-card hl">
                         <div class="rpt-acc {% if sp.accuracy >= 55 %}g{% elif sp.accuracy >= 48 %}y{% else %}r{% endif %}">{{ sp.accuracy }}%</div>
                         <div class="rpt-rec">{{ sp.correct }}-{{ sp.total - sp.correct }}{% if sp.pushes %}-{{ sp.pushes }}{% endif %}</div>
@@ -71990,7 +72042,7 @@ DAILY_REPORT_TEMPLATE = BASE_TEMPLATE.replace(
                 {% endif %}
                 {% if ou.total > 0 %}
                 <div>
-                    <div class="rpt-cat-label">Over/Under</div>
+                    <div class="rpt-cat-label">XSharp Over/Under</div>
                     <div class="rpt-card hl">
                         <div class="rpt-acc {% if ou.accuracy >= 55 %}g{% elif ou.accuracy >= 48 %}y{% else %}r{% endif %}">{{ ou.accuracy }}%</div>
                         <div class="rpt-rec">{{ ou.correct }}-{{ ou.total - ou.correct }}{% if ou.pushes %}-{{ ou.pushes }}{% endif %}</div>
@@ -72830,7 +72882,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -72840,7 +72892,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -72881,7 +72933,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -72891,7 +72943,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -72913,7 +72965,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -72926,7 +72978,7 @@ DAILY_RESULTS_TEMPLATE = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -73493,7 +73545,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -73503,7 +73555,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -73544,7 +73596,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -73554,7 +73606,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -73576,7 +73628,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -73589,7 +73641,7 @@ DAILY_RESULTS_TEMPLATE__golf = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -74155,7 +74207,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -74165,7 +74217,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -74206,7 +74258,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -74216,7 +74268,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -74238,7 +74290,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -74251,7 +74303,7 @@ DAILY_RESULTS_TEMPLATE__ufc = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -74817,7 +74869,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -74827,7 +74879,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -74868,7 +74920,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -74878,7 +74930,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -74900,7 +74952,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -74913,7 +74965,7 @@ DAILY_RESULTS_TEMPLATE__tennis = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -75479,7 +75531,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -75489,7 +75541,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -75530,7 +75582,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -75540,7 +75592,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -75562,7 +75614,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -75575,7 +75627,7 @@ DAILY_RESULTS_TEMPLATE__soccer = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -76141,7 +76193,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -76151,7 +76203,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -76192,7 +76244,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -76202,7 +76254,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -76224,7 +76276,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -76237,7 +76289,7 @@ DAILY_RESULTS_TEMPLATE__cfl = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -76803,7 +76855,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -76813,7 +76865,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -76854,7 +76906,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -76864,7 +76916,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -76886,7 +76938,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -76899,7 +76951,7 @@ DAILY_RESULTS_TEMPLATE__wnba = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -77465,7 +77517,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -77475,7 +77527,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -77516,7 +77568,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -77526,7 +77578,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -77548,7 +77600,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -77561,7 +77613,7 @@ DAILY_RESULTS_TEMPLATE__ncaaw = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -78127,7 +78179,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -78137,7 +78189,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -78178,7 +78230,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -78188,7 +78240,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -78210,7 +78262,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -78223,7 +78275,7 @@ DAILY_RESULTS_TEMPLATE__ncaab = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -78789,7 +78841,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -78799,7 +78851,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -78840,7 +78892,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -78850,7 +78902,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -78872,7 +78924,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -78885,7 +78937,7 @@ DAILY_RESULTS_TEMPLATE__nba = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -79451,7 +79503,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -79461,7 +79513,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -79502,7 +79554,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -79512,7 +79564,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -79534,7 +79586,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -79547,7 +79599,7 @@ DAILY_RESULTS_TEMPLATE__nhl = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -80113,7 +80165,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -80123,7 +80175,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -80164,7 +80216,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -80174,7 +80226,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -80196,7 +80248,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -80209,7 +80261,7 @@ DAILY_RESULTS_TEMPLATE__mlb = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -80775,7 +80827,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
             {% if daily_tally.spread is defined and daily_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if daily_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.spread.accuracy is none %}#94a3b8{% elif daily_tally.spread.accuracy >= 52 %}#067647{% elif daily_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.spread.accuracy is not none %}{{ daily_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.spread.correct }}-{{ daily_tally.spread.total - daily_tally.spread.correct }}{% if daily_tally.spread.pushes %}-{{ daily_tally.spread.pushes }}{% endif %}</div>
@@ -80785,7 +80837,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if daily_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if daily_tally.total_ou.accuracy is none %}#94a3b8{% elif daily_tally.total_ou.accuracy >= 52 %}#067647{% elif daily_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if daily_tally.total_ou.accuracy is not none %}{{ daily_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ daily_tally.total_ou.correct }}-{{ daily_tally.total_ou.total - daily_tally.total_ou.correct }}{% if daily_tally.total_ou.pushes %}-{{ daily_tally.total_ou.pushes }}{% endif %}</div>
@@ -80826,7 +80878,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
             {% if weekly_tally.spread is defined and weekly_tally.total_ou is defined %}
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;">
                 <div class="daily-tally-card" style="border:1px solid rgba(139,92,246,0.4);">
-                    <div class="daily-model">Spread</div>
+                    <div class="daily-model">Prediction Lab Spread</div>
                     {% if weekly_tally.spread.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.spread.accuracy is none %}#94a3b8{% elif weekly_tally.spread.accuracy >= 52 %}#067647{% elif weekly_tally.spread.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.spread.accuracy is not none %}{{ weekly_tally.spread.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.spread.correct }}-{{ weekly_tally.spread.total - weekly_tally.spread.correct }}{% if weekly_tally.spread.pushes %}-{{ weekly_tally.spread.pushes }}{% endif %}</div>
@@ -80836,7 +80888,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
                     {% endif %}
                 </div>
                 <div class="daily-tally-card" style="border:1px solid rgba(251,191,36,0.4);">
-                    <div class="daily-model">Over/Under</div>
+                    <div class="daily-model">XSharp Over/Under</div>
                     {% if weekly_tally.total_ou.total > 0 %}
                     <div class="daily-acc" style="color:{% if weekly_tally.total_ou.accuracy is none %}#94a3b8{% elif weekly_tally.total_ou.accuracy >= 52 %}#067647{% elif weekly_tally.total_ou.accuracy >= 48 %}#fbbf24{% else %}#D93025{% endif %};">{% if weekly_tally.total_ou.accuracy is not none %}{{ weekly_tally.total_ou.accuracy }}%{% else %}—{% endif %}</div>
                     <div class="daily-rec">{{ weekly_tally.total_ou.correct }}-{{ weekly_tally.total_ou.total - weekly_tally.total_ou.correct }}{% if weekly_tally.total_ou.pushes %}-{{ weekly_tally.total_ou.pushes }}{% endif %}</div>
@@ -80858,7 +80910,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
         {% if roi_cards %}
         <div style="background:#ffffff;border:1px solid rgba(15,23,42,0.16);border-radius:14px;padding:22px;margin-bottom:16px;overflow:hidden;">
             <h2 style="text-align:center;margin:0 0 4px 0;font-size:1.3em;color:#0f172a;">💰 Model Performance (Flat Unit Tracking)</h2>
-            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW') %}
+            {% if sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'CFL') %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>win rate</strong> matching the W-L below. Detail line still shows flat-unit profit (<code>±u</code>).</p>
             {% elif sport == 'WNBA' %}
             <p style="text-align:center;margin:0 0 14px;font-size:0.78em;color:#64748b;">Percentages are <strong>unit ROI</strong> (profit per $1 risked), not moneyline win rate. Records count <strong>graded decisions</strong> — not every completed final (no model pick, missing line, or no-lean / push is omitted).</p>
@@ -80871,7 +80923,7 @@ DAILY_RESULTS_TEMPLATE__ncaaf = BASE_TEMPLATE.replace(
                 <div style="background:#f8fafc;border:1px solid rgba(15,23,42,0.12);border-radius:10px;padding:14px;color:#0f172a;">
                     <div style="font-size:0.82em;text-align:center;opacity:0.9;margin-bottom:2px;font-weight:700;color:#334155;">{{ mkt_label }}</div>
                     {% set _sp = season_perf if season_perf is defined and season_perf else none %}
-                    {% set _wk_model = 'Sharp Consensus' if mkt == 'moneyline' else 'Prediction Lab' %}
+                    {% set _wk_model = 'Market Consensus' if mkt == 'moneyline' else ('XSharp' if mkt == 'total' else 'Prediction Lab') %}
                     {% set _se_model = (_sp.ml_model_label if (_sp and mkt == 'moneyline' and _sp.ml_model_label) else (_sp.spread_model_label if (_sp and mkt == 'spread' and _sp.spread_model_label) else (_sp.ou_model_label if (_sp and mkt == 'total' and _sp.ou_model_label) else _wk_model))) %}
                     <div style="font-size:0.72em;text-align:center;color:#64748b;margin-bottom:8px;">Model: {% if _wk_model == _se_model %}{{ _wk_model }}{% else %}7 Days {{ _wk_model }} · Season {{ _se_model }}{% endif %}</div>
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center;font-size:0.78em;color:#334155;">
@@ -86905,6 +86957,30 @@ def _web_game_counts():
             counts[row[0]] = (int(row[1] or 0), int(row[2] or 0))
     except Exception as exc:
         logger.debug(f"[web] game counts failed: {exc}")
+    # Tennis lives in its own DB; the main predictions table is often empty/stale for it.
+    try:
+        from pathlib import Path as _Path
+        from zoneinfo import ZoneInfo as _ZI
+        today_et = datetime.now(_ZI('America/New_York')).date().isoformat()
+        week_end = (datetime.now(_ZI('America/New_York')).date() + timedelta(days=7)).isoformat()
+        tennis_db = _Path(__file__).resolve().parent / 'tennis' / 'database' / 'tennis.sqlite'
+        tconn = sqlite3.connect(f'file:{tennis_db}?mode=ro', uri=True, timeout=.2)
+        try:
+            today_n = tconn.execute(
+                "SELECT COUNT(*) FROM matches WHERE status IN ('live','scheduled') "
+                "AND substr(match_date,1,10)=?",
+                (today_et,),
+            ).fetchone()[0]
+            week_n = tconn.execute(
+                "SELECT COUNT(*) FROM matches WHERE status IN ('live','scheduled') "
+                "AND substr(match_date,1,10)>=? AND substr(match_date,1,10)<?",
+                (today_et, week_end),
+            ).fetchone()[0]
+            counts['TENNIS'] = (int(today_n or 0), int(week_n or 0))
+        finally:
+            tconn.close()
+    except Exception as exc:
+        logger.debug(f"[web] tennis game counts failed: {exc}")
     _WEB_COUNTS['ts'] = now
     _WEB_COUNTS['counts'] = counts
     return counts
@@ -89262,6 +89338,16 @@ def sitemap_xml():
     urls.append((_SITE_DOMAIN + '/refund-policy', 'monthly', '0.3'))
     urls.append((_SITE_DOMAIN + '/responsible-gaming', 'monthly', '0.4'))
     urls.append((_SITE_DOMAIN + '/blog', 'daily', '0.7'))
+    urls.append((_SITE_DOMAIN + '/tools', 'weekly', '0.7'))
+    for _tool in (
+        '/tools/odds-conversion-calculator',
+        '/tools/parlay-calculator',
+        '/tools/hold-calculator',
+        '/tools/no-vig-calculator',
+        '/tools/clv-calculator',
+        '/tools/kelly-criterion-calculator',
+    ):
+        urls.append((_SITE_DOMAIN + _tool, 'monthly', '0.65'))
 
     try:
         from sport_blog_previews import sitemap_article_entries
@@ -112110,11 +112196,11 @@ def sport_results__ncaaf(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -113315,11 +113401,11 @@ def sport_results__mlb(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -114654,11 +114740,11 @@ def sport_results__nhl(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -115875,11 +115961,11 @@ def sport_results__nba(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -117116,7 +117202,7 @@ def sport_results__ncaab(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -118344,7 +118430,7 @@ def sport_results__ncaaw(sport):
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -119571,11 +119657,11 @@ def sport_results__wnba(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -120774,11 +120860,11 @@ def sport_results__cfl(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -122024,11 +122110,11 @@ def sport_results__soccer(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -123237,11 +123323,11 @@ def sport_results__tennis(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -124440,11 +124526,11 @@ def sport_results__ufc(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -125643,11 +125729,11 @@ def sport_results__golf(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':
@@ -126918,11 +127004,11 @@ def sport_results(sport):
             roi_weekly = compute_roi_for_range(daily_results, weekly_start_dt, weekly_end_dt)
             roi_total = compute_roi_for_range(daily_results, None, None)
             # Season ROI W-L must match face Season Performance (same pick + grade).
-            if sport in ('MLB', 'SOCCER', 'WNBA'):
+            if season_perf:
                 roi_total = _align_roi_moneyline_to_season_perf(roi_total, season_perf)
             roi_cards = build_roi_cards(
                 roi_daily, roi_weekly, roi_total,
-                win_pct_primary=(sport in ('NCAAF', 'NFL')),
+                win_pct_primary=(sport in ('NCAAF', 'NFL', 'NCAAB', 'NCAAW', 'NBA', 'NHL', 'MLB', 'WNBA', 'CFL')),
             )
             soccer_leagues = None
             if sport == 'SOCCER':

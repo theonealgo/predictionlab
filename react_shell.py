@@ -62,6 +62,64 @@ _OTHER_PAGES = {
                           "Every sport's AI predictions on one page, with each prediction type's recent record."),
     '/all-sports-projections': ('All Sports Predictions Today | Prediction Lab',
                                 "Every sport's AI projections on one page, with each pick type's recent record."),
+    # Props & Models menu + Daily Results (blog feed box beside the classic page).
+    # Every visitor URL + rename target must be listed or React never mounts BlogFeedBox.
+    '/performance': ('Model Performance | Prediction Lab',
+                     'Model performance records across sports on Prediction Lab.'),
+    '/ladder-picks': ('The Ladder | Prediction Lab',
+                     'The Prediction Lab ladder — parlays backed by graded records.'),
+    '/ladder': ('The Ladder | Prediction Lab',
+                'The Prediction Lab ladder — parlays backed by graded records.'),
+    '/daily-report': ('Daily Results | Prediction Lab',
+                     'Daily model results across every sport on Prediction Lab.'),
+    '/our-model-vs-sportsbooks': ('Model vs Sportsbooks | Prediction Lab',
+                                 'How Prediction Lab models compare with sportsbook prices.'),
+    '/our-model-vs-market': ('Model vs Sportsbooks | Prediction Lab',
+                             'How Prediction Lab models compare with sportsbook prices.'),
+    '/tutorial': ('Tutorial | Prediction Lab',
+                  'How to read Prediction Lab model predictions, scores, spreads, and totals.'),
+    '/ai-sports-betting-picks-today': ('AI Predictions Today | Prediction Lab',
+                                      "Today's AI sports predictions from Prediction Lab."),
+    '/ai-sports-predictions-today': ('AI Predictions Today | Prediction Lab',
+                                    "Today's AI sports predictions from Prediction Lab."),
+    '/ai-sports-projections-today': ('AI Predictions Today | Prediction Lab',
+                                    "Today's AI sports predictions from Prediction Lab."),
+    '/tools': ('Sports Betting Calculators & Tools | PredictionLab',
+               'Free sports betting calculators: odds conversion, parlays, hold, no-vig fair odds, '
+               'CLV, and Kelly criterion — built for PredictionLab.'),
+}
+
+_TOOL_PAGES = {
+    '/tools/odds-conversion-calculator': (
+        'Odds Conversion Calculator — American, Decimal, Fractional | PredictionLab',
+        'Free odds conversion calculator: convert American, decimal, and fractional odds to '
+        'implied probability, plus payout and profit from a stake.',
+    ),
+    '/tools/parlay-calculator': (
+        'Parlay Calculator — Combined Odds, Payout & Profit | PredictionLab',
+        'Free parlay calculator for American odds: add legs, see combined decimal and American odds, '
+        'implied win probability, total payout, and net profit.',
+    ),
+    '/tools/hold-calculator': (
+        'Hold Calculator — Sportsbook Overround & Vig | PredictionLab',
+        'Free sportsbook hold calculator: enter both sides (or 1X2), see implied probabilities, '
+        'market overround, and hold percentage.',
+    ),
+    '/tools/no-vig-calculator': (
+        'No-Vig Fair Odds Calculator | PredictionLab',
+        'Free no-vig calculator: remove sportsbook margin from two-way or three-way markets to get '
+        'fair probabilities and fair American/decimal odds.',
+    ),
+    '/tools/clv-calculator': (
+        'CLV Calculator — Closing Line Value | PredictionLab',
+        'Free closing line value (CLV) calculator: compare odds taken vs closing odds, optional '
+        'no-vig close, and see CLV % with a clear positive/negative badge.',
+    ),
+    '/tools/kelly-criterion-calculator': (
+        'Kelly Criterion Calculator — Stake Sizing | PredictionLab',
+        'Free Kelly criterion calculator: compute EV, full Kelly, and half/quarter Kelly stake '
+        'recommendations from bankroll, American odds, and true win probability.',
+    ),
 }
 
 
@@ -70,6 +128,8 @@ def _page_meta(path):
     clean = path.rstrip('/') or '/'
     if clean in _OTHER_PAGES:
         return _OTHER_PAGES[clean]
+    if clean in _TOOL_PAGES:
+        return _TOOL_PAGES[clean]
     match = _SPORT_PAGE.match(path)
     if not match:
         return None
@@ -99,6 +159,9 @@ class PublicPaths:
 
     def __call__(self, environ, start_response):
         path = environ.get('PATH_INFO', '')
+        # /classic/... iframes must hit the Flask page; never 301 them away.
+        if environ.get('pl.classic'):
+            return self.wsgi_app(environ, start_response)
         renamed = RENAMED.get(path.rstrip('/') or '/')
         if renamed and environ.get('REQUEST_METHOD') in ('GET', 'HEAD') and _real_visitor(environ):
             target = renamed + ('?' + environ['QUERY_STRING'] if environ.get('QUERY_STRING') else '')

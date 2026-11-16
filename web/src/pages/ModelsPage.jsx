@@ -1,0 +1,35 @@
+import { useEffect, useRef } from 'react';
+import BlogFeedBox from '../components/BlogFeedBox.jsx';
+import { trimFrame, whenFrameParsed } from '../frameTools.js';
+
+/**
+ * Models-menu pages: classic page + independent Sports News / Latest blog box.
+ * No sports left rail — only the page and the blog box.
+ */
+export default function ModelsPage({ classicPath, title }) {
+  const frame = useRef(null);
+  const qs = typeof window !== 'undefined' ? window.location.search : '';
+  const src = `/classic${classicPath}${qs}`;
+
+  useEffect(() => {
+    const node = frame.current;
+    if (!node) return undefined;
+    const prepare = () => trimFrame(node);
+    return whenFrameParsed(node, src, prepare);
+  }, [src]);
+
+  return (
+    <div className="pl-models-layout">
+      <main className="pl-models-main">
+        <iframe
+          ref={frame}
+          className="pl-models-frame"
+          title={title || 'Models'}
+          src={src}
+          onLoad={() => trimFrame(frame.current)}
+        />
+      </main>
+      <BlogFeedBox className="pl-models-blogs" />
+    </div>
+  );
+}

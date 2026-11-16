@@ -36,6 +36,18 @@
                     <a href="/results/downloads">Download CSV</a>
                 </div>
             </div>
+            <div class="pl-menu">
+                <button type="button" aria-expanded="false" aria-haspopup="true">Tools</button>
+                <div class="pl-menu-list" hidden>
+                    <a href="/tools">All Betting Tools</a>
+                    <a href="/tools/odds-conversion-calculator">Odds Conversion Calculator</a>
+                    <a href="/tools/parlay-calculator">Parlay Calculator</a>
+                    <a href="/tools/hold-calculator">Hold Calculator</a>
+                    <a href="/tools/no-vig-calculator">No-Vig Calculator</a>
+                    <a href="/tools/clv-calculator">CLV Calculator</a>
+                    <a href="/tools/kelly-criterion-calculator">Kelly Criterion Calculator</a>
+                </div>
+            </div>
             <a href="/blog">Blog</a>
         </nav>
         <div class="pl-right">
@@ -100,6 +112,16 @@
             {% for name, slug in SPORTS %}<a href="/{{ slug }}-results">{{ name }} results</a>{% endfor %}
             <a href="/daily-report">Daily Results</a>
             <a href="/results/downloads">Download CSV</a>
+        </details>
+        <details class="pl-drawer-folder">
+            <summary>Tools</summary>
+            <a href="/tools">All Betting Tools</a>
+            <a href="/tools/odds-conversion-calculator">Odds Conversion Calculator</a>
+            <a href="/tools/parlay-calculator">Parlay Calculator</a>
+            <a href="/tools/hold-calculator">Hold Calculator</a>
+            <a href="/tools/no-vig-calculator">No-Vig Calculator</a>
+            <a href="/tools/clv-calculator">CLV Calculator</a>
+            <a href="/tools/kelly-criterion-calculator">Kelly Criterion Calculator</a>
         </details>
         <details class="pl-drawer-folder">
             <summary>Props &amp; Models</summary>
