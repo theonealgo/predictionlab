@@ -144,9 +144,13 @@ def _conn() -> sqlite3.Connection:
         except Exception:
             n_final = n_up = 0
         # Demo slate is tiny; also resync when picks slate is empty.
+        # Never sync on a Flask request thread (visitor or card SSR) — that fought
+        # the 2.5s ESPN page budget and wedged the single Render worker.
         if n_final < 8 or n_up < 2:
             try:
-                sync_tennis_db(force=True)
+                from flask import has_request_context
+                if not has_request_context():
+                    sync_tennis_db(force=True)
             except Exception:
                 pass
     con = sqlite3.connect(str(DB_PATH))

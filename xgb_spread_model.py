@@ -98,9 +98,58 @@ _MODEL_VERSION = 'v3_variance_b2b'
 
 # ── Module-level model cache  {sport: {'ts': float, 'model': ..., 'ver': str}} ──
 _MODEL_CACHE: dict = {}
-_CACHE_TTL = 3600  # retrain at most once per hour
+# Memory TTL can be long — disk pickle covers worker restarts on Render.
+_CACHE_TTL = 6 * 3600
 
 N_FEATURES = 20  # must match feature vector built in train() and predict()
+
+
+def _disk_model_path(sport: str):
+    try:
+        from served_cache import cache_dir
+        base = cache_dir() / 'xgb_spread'
+    except Exception:
+        from pathlib import Path
+        base = Path(__file__).resolve().parent / '.cache' / 'xgb_spread'
+    base.mkdir(parents=True, exist_ok=True)
+    return base / f'{sport}_{_MODEL_VERSION}.pkl'
+
+
+def _load_disk_model(sport: str):
+    path = _disk_model_path(sport)
+    if not path.is_file():
+        return None
+    try:
+        import pickle
+        with open(path, 'rb') as fh:
+            model = pickle.load(fh)
+        if getattr(model, '_trained', False) and getattr(model, 'sport', None) == sport:
+            return model
+    except Exception as exc:
+        logger.debug(f'[{sport}] xgb disk load failed: {exc}')
+    return None
+
+
+def _save_disk_model(sport: str, model) -> None:
+    path = _disk_model_path(sport)
+    tmp = path.with_suffix('.tmp')
+    try:
+        import pickle
+        with open(tmp, 'wb') as fh:
+            pickle.dump(model, fh, protocol=pickle.HIGHEST_PROTOCOL)
+        tmp.replace(path)
+    except Exception as exc:
+        logger.debug(f'[{sport}] xgb disk save failed: {exc}')
+        try:
+            tmp.unlink(missing_ok=True)
+        except TypeError:
+            try:
+                if tmp.is_file():
+                    tmp.unlink()
+            except Exception:
+                pass
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -448,7 +497,7 @@ class XGBSpreadTotalPredictor:
 def get_or_train_model(sport: str, completed_games: list, team_stats: dict):
     """
     Return a trained XGBSpreadTotalPredictor for `sport`.
-    Re-trains if cache is missing, expired (>1 hour), or model version changed.
+    Prefers in-memory + /data disk pickle so Render does not retrain every deploy.
     """
     now = time.time()
     cached = _MODEL_CACHE.get(sport)
@@ -459,9 +508,22 @@ def get_or_train_model(sport: str, completed_games: list, team_stats: dict):
     ):
         return cached['model']
 
+    disk = _load_disk_model(sport)
+    if disk is not None:
+        # Refresh team_stats map so predict() sees current names without a full retrain.
+        try:
+            if team_stats:
+                disk.team_stats = team_stats
+        except Exception:
+            pass
+        _MODEL_CACHE[sport] = {'ts': now, 'model': disk, 'ver': _MODEL_VERSION}
+        logger.info(f'[{sport}] XGBSpread loaded from disk cache')
+        return disk
+
     model = XGBSpreadTotalPredictor(sport)
     ok = model.train(completed_games, team_stats)
     if ok:
         _MODEL_CACHE[sport] = {'ts': now, 'model': model, 'ver': _MODEL_VERSION}
+        _save_disk_model(sport, model)
         return model
     return None

@@ -241,6 +241,7 @@ def _reword_cards(payload):
     return payload
 
 _GAME_ID = re.compile(r'\sdata-game-id="([^"]*)"')
+_CARD_TIME_DATE = re.compile(r'class="game-time"[^>]*>\s*(\d{4}-\d{2}-\d{2})\b')
 _GAME_DATES = {}  # sport -> (loaded at, {game id: 'YYYY-MM-DD'})
 _EMOJI = re.compile('[\U0001F300-\U0001FAFF☀-➿⭐️‍]+')
 
@@ -262,7 +263,13 @@ def _page_html(path, app=None, host=None, cookie=None):
     """A page of this site, rendered in-process for the visitor (their host and cookies, so the
     paywall matches). A background refresh passes the app, host and cookie it captured."""
     app = app or current_app
-    headers = {'Host': host or request.host, 'X-Forwarded-Proto': 'https'}
+    # X-PL-Internal: card SSR must not share the visitor 2.5s ESPN page budget
+    # (that budget was causing "page budget spent" storms and worker hangs).
+    headers = {
+        'Host': host or request.host,
+        'X-Forwarded-Proto': 'https',
+        'X-PL-Internal': '1',
+    }
     cookie = cookie if host else request.headers.get('Cookie')
     if cookie:
         headers['Cookie'] = cookie
@@ -326,6 +333,53 @@ def _share_image(html):
     block = html[m.start():stop]
     opened = len(re.findall(r'<div\b', block, re.I)) - len(re.findall(r'</div>', block, re.I))
     return block + '</div>' * max(opened, 0)
+
+
+_SHARE_TOKEN_IN_HTML = re.compile(r'/share/predictions/([0-9a-f]{32})\.jpg', re.I)
+
+
+def _ensure_live_share_image(payload, slug):
+    """Re-mint the Predictions Image when the web_cards feed still names an expired token."""
+    if not isinstance(payload, dict):
+        return payload
+    share = payload.get('shareImage') or ''
+    m = _SHARE_TOKEN_IN_HTML.search(share)
+    if not m:
+        return payload
+    token = m.group(1)
+    try:
+        from NHL77FINAL import _get_share_cache_entry
+        if _get_share_cache_entry(token):
+            return payload
+    except Exception:
+        return payload
+    sport = _sport_for(slug) or (slug or 'Picks').replace('-picks', '').upper()
+    parts = []
+    for card in payload.get('cards') or []:
+        if not isinstance(card, dict):
+            continue
+        date = (card.get('date') or '').strip()
+        if date:
+            parts.append(f'<div id="date-{date}"></div>')
+        parts.append(card.get('html') or '')
+    if not parts:
+        return payload
+    try:
+        from isolate_checker_fixes import refresh_predictions_share_image
+        rebuilt = refresh_predictions_share_image(
+            '<main>' + ''.join(parts) + share + '</main>', sport
+        )
+        new_share = _share_image(rebuilt)
+        if not new_share or new_share == share:
+            return payload
+        out = dict(payload)
+        out['shareImage'] = new_share
+        return out
+    except Exception:
+        logging.getLogger(__name__).exception(
+            '[web cards] share image revive failed for %s', slug
+        )
+        return payload
 
 
 _CARD_SHEETS = ('mlb-pick-cards.css',)
@@ -497,22 +551,81 @@ def api_live():
     response.headers['Cache-Control'] = 'no-store'
     return response
 
+def _results_summary_cell(cell):
+    if not isinstance(cell, dict):
+        return {'status': 'unavailable', 'record': 'N/A', 'pct': None, 'reason': ''}
+    return {
+        'status': cell.get('status'),
+        'record': cell.get('record'),
+        'pct': cell.get('pct'),
+        'reason': cell.get('reason') or '',
+    }
+
+
+def _results_summary_row(row):
+    return {
+        'sport': row['sport'],
+        'name': row['name'],
+        'results_url': row['results_url'],
+        'through': row.get('through') or '',
+        'available': bool(row.get('available')),
+        'ml': {key: _results_summary_cell(val) for key, val in (row.get('ml') or {}).items()},
+        'spread': {key: _results_summary_cell(val) for key, val in (row.get('spread') or {}).items()},
+        'ou': {key: _results_summary_cell(val) for key, val in (row.get('ou') or {}).items()},
+    }
+
+
 @api.route('/api/web/results-summary')
 def api_results_summary():
-    from all_sports_summary import render_fragment, summary_rows, warm_missing
+    """Homepage results rail.
+
+    Default (no sport=): full HTML fragment — matches the live React board.
+    ?sport=NBA: one-sport JSON (lighter; for a future picker client).
+    """
+    from all_sports_summary import MODELS, SPORTS, render_fragment, summary_rows, warm_missing
+    sport = (request.args.get('sport') or '').upper()
+    catalog = [{'key': key, 'name': name, 'results_url': f'/{key.lower()}-results'}
+               for key, name in SPORTS]
+    models = [{'id': key, 'label': label} for key, label in MODELS]
+    if sport and sport in dict(SPORTS):
+        rows = [row for row in summary_rows() if row['sport'] == sport]
+        warm_missing(current_app._get_current_object(), rows)
+        pending = any(not row['available'] and row['sport'] != 'GOLF' for row in rows)
+        response = jsonify({
+            'sports': catalog,
+            'models': models,
+            'rows': [_results_summary_row(row) for row in rows],
+            'pending': pending,
+        })
+        response.headers['Cache-Control'] = 'public, max-age=30'
+        return response
+    # Live homepage + all-sports-results: full HTML board (same as before).
     rows = summary_rows()
     warm_missing(current_app._get_current_object(), rows)
-    return jsonify({'html': render_fragment(rows),
-                    'pending': any(not row['available'] and row['sport'] != 'GOLF' for row in rows)})
+    return jsonify({
+        'html': render_fragment(rows),
+        'sports': catalog,
+        'models': models,
+        'pending': any(not row['available'] and row['sport'] != 'GOLF' for row in rows),
+    })
 
 
 _TENNIS_DB = Path(__file__).resolve().parent / 'tennis' / 'database' / 'tennis.sqlite'
 _TENNIS_SYNC = {'at': 0.0, 'running': False}
-_TENNIS_SYNC_EVERY = 10 * 60
+# Render: one worker — do not sync tennis every 10 minutes under load.
+_TENNIS_SYNC_EVERY = int(os.environ.get('PL_TENNIS_SYNC_S', str(30 * 60)) or (30 * 60))
+_PROCESS_START = time.time()
+_BOOT_GRACE_S = float(os.environ.get('PL_BOOT_GRACE_S', '180') or 180)
+
+
+def _in_boot_grace() -> bool:
+    return (time.time() - _PROCESS_START) < _BOOT_GRACE_S
 
 
 def _tennis_sync_in_background():
     """Keep the tennis DB's live / scheduled matches fresh (ESPN, ATP + WTA) for the live row."""
+    if _in_boot_grace():
+        return
     with _CARDS_LOCK:
         if _TENNIS_SYNC['running'] or time.time() - _TENNIS_SYNC['at'] < _TENNIS_SYNC_EVERY:
             return
@@ -640,9 +753,20 @@ def api_chrome():
 
 @api.route('/api/web/me')
 def api_me():
-    from flask_login import current_user
-    from auth_system import is_premium_user
-    return jsonify({'loggedIn': bool(current_user.is_authenticated), 'premium': bool(is_premium_user())})
+    """Membership for the React shell. Always JSON + no-store so a signed-in
+    props page never paints a cached guest answer or a non-JSON error page."""
+    try:
+        from flask_login import current_user
+        from auth_system import is_premium_user
+        logged_in = bool(getattr(current_user, 'is_authenticated', False))
+        premium = bool(is_premium_user()) if logged_in else False
+    except Exception:
+        current_app.logger.exception('api/web/me failed')
+        logged_in, premium = False, False
+    response = jsonify({'loggedIn': logged_in, 'premium': premium})
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.vary.add('Cookie')
+    return response
 
 
 @api.route('/api/web/season')
@@ -675,18 +799,21 @@ def _page_order(card):
 # Saved card feeds: one per sport and visitor kind (member / free signed in / signed out), so a
 # free visitor is never handed a member's cards. A saved feed is served at once; one older than
 # _CARDS_FRESH is refreshed in the background. Saved to disk too, so a restart starts warm.
-_CARDS_FRESH = 60
-_CARDS_KEEP = 6 * 3600
+# Keep FRESH aligned with the warmer so homepage traffic does not stampede full SSR rebuilds.
+_WARM_EVERY = 10 * 60
+_CARDS_FRESH = _WARM_EVERY
+_CARDS_KEEP = 7 * 24 * 3600
 _CARDS = {}  # (slug, tier) -> (saved at, payload)
 _CARDS_BUILDING = set()
 _CARDS_LOCK = threading.Lock()
+# Full classic-page card builds are heavy; only one runs at a time so visitors stay responsive.
+_CARD_BUILD_SLOTS = threading.Semaphore(1)
 try:
     from served_cache import cache_dir as _cache_dir
     _CARDS_DIR = _cache_dir() / 'web_cards'  # the persistent disk on the live server, so a deploy starts warm
 except Exception:
     _CARDS_DIR = Path(__file__).resolve().parent / '.cache' / 'web_cards'
 _WARM_HOST = 'predictionlab.io'
-_WARM_EVERY = 10 * 60
 
 
 def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
@@ -694,13 +821,22 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
     path = '/' + slug.replace('-projections', '-picks')
     if sport == 'SOCCER':
         path += '?region=all'  # the soccer page redirects to its region view without this
-    if limit is None:
-        html = _page_html(path, app, host, cookie)
-        page = None
-    else:
-        from card_pagination import window
-        with window(offset, limit) as page:
+    # Member feeds must be full paid HTML. Background rebuilds often have no
+    # visitor cookie; without this the free/locked slate is stored as "member"
+    # and premium NHL/NCAAB pages look empty or missing lines.
+    from contextlib import ExitStack
+    from unittest.mock import patch
+    with ExitStack() as stack:
+        if tier == 'member':
+            stack.enter_context(patch('auth_system.is_premium_user', return_value=True))
+            stack.enter_context(patch('NHL77FINAL.is_premium_user', return_value=True))
+        if limit is None:
             html = _page_html(path, app, host, cookie)
+            page = None
+        else:
+            from card_pagination import window
+            with window(offset, limit) as page:
+                html = _page_html(path, app, host, cookie)
     if not html or 'upstream data/model dependency failed' in html.lower():
         raise RuntimeError(f'Original sport renderer returned no page for {slug}')
     cards = _cards(html)
@@ -712,6 +848,9 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
         if not card['date']:
             found = _GAME_ID.search(card['html'])
             card['date'] = dates.get(found.group(1), '') if found else ''
+        if not card['date']:
+            shown = _CARD_TIME_DATE.search(card['html'])
+            card['date'] = shown.group(1) if shown else ''
     cards.sort(key=_page_order)
     total = len(cards)
     next_offset = None
@@ -730,18 +869,44 @@ def _cards_file(slug, tier):
     return _CARDS_DIR / f'{slug}.{tier}.v2.json.gz'
 
 
+def _read_cards_file(path):
+    raw = json.loads(gzip.decompress(path.read_bytes()))
+    # Older writers wrapped the feed; accept both shapes.
+    if isinstance(raw, dict) and 'cards' not in raw and isinstance(raw.get('payload'), dict):
+        raw = raw['payload']
+    return _reword_cards(raw)
+
+
+def _usable_cards(payload):
+    return bool(payload and (payload.get('cards') or payload.get('picks')))
+
+
 def _saved_cards(slug, tier):
     saved = _CARDS.get((slug, tier))
-    if saved:
+    if saved and _usable_cards(saved[1]):
         return saved
+    if saved and not _usable_cards(saved[1]):
+        _CARDS.pop((slug, tier), None)
     try:
-        path = _cards_file(slug, tier)
-        payload = _reword_cards(json.loads(gzip.decompress(path.read_bytes())))
-        saved = (path.stat().st_mtime, payload)
-        _CARDS[(slug, tier)] = saved
-        return saved
-    except (OSError, ValueError):
+        candidates = [
+            _cards_file(slug, tier),
+            # Homepage only needs the first page; older warmers saved that slice alone.
+            _CARDS_DIR / f'{slug}.{tier}-page-0-5.v2.json.gz',
+        ]
+        for path in candidates:
+            if not path.is_file():
+                continue
+            payload = _read_cards_file(path)
+            if not _usable_cards(payload):
+                continue
+            # Stamp "now" so a restart still serves multi-day-old disk feeds immediately
+            # (stale-while-revalidate); the warmer owns rebuilds.
+            saved = (time.time(), payload)
+            _CARDS[(slug, tier)] = saved
+            return saved
+    except (OSError, ValueError, TypeError):
         return None
+    return None
 
 
 def _save_cards(slug, tier, payload, allow_empty=False):
@@ -760,20 +925,55 @@ def _save_cards(slug, tier, payload, allow_empty=False):
 
 
 def _refresh_cards(slug, tier, app, host, cookie):
+    with _CARD_BUILD_SLOTS:
+        try:
+            with app.app_context():
+                payload = _build_cards(slug, tier, app, host, cookie)
+                _save_cards(slug, tier, payload)
+                if tier == 'guest':
+                    _save_cards(slug, 'free', payload, allow_empty=True)
+        except Exception:
+            logging.getLogger(__name__).exception('[web cards] refresh failed for %s', slug)
+        finally:
+            with _CARDS_LOCK:
+                _CARDS_BUILDING.discard((slug, tier))
+
+
+def _locked_from_member(payload):
+    """Member feed with Consensus / PL-vs-Books chips locked for guest/free visitors."""
+    import copy
+    out = copy.deepcopy(payload)
+    for card in out.get('cards') or []:
+        card['html'] = _lock_member_chips(card.get('html') or '')
+    return out
+
+
+def _seed_cards_from_disk():
+    """Load every saved feed into memory so the first visitor does not pay gzip I/O."""
     try:
-        with app.app_context():
-            _save_cards(slug, tier, _build_cards(slug, tier, app, host, cookie))
-    except Exception:
-        logging.getLogger(__name__).exception('[web cards] refresh failed for %s', slug)
-    finally:
-        with _CARDS_LOCK:
-            _CARDS_BUILDING.discard((slug, tier))
+        for path in _CARDS_DIR.glob('*.v2.json.gz'):
+            parts = path.name.split('.')
+            if len(parts) >= 3 and parts[1] in ('guest', 'free', 'member'):
+                _saved_cards(parts[0], parts[1])
+        # Fill missing guest/free from member so the homepage never waits on a cold SSR.
+        for path in _CARDS_DIR.glob('*.member.v2.json.gz'):
+            slug = path.name.split('.')[0]
+            if _saved_cards(slug, 'guest'):
+                continue
+            member = _saved_cards(slug, 'member')
+            if not member:
+                continue
+            locked = _locked_from_member(member[1])
+            _save_cards(slug, 'guest', locked, allow_empty=True)
+            _save_cards(slug, 'free', locked, allow_empty=True)
+    except OSError:
+        pass
 
 
 def _warm_cards_loop(app):
     """Keep every sport's signed-out feed built, one sport at a time, so no visitor waits on a build."""
     from NHL77FINAL import SPORT_SEO_SLUGS
-    time.sleep(20)
+    time.sleep(2)
     while True:
         for sport in _SPORT_ORDER:
             slug = SPORT_SEO_SLUGS.get(sport, '').replace('-projections', '-picks')
@@ -781,12 +981,18 @@ def _warm_cards_loop(app):
                 continue
             saved = _saved_cards(slug, 'guest')
             if saved and time.time() - saved[0] < _WARM_EVERY:
+                # Free visitors share the guest feed (chips already locked).
+                if not _saved_cards(slug, 'free'):
+                    _save_cards(slug, 'free', saved[1], allow_empty=True)
                 continue
             with _CARDS_LOCK:
                 if (slug, 'guest') in _CARDS_BUILDING:
                     continue
                 _CARDS_BUILDING.add((slug, 'guest'))
             _refresh_cards(slug, 'guest', app, _WARM_HOST, None)
+            guest = _saved_cards(slug, 'guest')
+            if guest:
+                _save_cards(slug, 'free', guest[1], allow_empty=True)
         time.sleep(_WARM_EVERY)
 
 
@@ -794,18 +1000,44 @@ _WARM_STARTED = False
 
 
 def start_cards_warmer(app):
+    """Seed disk feeds into memory on boot. Full SSR warm loop only if PL_WEB_WARM=1."""
     global _WARM_STARTED
-    if _WARM_STARTED or os.environ.get('PL_WEB_WARM') != '1' or os.environ.get('PL_EAGER_WARM', '0') != '1':
+    if _WARM_STARTED:
         return
     _WARM_STARTED = True
+    _seed_cards_from_disk()
+    # Default off: background classic-page builds starve the left sports nav.
+    if os.environ.get('PL_WEB_WARM', '0') != '1':
+        return
     threading.Thread(target=_warm_cards_loop, args=(app,), daemon=True, name='web-cards-warm').start()
 
 
 _CARD_ERRORS = {}
 
 
+def _cards_for_tier(slug, tier):
+    """Guest/free share the locked feed; never hand a member feed to a free visitor."""
+    saved = _saved_cards(slug, tier)
+    if saved and _usable_cards(saved[1]):
+        return saved
+    if tier in ('guest', 'free'):
+        saved = _saved_cards(slug, 'free' if tier == 'guest' else 'guest')
+        if saved and _usable_cards(saved[1]):
+            return saved
+        member = _saved_cards(slug, 'member')
+        if member and _usable_cards(member[1]):
+            locked = _locked_from_member(member[1])
+            _save_cards(slug, 'guest', locked, allow_empty=True)
+            _save_cards(slug, 'free', locked, allow_empty=True)
+            return (time.time(), locked)
+    return None
+
+
 def _start_full_cards(slug, tier, app):
     """One full build per sport and tier; every page of cards is cut from it."""
+    # Right after deploy, prefer answering the homepage over starting N classic SSRs.
+    if _in_boot_grace():
+        return False
     with _CARDS_LOCK:
         if (slug, tier) in _CARDS_BUILDING:
             return True
@@ -813,17 +1045,20 @@ def _start_full_cards(slug, tier, app):
     host, cookie = request.host, request.headers.get('Cookie')
 
     def build():
-        try:
-            with app.app_context():
-                payload = _build_cards(slug, tier, app, host, cookie)
-                _save_cards(slug, tier, payload, allow_empty=not _saved_cards(slug, tier))
-            _CARD_ERRORS.pop((slug, tier), None)
-        except Exception:
-            _CARD_ERRORS[(slug, tier)] = time.time()
-            logging.getLogger(__name__).exception('[web cards] build failed for %s', slug)
-        finally:
-            with _CARDS_LOCK:
-                _CARDS_BUILDING.discard((slug, tier))
+        with _CARD_BUILD_SLOTS:
+            try:
+                with app.app_context():
+                    payload = _build_cards(slug, tier, app, host, cookie)
+                    _save_cards(slug, tier, payload, allow_empty=not _cards_for_tier(slug, tier))
+                    if tier == 'guest':
+                        _save_cards(slug, 'free', payload, allow_empty=True)
+                _CARD_ERRORS.pop((slug, tier), None)
+            except Exception:
+                _CARD_ERRORS[(slug, tier)] = time.time()
+                logging.getLogger(__name__).exception('[web cards] build failed for %s', slug)
+            finally:
+                with _CARDS_LOCK:
+                    _CARDS_BUILDING.discard((slug, tier))
 
     threading.Thread(target=build, daemon=True, name=f'cards-{slug}-{tier}').start()
     return True
@@ -831,20 +1066,23 @@ def _start_full_cards(slug, tier, app):
 
 def _card_page(slug, tier, app, offset, limit):
     from slate_freshness import current_payload
-    saved = _saved_cards(slug, tier)
+    saved = _cards_for_tier(slug, tier)
     if saved and time.time()-saved[0] < _CARDS_KEEP:
-        payload = current_payload(saved[1])
-        running = (slug, tier) in _CARDS_BUILDING
-        if time.time()-saved[0] >= _CARDS_FRESH or payload.get('suppressed_stale_predictions'):
-            running = _start_full_cards(slug, tier, app)
+        payload = _ensure_live_share_image(current_payload(saved[1]), slug)
+        if payload is not saved[1] and payload.get('shareImage') != (saved[1] or {}).get('shareImage'):
+            _save_cards(slug, tier, payload, allow_empty=True)
         cards = payload['cards'][offset:offset+limit]
         total = len(payload['cards'])
         next_offset = offset+len(cards) if offset+len(cards) < total else None
+        # Never flag refreshing when cards are already on hand — the client skips
+        # caching refreshing payloads and the homepage would refetch every sport.
         return {**payload, 'cards': cards, 'total': total, 'offset': offset,
                 'nextOffset': next_offset, 'hasMore': next_offset is not None,
-                'refreshing': running}, 200
+                'refreshing': False}, 200
     if time.time()-_CARD_ERRORS.get((slug, tier), 0) < 15:
         return {'error': 'Games could not be loaded. Please retry.', 'cards': []}, 503
+    # One cold build at a time (semaphore inside _start_full_cards). Homepage stays
+    # serial so this does not stampede; sport pages poll building:true.
     _start_full_cards(slug, tier, app)
     return {'cards': [], 'total': None, 'css': '', 'shareImage': '', 'offset': offset,
             'nextOffset': offset, 'hasMore': True, 'building': True,
@@ -871,7 +1109,7 @@ def api_cards(slug):
         except (ValueError, TypeError):
             return jsonify(error='Choose a valid game page.'), 400
         payload, status = _card_page(slug, tier, app, offset, limit)
-        if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB'}:
+        if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NBA'}:
             from market_card_refresh import refresh as refresh_market_cards
             from NHL77FINAL import DATABASE
             payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)
@@ -883,25 +1121,18 @@ def api_cards(slug):
         response.headers['Cache-Control'] = 'private, no-store'
         response.vary.add('Cookie')
         return response
-    saved = _saved_cards(slug, tier)
+    saved = _cards_for_tier(slug, tier)
     age = time.time() - saved[0] if saved else None
     if saved and age < _CARDS_KEEP:
         payload = saved[1]
-        if age >= _CARDS_FRESH:
-            with _CARDS_LOCK:
-                start = (slug, tier) not in _CARDS_BUILDING
-                _CARDS_BUILDING.add((slug, tier))
-            if start:
-                threading.Thread(
-                    target=_refresh_cards,
-                    args=(slug, tier, app, request.host, request.headers.get('Cookie')),
-                    daemon=True,
-                ).start()
     else:
-        payload = _build_cards(slug, tier, app, request.host, request.headers.get('Cookie'))
+        with _CARD_BUILD_SLOTS:
+            payload = _build_cards(slug, tier, app, request.host, request.headers.get('Cookie'))
         _save_cards(slug, tier, payload)
+        if tier == 'guest':
+            _save_cards(slug, 'free', payload, allow_empty=True)
     from slate_freshness import current_payload
-    payload = current_payload(payload)
+    payload = _ensure_live_share_image(current_payload(payload), slug)
     if payload['suppressed_stale_predictions']:
         with _CARDS_LOCK:
             start = (slug, tier) not in _CARDS_BUILDING
@@ -912,7 +1143,7 @@ def api_cards(slug):
                              args=(slug, tier, app, request.host, request.headers.get('Cookie')),
                              daemon=True).start()
     payload['refreshing'] = (slug, tier) in _CARDS_BUILDING
-    if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB'}:
+    if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NBA'}:
         from market_card_refresh import refresh as refresh_market_cards
         from NHL77FINAL import DATABASE
         payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)

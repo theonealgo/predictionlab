@@ -16044,6 +16044,29 @@ _PAGE_HTTP_BUDGET_S = 2.5
 _PAGE_HTTP_RE = re.compile(
     r'^/(?:mlb|nba|nfl|nhl|ncaab|ncaaf|ncaaw|wnba|cfl|soccer|tennis|ufc|golf)-(?:picks|results)/?$'
 )
+# Wall clock when this worker imported the app — used to defer score syncs after deploy.
+_WORKER_BOOT_MONO = _time.monotonic()
+_SCORE_SYNC_SLOTS = threading.BoundedSemaphore(
+    max(1, int(_os_v2.environ.get('PL_SCORE_SYNC_SLOTS', '1') or 1))
+)
+
+
+def _page_http_budget_exempt() -> bool:
+    """Internal rebuilds / card SSR must not share the visitor 2.5s ESPN cap."""
+    if not has_request_context():
+        return True
+    try:
+        hdr = request.headers
+        if hdr.get('X-PL-Results-Rebuild') == '1' or hdr.get('X-PL-Internal') == '1':
+            return True
+        host = (request.host or '').lower()
+        if host.startswith('localhost') or 'results-refresh.local' in host:
+            return True
+        if getattr(_PAGE_REBUILD_LOCAL, 'force', False):
+            return True
+    except Exception:
+        return False
+    return False
 
 
 @app.after_request
@@ -16225,7 +16248,7 @@ def _install_page_http_budget():
         return
 
     def _budgeted(self, method, url, *args, **kwargs):
-        if has_request_context():
+        if has_request_context() and not _page_http_budget_exempt():
             from flask import g as _g
             t0 = getattr(_g, '_pl_http_t0', None)
             if t0 is not None:
@@ -16246,7 +16269,7 @@ def _install_page_http_budget():
     _orig_open = _ureq.urlopen
 
     def _budgeted_open(url, *args, **kwargs):
-        if has_request_context():
+        if has_request_context() and not _page_http_budget_exempt():
             from flask import g as _g
             t0 = getattr(_g, '_pl_http_t0', None)
             if t0 is not None:
@@ -128526,11 +128549,17 @@ def _results_page_date_kwargs(daily_results, sorted_dates):
 
 def _start_background_score_sync(sport, sync_fn=None):
     """Fire-and-forget score sync — never block page render on ESPN."""
+    # After a Render deploy the single worker must answer / and cards first.
+    _grace = float(_os_v2.environ.get('PL_BOOT_GRACE_S', '180') or 180)
+    if (_time.monotonic() - _WORKER_BOOT_MONO) < _grace:
+        return
     sync_key = f'{sport}_results_score_sync_ts'
     sync_entry = _SPORT_RESULTS_CACHE.get(sync_key)
     sync_last_ts = sync_entry.get('ts') if isinstance(sync_entry, dict) else None
     now_ts = _time.time()
     if sync_last_ts is not None and (now_ts - sync_last_ts) < 600:
+        return
+    if not _SCORE_SYNC_SLOTS.acquire(blocking=False):
         return
     _SPORT_RESULTS_CACHE[sync_key] = {'ts': now_ts}
     if sync_fn is None:
@@ -128538,9 +128567,19 @@ def _start_background_score_sync(sport, sync_fn=None):
             sync_fn = update_nhl_scores
         else:
             sync_fn = lambda s=sport: update_espn_scores(s)
+
+    def _run(fn=sync_fn):
+        try:
+            fn()
+        finally:
+            try:
+                _SCORE_SYNC_SLOTS.release()
+            except Exception:
+                pass
+
     import threading as _thr
     _thr.Thread(
-        target=sync_fn,
+        target=_run,
         daemon=True,
         name=f'score-sync-{sport}',
     ).start()

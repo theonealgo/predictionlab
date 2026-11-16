@@ -32,8 +32,17 @@ except Exception:
 bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
 workers = 1
 worker_class = "gthread"
-threads = 8
+# 8 gthreads on a 1-CPU / 2 GB box inflate RSS and fight the GIL during XGB/ESPN
+# storms after deploy. Cap on Render-sized hosts; override with GUNICORN_THREADS.
+_default_threads = "4" if (
+    os.path.isdir("/data") or os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID")
+) else "8"
+threads = max(2, int(os.environ.get("GUNICORN_THREADS", _default_threads) or _default_threads))
 timeout = 120
+# Recycle the worker before RAM creep OOMs the 2–4 GB Render box.
+# Jitter spreads restarts so a traffic spike does not coincide with recycle.
+max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", "250") or 250)
+max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", "40") or 40)
 # preload_app MUST stay False.
 # With preload_app=True gunicorn imports the whole app in the MASTER *before*
 # binding $PORT, so the port only opens after every top-level import finishes —

@@ -22,6 +22,16 @@ export MALLOC_TRIM_THRESHOLD_=131072
 export OMP_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
+# One background page rebuild at a time on Render (each can be hundreds of MB).
+export PL_BUILD_SLOTS="${PL_BUILD_SLOTS:-1}"
+# Defer score sync / tennis ESPN for a few minutes so / and cards answer first.
+export PL_BOOT_GRACE_S="${PL_BOOT_GRACE_S:-180}"
+export PL_SCORE_SYNC_SLOTS="${PL_SCORE_SYNC_SLOTS:-1}"
+export PL_TENNIS_SYNC_S="${PL_TENNIS_SYNC_S:-1800}"
+export GUNICORN_THREADS="${GUNICORN_THREADS:-4}"
+# Worker recycle — see gunicorn.conf.py max_requests (override via env if needed).
+export GUNICORN_MAX_REQUESTS="${GUNICORN_MAX_REQUESTS:-250}"
+export GUNICORN_MAX_REQUESTS_JITTER="${GUNICORN_MAX_REQUESTS_JITTER:-40}"
 
 # ── Launch Flask app via gunicorn (optional Datadog APM via ddtrace-run) ───────
 if [ -n "${DD_API_KEY:-}" ] || [ "${DD_TRACE_ENABLED:-}" = "true" ]; then

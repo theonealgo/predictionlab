@@ -262,12 +262,20 @@ def fetch_tennis_slate() -> tuple[
     upcoming: dict[str, dict[str, Any]] = {}
     logos: dict[str, str] = {}
     flags: dict[str, str] = {}
+    budget_fails = 0
     for url in _scoreboard_urls():
         tour = "wta" if "/wta/" in url else "atp"
         try:
             data = _fetch_json(url)
+            budget_fails = 0
         except Exception as exc:
             print(f"[tennis sync] {url} failed: {exc}", flush=True)
+            msg = str(exc).lower()
+            if "page budget" in msg or "budget spent" in msg:
+                budget_fails += 1
+                # Visitor page budget is 2.5s — stop hammering ESPN after two hits.
+                if budget_fails >= 2:
+                    break
             continue
         rows, ids, fl = _parse_singles(data, tour, include_upcoming=True)
         logos.update(ids)
