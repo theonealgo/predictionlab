@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getJson, peekJson } from '../api.js';
 import { useDragScroll } from '../hooks/useDragScroll.js';
+import BlogFeedBox from '../components/BlogFeedBox.jsx';
 
 // All Sports Picks: every open pick across the sports, from the same board the classic page shows
 // (members only, same rule). Picks by day, a sport filter, today's Ladder pick, and the graded results.
@@ -223,8 +224,8 @@ export default function AllSportsPage() {
               </section>
             ))}
             <p className="pl-asp-note">
-              <span className="pl-asp-ladder-tag">Ladder</span> marks a pick type with {board.rules.games}+ graded predictions whose
-              record clears the rate its price needs. Past records do not guarantee future results.
+              <span className="pl-asp-ladder-tag">Ladder</span> marks a possible parlay leg (−300 or heavier moneyline, or a
+              high-confidence spread). Today&apos;s Ladder is a 3-leg parlay of two of those moneylines plus one spread.
             </p>
           </>
         )}
@@ -297,12 +298,15 @@ export default function AllSportsPage() {
         </div>
         {body}
       </main>
-      <aside className="pl-right pl-all-results" aria-label="All sports results summary" tabIndex={0}>
-        <div className="pl-right-title">Last night · {board ? board.results_label : ''}</div>
-        {board ? <SummaryTable rows={board.summary_last_night} label="Record" /> : <p className="pl-asp-muted">—</p>}
-        <div className="pl-right-title pl-asp-gap">Last 7 days</div>
-        {board ? <SummaryTable rows={board.summary_last7} label="Record" /> : <p className="pl-asp-muted">—</p>}
-      </aside>
+      <div className="pl-right-stack">
+        <aside className="pl-right pl-all-results" aria-label="All sports results summary" tabIndex={0}>
+          <div className="pl-right-title">Last night · {board ? board.results_label : ''}</div>
+          {board ? <SummaryTable rows={board.summary_last_night} label="Record" /> : <p className="pl-asp-muted">—</p>}
+          <div className="pl-right-title pl-asp-gap">Last 7 days</div>
+          {board ? <SummaryTable rows={board.summary_last7} label="Record" /> : <p className="pl-asp-muted">—</p>}
+        </aside>
+        <BlogFeedBox defer />
+      </div>
     </>
   );
 }

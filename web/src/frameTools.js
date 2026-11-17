@@ -3,7 +3,7 @@
 // Hides the classic page's own header, footer, premium bar and the duplicate Cards/Chart pills. The site's
 // header and footer come from React, and the sport's Cards/Chart buttons come from the panel itself.
 const HIDDEN_IN_FRAME = ['.pl2-header', '.site-directory-footer', '.join-premium-bar', '.share-strip', '.navbar',
-  '#joinPremiumBar', '.pl-view-toggle', '.pl-view-btn'];
+  '#joinPremiumBar', '.pl-view-toggle', '.pl-view-btn', '.pl-page-jump', '#plPageJump'];
 
 export function trimFrame(node) {
   try {

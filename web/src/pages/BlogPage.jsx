@@ -104,14 +104,13 @@ export default function BlogPage() {
         <h1>PredictionLab Blog</h1>
         <p>Sports news, game recaps and the latest from PredictionLab.</p>
       </header>
+      {/* Three stacked boxes — same order as classic /blog: Trending, Sports News, Latest. */}
       <section className="pl-blog-window pl-blog-trending" aria-labelledby="blog-trending-title">
         <div className="pl-blog-window-head"><h2 id="blog-trending-title">Trending in Sports</h2></div>
         <iframe className="pl-blog-soro-frame" title="Trending in Sports — Soro" srcDoc={SORO_DOCUMENT} />
       </section>
-      <div className="pl-blog-columns">
-        <ArticleWindow title="Sports News" section="news" group={data?.news} loading={loading} error={error} onRetry={reload} />
-        <ArticleWindow title="Latest from PredictionLab" section="latest" group={data?.latest} loading={loading} error={error} onRetry={reload} />
-      </div>
+      <ArticleWindow title="Sports News" section="news" group={data?.news} loading={loading} error={error} onRetry={reload} />
+      <ArticleWindow title="Latest from PredictionLab" section="latest" group={data?.latest} loading={loading} error={error} onRetry={reload} />
     </main>
   );
 }

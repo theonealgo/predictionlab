@@ -19,7 +19,7 @@ from prop_models import VERSION as MODEL_VERSION
 from prop_player_pool import VERSION as PLAYER_POOL_VERSION
 
 ET = ZoneInfo("America/New_York")
-TTL = 600
+TTL = max(600, int(os.getenv("PL_PROPS_TTL", "3600")))
 UNSUPPORTED = {
     "TENNIS": "Verified player-stat prop markets and settlement coverage are not connected for tennis.",
     "GOLF": "Verified round-specific player prop markets and settlement coverage are not connected for golf.",
@@ -38,6 +38,8 @@ logger = logging.getLogger(__name__)
 
 
 def start_daily(site):
+    if os.getenv("PL_PROP_PUBLICATION", "1") != "1":
+        return
     identity = str(Path(site.DATABASE).resolve())
     with _LOCK:
         if identity in _DAILY:
@@ -52,7 +54,10 @@ def start_daily(site):
             day = now.date().isoformat()
             try:
                 if day != last_day or time.monotonic()-last_refresh >= TTL:
-                    ensure(site, day)
+                    # Today plus the next week: NFL Sunday props must exist before Sunday.
+                    for offset in range(0, 8):
+                        target = (now.date() + timedelta(days=offset)).isoformat()
+                        ensure(site, target)
                     last_day = day
                     last_refresh = time.monotonic()
             except Exception:
@@ -132,7 +137,8 @@ def run_isolated(site, league, day):
                    "--database", str(Path(site.DATABASE).resolve()), "--cache-dir", str(directory),
                    "--league", league, "--date", day, "--timeout", str(timeout)]
         with (directory / "worker.log").open("ab") as log:
-            process = subprocess.Popen(command, env=env, stdout=subprocess.DEVNULL, stderr=log)
+            process = subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL,
+                                       stdout=subprocess.DEVNULL, stderr=log)
             started = time.monotonic()
             try:
                 while process.poll() is None:
@@ -219,6 +225,8 @@ def _enqueue(site, league, day, priority=10):
 def ensure(site, day, selected=None):
     """Queue a day's leagues once; a single worker bounds expensive refreshes."""
     global _THREAD
+    if os.getenv("PL_PROP_PUBLICATION", "1") != "1":
+        return
     if day < datetime.now(ET).date().isoformat():
         return
     if day > (datetime.now(ET).date()+timedelta(days=7)).isoformat():

@@ -82,6 +82,9 @@ function wireSearch(root) {
   const onDocClick = (event) => {
     if (!form.contains(event.target)) list.hidden = true;
   };
+  const onResultClick = (event) => {
+    if (event.target.closest && event.target.closest('a.pl-search-item')) list.hidden = true;
+  };
   const onFocus = () => {
     if (completed === input.value.trim() && results.length) show();
   };
@@ -90,12 +93,14 @@ function wireSearch(root) {
   input.addEventListener('input', onInput);
   input.addEventListener('focus', onFocus);
   form.addEventListener('submit', onSubmit);
+  form.addEventListener('click', onResultClick);
   document.addEventListener('click', onDocClick);
   return () => {
     clearTimeout(timer);
     input.removeEventListener('input', onInput);
     input.removeEventListener('focus', onFocus);
     form.removeEventListener('submit', onSubmit);
+    form.removeEventListener('click', onResultClick);
     document.removeEventListener('click', onDocClick);
     list.remove();
   };

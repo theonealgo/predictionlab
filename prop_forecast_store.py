@@ -97,6 +97,39 @@ def first_recorded_dates(original_db, league=None):
         return {model: day for model, day in conn.execute(sql, params) if model and day}
 
 
+def latest_results_date(original_db, league=None, before=None):
+    """Most recent night with settled model props (Win/Loss/Push), else latest forecast night."""
+    path = ledger_path(original_db)
+    if not path.exists():
+        return None
+    ceiling = before or datetime.now(ET).date().isoformat()
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=3)) as conn:
+        conn.execute("PRAGMA query_only=ON")
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        params = [ceiling]
+        league_sql = ""
+        if league:
+            league_sql = " AND f.league=?"
+            params.append(league)
+        if "settlements" in tables:
+            settled = conn.execute(
+                """SELECT MAX(f.pick_date) FROM forecasts f
+                   JOIN settlements s ON s.forecast_id=f.id
+                   WHERE f.pick_date<=?
+                     AND json_extract(s.payload,'$.result') IN ('Win','Loss','Push')"""
+                + league_sql,
+                params,
+            ).fetchone()[0]
+            if settled:
+                return settled
+        day = conn.execute(
+            "SELECT MAX(pick_date) FROM forecasts WHERE pick_date<=?"
+            + (" AND league=?" if league else ""),
+            params,
+        ).fetchone()[0]
+        return day
+
+
 def read(original_db, day, league=None, end_day=None):
     path = ledger_path(original_db)
     if not path.exists():

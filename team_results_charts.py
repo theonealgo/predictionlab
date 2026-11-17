@@ -1697,7 +1697,9 @@ def _inject_toggle(html: str, sport: str, view: str) -> str:
 
 _REC_IN_BLOCK = re.compile(
     r'class="[^"]*(?:daily-model|model-label)[^"]*"[^>]*>\s*(?:[⭐🎯📊🤖🏆⚡📈🎲]\s*)?'
-    r"(Grinder2|Takedown|Edge|XSharp|Sharp Consensus|Efficiency|Spread|Over/Under)\s*</div>"
+    r"(Grinder2|Takedown|Edge|XSharp|Sharp Consensus|Market Consensus|Efficiency|"
+    r"Prediction Lab Spread|XSharp Spread|XSharp Over/Under|Prediction Lab Over/Under|"
+    r"Spread|Over/Under)\s*</div>"
     r'[\s\S]{0,420}?class="[^"]*(?:daily-rec|model-rec)[^"]*"[^>]*>\s*'
     r"(\d+\s*[-–]\s*\d+(?:\s*[-–]\s*\d+)?)",
     flags=re.I,
@@ -1708,10 +1710,13 @@ def _recs_from_block(block: str) -> dict[str, str]:
     found: dict[str, str] = {}
     for m in _REC_IN_BLOCK.finditer(block or ""):
         name = m.group(1)
-        if name.lower() == "over/under":
+        low = name.lower()
+        if "over/under" in low:
             name = "Over/Under"
-        elif name.lower() == "spread":
+        elif "spread" in low:
             name = "Spread"
+        elif low in ("sharp consensus", "market consensus"):
+            name = "Sharp Consensus"
         found[name] = re.sub(r"\s+", "", m.group(2)).replace("–", "-")
     return found
 
@@ -4689,6 +4694,11 @@ def _card_dissent_for_models(
     sides: dict[str, str] = {}
     for name in models:
         side = _pc_model_ml_side(card, name, home=home, away=away)
+        # NCAAB (and some other faces) label Sharp Consensus as Market Consensus.
+        if side is None and name == "Sharp Consensus":
+            side = _pc_model_ml_side(
+                card, "Market Consensus", home=home, away=away
+            )
         if side in ("HOME", "AWAY"):
             sides[name] = side
     panel = len(models)
@@ -4821,7 +4831,7 @@ def _consensus_d7_combo_lookup(
         )
     except Exception:
         return {}
-    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER", "NHL"):
+    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER", "NHL", "NCAAB"):
         finals = _season_consensus_finals(sport_u)
     elif sport_u in ("WNBA", "NBA"):
         finals = _wnba_nba_consensus_finals(sport_u)
@@ -5138,25 +5148,30 @@ def _inject_consensus_hist_chips(
                 hit = lookup.get((folded, dissent))
             if hit is None and folded >= panel and not dissent:
                 hit = lookup.get((panel, ()))
-            if hit is None:
-                w, l, pct, pushes = 0, 0, None, 0
-            elif len(hit) >= 4:
-                w, l, pct, pushes = hit[0], hit[1], hit[2], int(hit[3] or 0)
+            # NCAAB: no matching season pattern (e.g. G2/Takedown N/A) → dash,
+            # not a fake 0-0 that looks like a graded record.
+            if hit is None and sport_u == "NCAAB":
+                label = "Consensus Record: —"
             else:
-                w, l, pct = hit[0], hit[1], hit[2]
-                pushes = 0
-            if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
-                label = _wnba_consensus_hist_label(
-                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
-                )
-            elif sport_u in ("NFL", "MLB", "NCAAF", "CFL", "NHL"):
-                label = _nfl_consensus_hist_label(
-                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
-                )
-            else:
-                label = _consensus_hist_label(
-                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
-                )
+                if hit is None:
+                    w, l, pct, pushes = 0, 0, None, 0
+                elif len(hit) >= 4:
+                    w, l, pct, pushes = hit[0], hit[1], hit[2], int(hit[3] or 0)
+                else:
+                    w, l, pct = hit[0], hit[1], hit[2]
+                    pushes = 0
+                if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
+                    label = _wnba_consensus_hist_label(
+                        folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                    )
+                elif sport_u in ("NFL", "MLB", "NCAAF", "CFL", "NHL"):
+                    label = _nfl_consensus_hist_label(
+                        folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                    )
+                else:
+                    label = _consensus_hist_label(
+                        folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                    )
         chip = (
             '<div class="line-chip consensus-hist-chip">'
             '<div class="line-chip-label">Consensus Historical Record</div>'

@@ -68,9 +68,8 @@ def feed(posts, section=None, offset=0, limit=PAGE_SIZE):
 
 
 def initial_html(payload):
-    """Visible article links before React loads, including when JavaScript is off."""
-    sections = []
-    for key, title in (("news", "Sports News"), ("latest", "Latest from PredictionLab")):
+    """Visible article links before React loads — same three boxes as BlogPage.jsx."""
+    def _window(key, title):
         cards = []
         for row in (payload.get(key) or {}).get("items") or []:
             url = _article_url(row.get("url"))
@@ -81,10 +80,24 @@ def initial_html(payload):
                 '<h3>' + escape(str(row.get("title") or "")) + '</h3><p>'
                 + escape(str(row.get("excerpt") or "")) + '</p></a></article>'
             )
-        sections.append('<section class="pl-blog-window" aria-label="' + title + '"><h2>'
-                        + title + '</h2><div class="pl-blog-scroll">'
-                        + ("".join(cards) or "<p>No articles available right now.</p>") + "</div></section>")
-    return ('<main class="pl-blog-page"><h1>PredictionLab Blog</h1>'
-            '<p><a href="/classic/blog#soro-blog">Trending in Sports</a></p>'
-            '<div class="pl-blog-columns">' + "".join(sections) + '</div>'
-            '<p><a href="/classic/blog">Browse the complete article archive</a></p></main>')
+        body = "".join(cards) or "<p class=\"pl-blog-message\">No articles available right now.</p>"
+        return (
+            '<section class="pl-blog-window" aria-labelledby="blog-' + key + '-title">'
+            '<div class="pl-blog-window-head"><h2 id="blog-' + key + '-title">' + title + '</h2></div>'
+            '<div class="pl-blog-scroll">' + body + '</div></section>'
+        )
+
+    trending = (
+        '<section class="pl-blog-window pl-blog-trending" aria-labelledby="blog-trending-title">'
+        '<div class="pl-blog-window-head"><h2 id="blog-trending-title">Trending in Sports</h2></div>'
+        '<p class="pl-blog-message">Loading trending stories…</p></section>'
+    )
+    return (
+        '<main class="pl-blog-page">'
+        '<header class="pl-blog-intro"><h1>PredictionLab Blog</h1>'
+        '<p>Sports news, game recaps and the latest from PredictionLab.</p></header>'
+        + trending
+        + _window("news", "Sports News")
+        + _window("latest", "Latest from PredictionLab")
+        + '</main>'
+    )

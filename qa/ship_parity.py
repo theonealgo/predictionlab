@@ -430,7 +430,7 @@ class ShipParityAuditor:
         for m in re.finditer(
             r'class="[^"]*(?:daily-model|model-label)[^"]*"[^>]*>\s*'
             r"(?:[⭐🎯📊🤖🏆⚡📈🎲]\s*)?"
-            r"(Spread|Over/Under)\s*</div>"
+            r"((?:Prediction Lab |XSharp )?Spread|(?:XSharp |Prediction Lab )?Over/Under)\s*</div>"
             r"[\s\S]{0,360}?class=\"[^\"]*(?:daily-rec|model-rec)[^\"]*\"[^>]*>\s*"
             r"([^<]{1,40})</div>",
             html or "",

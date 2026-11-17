@@ -24,8 +24,14 @@ export function getJson(path, { maxAge = FRESH_MS } = {}) {
   const hit = memory.get(path);
   if (hit && maxAge > 0 && Date.now() - hit.ts < maxAge) return Promise.resolve(hit.data);
   if (inflight.has(path)) return inflight.get(path);
-  const request = fetch(path, { headers: { Accept: 'application/json' } })
+  const request = fetch(path, {
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { Accept: 'application/json' },
+  })
     .then((res) => {
+      // 202 = card feed still building; body carries building:true for the poller.
+      if (res.status === 202) return res.json();
       if (!res.ok) throw new Error(`${path} returned ${res.status}`);
       return res.json();
     })

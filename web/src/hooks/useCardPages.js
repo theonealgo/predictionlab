@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getJson, peekJson } from '../api.js';
 import { applyCardStyles } from '../cardStyles.js';
 
-const pause = () => new Promise((resolve) => setTimeout(resolve, 1000));
+const pause = (seconds = 1) => new Promise((resolve) => {
+  const ms = Math.max(1, Math.min(30, Number(seconds) || 1)) * 1000;
+  setTimeout(resolve, ms);
+});
 const identity = (card) => /data-game-id="([^"]+)"/.exec(card.html || '')?.[1]
   || `${card.date}|${card.away}|${card.home}`;
 
@@ -26,6 +29,8 @@ export default function useCardPages(slug, enabled = true) {
       try {
         const data = await getJson(offset ? `${path}&offset=${offset}` : path, { maxAge: 0 });
         if (!data.building) return data;
+        await pause(data.retryAfter);
+        continue;
       } catch (failure) {
         if (++failures >= 4) throw failure;
       }

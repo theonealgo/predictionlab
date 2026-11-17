@@ -286,8 +286,9 @@ def _h2h_has_values(html: str) -> bool:
 def _face_pl_ml_has_values(html: str) -> bool:
     """True when at least one pick-card face shows a real Prediction Lab moneyline."""
     html = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", "", html or "", flags=re.I)
+    # site_words rewrites the face label to "Predictionlab"; accept both.
     nums = re.findall(
-        r'class="ml-src pl">\s*Prediction Lab\s*</span>\s*'
+        r'class="ml-src pl">\s*Prediction\s*Lab\s*</span>\s*'
         r'<span class="ml-num[^"]*">\s*([+]?\d+|[\u2212\-]\d+)\s*</span>',
         html,
         flags=re.I,
@@ -383,7 +384,7 @@ def _pl_records_expected(html: str) -> bool:
     for m in re.finditer(
         r'class="[^"]*(?:daily-model|model-label)[^"]*"[^>]*>\s*'
         r"(?:[⭐🎯📊🤖🏆⚡📈🎲]\s*)?"
-        r"(Spread|Over/Under)\s*</div>"
+        r"((?:Prediction Lab |XSharp )?Spread|(?:XSharp |Prediction Lab )?Over/Under)\s*</div>"
         r"[\s\S]{0,360}?class=\"[^\"]*(?:daily-rec|model-rec)[^\"]*\"[^>]*>\s*"
         r"([^<]{1,40})</div>",
         html or "",

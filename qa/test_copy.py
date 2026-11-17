@@ -86,6 +86,22 @@ def start(port: int, commit: str | None, env_extra: list[str]) -> int:
     for name in (".env",):
         if (ROOT / name).exists():
             shutil.copy2(ROOT / name, work / name)
+    # Disk caches the live server keeps warm (gitignored). Without them the React
+    # cards API returns building:true and results pages rebuild on first hit.
+    cache_src, cache_dst = ROOT / ".cache", work / ".cache"
+    if cache_src.is_dir():
+        cache_dst.mkdir(parents=True, exist_ok=True)
+        cards_src = cache_src / "web_cards"
+        if cards_src.is_dir():
+            shutil.copytree(cards_src, cache_dst / "web_cards", dirs_exist_ok=True)
+        for path in cache_src.glob("served_*.html"):
+            shutil.copy2(path, cache_dst / path.name)
+    # Tennis has its own sqlite; a stale copy shows a Today count with zero cards.
+    tennis_db = ROOT / "tennis" / "database" / "tennis.sqlite"
+    if tennis_db.is_file():
+        dest = work / "tennis" / "database" / "tennis.sqlite"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(tennis_db, dest)
 
     env = dict(os.environ, PORT=str(port), PL_AUTOREFRESH="0", PYTHONUNBUFFERED="1")
     env.pop("RENDER", None)

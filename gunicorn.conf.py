@@ -36,6 +36,17 @@ try:
 except Exception:
     pass
 
+# Stamp master start once. Worker recycles (max_requests) must NOT re-apply
+# PL_BOOT_GRACE_S — that left card builds blocked while the homepage hammered.
+try:
+    import time as _time_boot
+    from pathlib import Path as _Path_boot
+    _boot_stamp = _Path_boot(os.environ.get("PL_BOOT_STAMP", "/data/.cache/gunicorn_boot_at"))
+    _boot_stamp.parent.mkdir(parents=True, exist_ok=True)
+    _boot_stamp.write_text(str(_time_boot.time()))
+except Exception:
+    pass
+
 bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
 workers = 1
 worker_class = "gthread"

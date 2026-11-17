@@ -2577,41 +2577,126 @@ def ncaaf_consensus_hist_face_issues(html: str) -> list[str]:
 def model_performance_wl_pct_issues(html: str, sport: str = "") -> list[str]:
     """FAIL when Model Performance big % does not match the W-L win rate.
 
-    Catches ROI (~35%) shown where win rate for 40-19 (~68%) belongs.
+    Catches ROI (~9%) shown where win rate for 108-89 (~55%) belongs.
+    Applies to every sport that shows Flat Unit Tracking.
     """
     html = html or ""
-    sport_u = (sport or "").strip().upper()
-    if sport_u and sport_u != "NCAAF":
+    if "Model Performance" not in html or "Flat Unit" not in html:
         return []
-    if "Model Performance" not in html:
+    # Skip sports that still document unit ROI as the big %
+    if re.search(
+        r"Percentages are\s*<strong>\s*unit ROI\s*</strong>",
+        html,
+        flags=re.I,
+    ):
         return []
-    # Pull 7 Days cells: big % then W-L-P detail
     block_m = re.search(
-        r"Model Performance \(Flat Unit Tracking\)([\s\S]{0,6000})</div>\s*</div>\s*<!--",
+        r"Model Performance \(Flat Unit Tracking\)([\s\S]{0,8000})</div>\s*</div>\s*<!--",
         html,
         flags=re.I,
     )
     block = block_m.group(1) if block_m else html
     issues: list[str] = []
-    for m in re.finditer(
-        r"7 Days</div>\s*<div[^>]*>\s*([0-9]+(?:\.[0-9]+)?)%\s*</div>\s*"
-        r"<div[^>]*>\s*(\d+)-(\d+)-(\d+)",
-        block,
+    sport_u = (sport or "").strip().upper() or "results"
+    for label in ("7 Days", "Season"):
+        for m in re.finditer(
+            rf"{re.escape(label)}</div>\s*<div[^>]*>\s*([0-9]+(?:\.[0-9]+)?)%\s*</div>\s*"
+            r"<div[^>]*>\s*(\d+)-(\d+)-(\d+)",
+            block,
+            flags=re.I,
+        ):
+            shown = float(m.group(1))
+            wins = int(m.group(2))
+            losses = int(m.group(3))
+            graded = wins + losses
+            if graded <= 0:
+                continue
+            expected = round(wins / graded * 100, 1)
+            if abs(shown - expected) > 1.5:
+                issues.append(
+                    f"{sport_u} Model Performance {label} shows {shown}% next to "
+                    f"{wins}-{losses} (win rate is {expected}%)"
+                )
+    # Season Flat Unit W-L must match Season Performance tiles when both present
+    sp = re.search(
+        r"Season Performance[\s\S]{0,3500}?"
+        r"Spread(?:\s*\([^)]+\))?</div>\s*"
+        r"<div[^>]*>\s*[0-9.]+%</div>\s*"
+        r"<div[^>]*>\s*(\d+)-(\d+)",
+        html,
         flags=re.I,
-    ):
-        shown = float(m.group(1))
-        wins = int(m.group(2))
-        losses = int(m.group(3))
-        graded = wins + losses
-        if graded <= 0:
-            continue
-        expected = round(wins / graded * 100, 1)
-        if abs(shown - expected) > 1.5:
-            issues.append(
-                f"Model Performance 7 Days shows {shown}% next to {wins}-{losses} "
-                f"(win rate is {expected}%)"
-            )
+    )
+    fu = re.search(
+        r"Model Performance \(Flat Unit Tracking\)[\s\S]{0,4000}?"
+        r">\s*Spread\s*<[\s\S]{0,800}?"
+        r"Season</div>\s*<div[^>]*>\s*[0-9.]+%</div>\s*"
+        r"<div[^>]*>\s*(\d+)-(\d+)-\d+",
+        html,
+        flags=re.I,
+    )
+    if sp and fu and (sp.group(1), sp.group(2)) != (fu.group(1), fu.group(2)):
+        issues.append(
+            f"{sport_u} Flat Unit Season Spread {fu.group(1)}-{fu.group(2)} "
+            f"does not match Season Performance Spread {sp.group(1)}-{sp.group(2)}"
+        )
     return issues
+
+
+def results_spread_ou_model_label_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when Last Night / Last 7 Spread or Over/Under tiles omit the model name."""
+    html = html or ""
+    if "daily-model" not in html:
+        return []
+    issues: list[str] = []
+    sport_u = (sport or "").strip().upper() or "results"
+    bare = re.findall(
+        r'class="daily-model">\s*(Spread|Over/Under)\s*</div>',
+        html,
+        flags=re.I,
+    )
+    if bare:
+        issues.append(
+            f"{sport_u} results Spread/Over/Under tiles missing model name "
+            f"(need Prediction Lab or XSharp) — found bare {sorted(set(bare))}"
+        )
+    return issues
+
+
+def picks_missing_xsharp_line_issues(html: str, sport: str = "") -> list[str]:
+    """FAIL when picks cards show XSharp N/A in the odds table while other models have lines."""
+    html = html or ""
+    sport_u = (sport or "").strip().upper()
+    if sport_u not in ("NCAAB", "NCAAW", "NBA", "WNBA"):
+        return []
+    if "data-pick-card" not in html and "val-xs" not in html:
+        return []
+    cards = re.split(r'(?=<div\b[^>]*\bdata-pick-card\b)', html, flags=re.I)
+    missing = 0
+    checked = 0
+    for part in cards[1:]:
+        checked += 1
+        xs = re.search(r'<td class="val-xs">([^<]*)</td>', part, flags=re.I)
+        pl = re.search(r'<td class="val-pl">([^<]*)</td>', part, flags=re.I)
+        if not xs:
+            continue
+        xs_v = re.sub(r"\s+", " ", xs.group(1)).strip()
+        pl_v = re.sub(r"\s+", " ", (pl.group(1) if pl else "")).strip()
+        if xs_v in ("", "N/A", "—", "–", "-", "&mdash;", "&ndash;") and pl_v not in (
+            "",
+            "N/A",
+            "—",
+            "–",
+            "-",
+            "&mdash;",
+            "&ndash;",
+        ):
+            missing += 1
+    if missing:
+        return [
+            f"{sport_u} picks: {missing}/{checked} cards missing XSharp spread/total "
+            "while Prediction Lab has a line"
+        ]
+    return []
 
 
 def nfl_duplicate_h2h_issues(html: str) -> list[str]:

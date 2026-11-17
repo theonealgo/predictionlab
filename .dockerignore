@@ -13,7 +13,8 @@ sports_predictions_original.db
 engines/cfl/database/*.db
 ufc_pipeline/database/*.db
 models/**/*.sqlite
+# Keep only the current Vite bundle in the image (index.html must match).
 static/web/assets/index-*.js
-!static/web/assets/index-DY0Kx7nO.js
+!static/web/assets/index-CFzUKwcp.js
 agent-transcripts
 *.log

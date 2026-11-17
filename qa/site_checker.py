@@ -578,6 +578,8 @@ class ContentAuditor:
             nfl_chart_same_as_cards_issues,
             duplicate_h2h_issues,
             model_performance_wl_pct_issues,
+            results_spread_ou_model_label_issues,
+            picks_missing_xsharp_line_issues,
             ncaaf_consensus_hist_face_issues,
             compact_consensus_hist_face_issues,
             nfl_missing_efficiency_issues,
@@ -650,6 +652,13 @@ class ContentAuditor:
             if sport != "Soccer":
                 miss = card_missing_model_value_issues(html, sport)
                 miss.extend(card_blank_market_line_issues(html, sport))
+                xs_miss = picks_missing_xsharp_line_issues(html, sport)
+                if xs_miss:
+                    self.r.add(CheckResult(
+                        label=f"{sport} XSharp lines",
+                        status=FAIL,
+                        message="; ".join(xs_miss),
+                        url=path, auditor=self.NAME))
                 copied = efficiency_copied_na_issues(html)
                 if copied:
                     self.r.add(CheckResult(
@@ -994,12 +1003,25 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(date_issues),
                         url=path, auditor=self.NAME))
-                mp = model_performance_wl_pct_issues(html, "NCAAF")
+            if slug.endswith("-results") and html:
+                sport_name = slug.split("-")[0].upper()
+                mp = model_performance_wl_pct_issues(html, sport_name)
+                if mp or sport_name in (
+                    "NBA", "NCAAF", "NFL", "NCAAB", "NCAAW", "NHL", "MLB", "WNBA", "CFL",
+                ):
+                    self.r.add(CheckResult(
+                        label=f"{sport_name} Model Performance W-L %",
+                        status=FAIL if mp else PASS,
+                        message="; ".join(mp) if mp else (
+                            "Model Performance big % matches W-L win rate"
+                        ),
+                        url=path, auditor=self.NAME))
+                sou = results_spread_ou_model_label_issues(html, sport_name)
                 self.r.add(CheckResult(
-                    label="NCAAF Model Performance W-L %",
-                    status=FAIL if mp else PASS,
-                    message="; ".join(mp) if mp else (
-                        "Model Performance big % matches W-L win rate"
+                    label=f"{sport_name} Spread/OU model labels",
+                    status=FAIL if sou else PASS,
+                    message="; ".join(sou) if sou else (
+                        "Spread and Over/Under tiles name Prediction Lab or XSharp"
                     ),
                     url=path, auditor=self.NAME))
             if not html or "Consensus Based Betting Records" not in html:

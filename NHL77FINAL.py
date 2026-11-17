@@ -83044,41 +83044,138 @@ _SPORT_ICONS_LANDING = {
 }
 
 
-def _get_sport_ml_units_banner():
-    """Compute flat-bet consensus ML units per sport from graded predictions."""
+_SPORT_MARKET_UNITS_CACHE: dict = {}  # market -> {'ts': float, 'items': list}
+
+
+def _get_sport_market_units_banner(market: str = 'moneyline'):
+    """Flat-bet consensus W-L / units per sport for SU, spread, or totals.
+
+    Row labels are sport names only — the UI market dropdown already names the market.
+    """
+    key = (market or 'moneyline').strip().lower()
+    if key in ('su', 'straight', 'straight_up', 'straight-up', 'ml', 'moneyline'):
+        key = 'moneyline'
+    elif key in ('ou', 'over_under', 'over-under', 'totals', 'total'):
+        key = 'total'
+    elif key == 'spread':
+        key = 'spread'
+    else:
+        key = 'moneyline'
+
     now_ts = _time.time()
-    cached = _SPORT_ML_UNITS_CACHE
+    cached = _SPORT_MARKET_UNITS_CACHE.get(key)
+    if key == 'moneyline' and not cached:
+        # Older callers still fill _SPORT_ML_UNITS_CACHE; only reuse when market matches.
+        legacy = _SPORT_ML_UNITS_CACHE
+        if legacy and legacy.get('items') and all(
+            (it or {}).get('market') == 'moneyline' for it in legacy.get('items') or []
+        ):
+            cached = legacy
     if cached and (now_ts - cached.get('ts', 0)) < _SPORT_ML_UNITS_TTL:
         return cached.get('items', [])
+
     items = []
+    sport_order = ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAF', 'WNBA', 'NCAAW', 'SOCCER']
     try:
         conn = get_db_connection()
-        rows = conn.execute('''
-            SELECT
-                p.sport,
-                SUM(CASE
-                    WHEN p.win_probability > 0.5 AND g.home_score > g.away_score THEN 1.0
-                    WHEN p.win_probability <= 0.5 AND g.away_score > g.home_score THEN 1.0
-                    ELSE -1.0
-                END) AS units,
-                COUNT(*) AS total,
-                SUM(CASE
-                    WHEN p.win_probability > 0.5 AND g.home_score > g.away_score THEN 1
-                    WHEN p.win_probability <= 0.5 AND g.away_score > g.home_score THEN 1
-                    ELSE 0
-                END) AS wins
-            FROM predictions p
-            JOIN games g ON p.game_id = g.game_id
-            WHERE g.home_score IS NOT NULL
-              AND g.away_score IS NOT NULL
-              AND p.win_probability IS NOT NULL
-              AND g.home_score != g.away_score
-              AND p.sport IS NOT NULL
-            GROUP BY p.sport
-            ORDER BY p.sport
-        ''').fetchall()
+        if key == 'moneyline':
+            rows = conn.execute('''
+                SELECT
+                    p.sport,
+                    SUM(CASE
+                        WHEN p.win_probability > 0.5 AND g.home_score > g.away_score THEN 1.0
+                        WHEN p.win_probability <= 0.5 AND g.away_score > g.home_score THEN 1.0
+                        ELSE -1.0
+                    END) AS units,
+                    COUNT(*) AS total,
+                    SUM(CASE
+                        WHEN p.win_probability > 0.5 AND g.home_score > g.away_score THEN 1
+                        WHEN p.win_probability <= 0.5 AND g.away_score > g.home_score THEN 1
+                        ELSE 0
+                    END) AS wins
+                FROM predictions p
+                JOIN games g ON p.game_id = g.game_id
+                WHERE g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                  AND p.win_probability IS NOT NULL
+                  AND g.home_score != g.away_score
+                  AND p.sport IS NOT NULL
+                GROUP BY p.sport
+            ''').fetchall()
+        elif key == 'spread':
+            # PL spread vs book: pick home when model number is better for home; skip pushes / no edge.
+            rows = conn.execute('''
+                SELECT
+                    p.sport,
+                    SUM(CASE
+                        WHEN p.lock_pl_spread < b.spread
+                             AND (g.home_score - g.away_score + b.spread) > 0 THEN 1.0
+                        WHEN p.lock_pl_spread > b.spread
+                             AND (g.home_score - g.away_score + b.spread) < 0 THEN 1.0
+                        ELSE -1.0
+                    END) AS units,
+                    COUNT(*) AS total,
+                    SUM(CASE
+                        WHEN p.lock_pl_spread < b.spread
+                             AND (g.home_score - g.away_score + b.spread) > 0 THEN 1
+                        WHEN p.lock_pl_spread > b.spread
+                             AND (g.home_score - g.away_score + b.spread) < 0 THEN 1
+                        ELSE 0
+                    END) AS wins
+                FROM predictions p
+                JOIN games g ON p.game_id = g.game_id
+                JOIN (
+                    SELECT game_id, spread FROM betting_lines
+                    WHERE id IN (
+                        SELECT MAX(id) FROM betting_lines
+                        WHERE spread IS NOT NULL GROUP BY game_id
+                    )
+                ) b ON b.game_id = p.game_id
+                WHERE g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                  AND p.lock_pl_spread IS NOT NULL
+                  AND p.lock_pl_spread != b.spread
+                  AND (g.home_score - g.away_score + b.spread) != 0
+                  AND p.sport IS NOT NULL
+                GROUP BY p.sport
+            ''').fetchall()
+        else:  # total / over-under
+            rows = conn.execute('''
+                SELECT
+                    p.sport,
+                    SUM(CASE
+                        WHEN p.lock_pl_total > b.total
+                             AND (g.home_score + g.away_score) > b.total THEN 1.0
+                        WHEN p.lock_pl_total < b.total
+                             AND (g.home_score + g.away_score) < b.total THEN 1.0
+                        ELSE -1.0
+                    END) AS units,
+                    COUNT(*) AS total,
+                    SUM(CASE
+                        WHEN p.lock_pl_total > b.total
+                             AND (g.home_score + g.away_score) > b.total THEN 1
+                        WHEN p.lock_pl_total < b.total
+                             AND (g.home_score + g.away_score) < b.total THEN 1
+                        ELSE 0
+                    END) AS wins
+                FROM predictions p
+                JOIN games g ON p.game_id = g.game_id
+                JOIN (
+                    SELECT game_id, total FROM betting_lines
+                    WHERE id IN (
+                        SELECT MAX(id) FROM betting_lines
+                        WHERE total IS NOT NULL GROUP BY game_id
+                    )
+                ) b ON b.game_id = p.game_id
+                WHERE g.home_score IS NOT NULL
+                  AND g.away_score IS NOT NULL
+                  AND p.lock_pl_total IS NOT NULL
+                  AND p.lock_pl_total != b.total
+                  AND (g.home_score + g.away_score) != b.total
+                  AND p.sport IS NOT NULL
+                GROUP BY p.sport
+            ''').fetchall()
         conn.close()
-        sport_order = ['NHL', 'NBA', 'MLB', 'NFL', 'NCAAB', 'NCAAF', 'WNBA', 'NCAAW', 'SOCCER']
         rows_by_sport = {r[0]: r for r in rows}
         for sport in sport_order:
             row = rows_by_sport.get(sport)
@@ -83088,20 +83185,30 @@ def _get_sport_ml_units_banner():
             if total < 5:
                 continue
             units = float(row[1]) if row[1] is not None else 0.0
-            wins  = int(row[3]) if row[3] else 0
+            wins = int(row[3]) if row[3] else 0
             losses = total - wins
-            icon = _SPORT_ICONS_LANDING.get(sport, '🏆')
             sign = '+' if units >= 0 else ''
             items.append({
-                'label':    f"{icon} {sport} Moneyline",
-                'units':    f"{sign}{units:.1f}u",
-                'record':   f"{wins}-{losses}",
+                'label': sport,  # market lives in the dropdown; do not repeat on each row
+                'units': f"{sign}{units:.1f}u",
+                'record': f"{wins}-{losses}",
                 'positive': units >= 0,
+                'market': key,
+                'sport': sport,
             })
     except Exception as _ue:
-        logger.debug(f"ML units banner failed: {_ue}")
-    _SPORT_ML_UNITS_CACHE.update({'ts': now_ts, 'items': items})
+        logger.debug(f"Market units banner ({key}) failed: {_ue}")
+
+    payload = {'ts': now_ts, 'items': items}
+    _SPORT_MARKET_UNITS_CACHE[key] = payload
+    if key == 'moneyline':
+        _SPORT_ML_UNITS_CACHE.update(payload)
     return items
+
+
+def _get_sport_ml_units_banner():
+    """Compute flat-bet consensus ML / Straight-up units per sport from graded predictions."""
+    return _get_sport_market_units_banner('moneyline')
 
 
 # ===== SECTION: Placeholder matchup filtering =====
@@ -87317,6 +87424,8 @@ def _props_warm_loop(engine_mod, config_mod):
 
 
 def _start_props_warm(engine_mod, config_mod):
+    if _os.environ.get('PL_PROP_PUBLICATION', '1') != '1':
+        return
     from props_service import start_daily
     start_daily(sys.modules[__name__])
 
@@ -87336,6 +87445,10 @@ def _props_league_data(engine_mod, config_mod, league):
 
 def _props_preload():
     """Compatibility entry point for the shared delayed, isolated publication queue."""
+    if _os.environ.get('PL_PROP_PUBLICATION', '1') != '1':
+        return
+    if _os.environ.get('PL_PROPS_PRELOAD', '1') == '0':
+        return
     from props_service import start_daily
     start_daily(sys.modules[__name__])
 
@@ -87639,7 +87752,11 @@ def _query_prop_results(league: str, for_date: str | None = None):
         conn.close()
 
 
-if _os.environ.get('PL_SNAPSHOT_BUILD') != '1' and _os.environ.get('PL_PROPS_PRELOAD', '1') != '0':
+if (
+    _os.environ.get('PL_SNAPSHOT_BUILD') != '1'
+    and _os.environ.get('PL_PROPS_PRELOAD', '1') != '0'
+    and _os.environ.get('PL_PROP_PUBLICATION', '1') == '1'
+):
     _props_preload()
 
 
@@ -128550,9 +128667,16 @@ def _results_page_date_kwargs(daily_results, sorted_dates):
 def _start_background_score_sync(sport, sync_fn=None):
     """Fire-and-forget score sync — never block page render on ESPN."""
     # After a Render deploy the single worker must answer / and cards first.
+    # Use the master boot stamp so max_requests worker recycles do not re-arm grace.
     _grace = float(_os_v2.environ.get('PL_BOOT_GRACE_S', '180') or 180)
-    if (_time.monotonic() - _WORKER_BOOT_MONO) < _grace:
-        return
+    if _grace > 0:
+        try:
+            _boot_at = float(open(_os_v2.environ.get('PL_BOOT_STAMP', '/data/.cache/gunicorn_boot_at')).read().strip())
+            if (_time.time() - _boot_at) < _grace:
+                return
+        except Exception:
+            if (_time.monotonic() - _WORKER_BOOT_MONO) < _grace:
+                return
     sync_key = f'{sport}_results_score_sync_ts'
     sync_entry = _SPORT_RESULTS_CACHE.get(sync_key)
     sync_last_ts = sync_entry.get('ts') if isinstance(sync_entry, dict) else None

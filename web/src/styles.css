@@ -232,6 +232,21 @@ button {
   font-size: 16px;
 }
 
+.pl-left-title-sub {
+  margin-top: 14px;
+  font-size: 13px;
+}
+
+.pl-nav-empty {
+  display: block;
+  padding: 6px 10px 12px;
+  font-size: 13px;
+}
+
+.pl-sport-nav .pl-left-title:first-child {
+  margin-top: 0;
+}
+
 .pl-sport-link {
   display: flex;
   justify-content: space-between;
@@ -621,6 +636,9 @@ button {
   align-items: start;
   width: 100%;
 }
+.pl-models-layout.is-ladder {
+  grid-template-columns: minmax(0, 1fr);
+}
 .pl-models-main {
   min-width: 0;
   width: 100%;
@@ -727,6 +745,73 @@ button {
 .pl-home-head .pl-results-views {
   margin-bottom: 0;
 }
+
+/* Home sidebar: season W-L / units (from /api/web/season). */
+.pl-season-record .pl-home-results-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.pl-season-record .pl-home-results-title h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.pl-season-market {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 12px;
+}
+.pl-season-market-btn {
+  border: 1px solid var(--line, #e5e7eb);
+  background: #fff;
+  color: var(--pl-ink, #0f172a);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: 700 12px/1.2 inherit;
+  cursor: pointer;
+}
+.pl-season-market-btn:hover {
+  background: var(--soft, #f8fafc);
+}
+.pl-season-market-btn.is-active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.pl-season-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pl-season-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 13px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line, #e5e7eb);
+}
+.pl-season-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.pl-season-record-wl {
+  font-variant-numeric: tabular-nums;
+}
+.pl-season-units {
+  font-style: normal;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.pl-season-list li.is-pos .pl-season-units { color: #15803d; }
+.pl-season-list li.is-neg .pl-season-units { color: #b91c1c; }
 
 /* Chart view on the main page: one sport's results chart, sized to the page. */
 .pl-chart-frame {

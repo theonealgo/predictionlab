@@ -76,10 +76,35 @@
       return;
     }
 
+    // SPA: a click inside the open list (especially a link) must close it — the document
+    // does not unload the way a classic full-page navigation does.
+    if (target.closest('header.pl2-header .pl-menu-list a, header.pl2-header .pl2-account-menu a')) {
+      closeAll(null);
+      setDrawer(false);
+      return;
+    }
+
     if (!target.closest('header.pl2-header .pl-menu-list, header.pl2-header .pl2-account-menu')) {
       closeAll(null);
     }
   });
+
+  // React in-place navigations never unload the document; close menus when the URL changes.
+  window.addEventListener('popstate', function () {
+    closeAll(null);
+    setDrawer(false);
+  });
+  try {
+    var _push = history.pushState;
+    history.pushState = function () {
+      var out = _push.apply(this, arguments);
+      try {
+        closeAll(null);
+        setDrawer(false);
+      } catch (ignore) { /* never break SPA navigation */ }
+      return out;
+    };
+  } catch (err) { /* leave menus alone if history cannot be wrapped */ }
 
   document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
@@ -102,8 +127,19 @@
   document.head.appendChild(installer);
 
   // Left-corner jump control for long picks/results pages.
+  // Only on the top window — classic pages inside React iframes also load this
+  // script, and a second fixed control stacks on top of the shell's one.
   function ensurePageJump() {
-    if (document.getElementById('plPageJump')) return;
+    try {
+      if (window.top !== window) return;
+    } catch (err) {
+      return;
+    }
+    var extras = document.querySelectorAll('.pl-page-jump');
+    if (extras.length > 1) {
+      for (var i = 1; i < extras.length; i += 1) extras[i].remove();
+    }
+    if (document.getElementById('plPageJump') || document.querySelector('.pl-page-jump')) return;
     var wrap = document.createElement('div');
     wrap.id = 'plPageJump';
     wrap.className = 'pl-page-jump';

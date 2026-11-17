@@ -8,13 +8,6 @@ const nameOf = (code) => code === 'SOCCER' ? 'Soccer' : code;
 const labelOf = (type) => type === 'threes' ? '3PT Made' : String(type || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const percentOf = (value) => value == null ? 'N/A' : value > 99.95 ? '>99.9%' : value < 0.05 ? '<0.1%' : `${Number(value).toFixed(1)}%`;
 
-function yesterdayET() {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' })
-    .formatToParts(new Date());
-  const get = (type) => Number(parts.find((part) => part.type === type).value);
-  return new Date(Date.UTC(get('year'), get('month') - 1, get('day') - 1)).toISOString().slice(0, 10);
-}
-
 function todayET() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
@@ -31,7 +24,8 @@ export default function PropsPage() {
   const [feedError, setFeedError] = useState('');
   const [results, setResults] = useState(null);
   const [resultsError, setResultsError] = useState('');
-  const [day, setDay] = useState(() => new URLSearchParams(window.location.search).get('results_date') || yesterdayET());
+  // Empty until the API names the latest night with records — calendar yesterday is often all N/A.
+  const [day, setDay] = useState(() => new URLSearchParams(window.location.search).get('results_date') || '');
   const [resultWindow, setResultWindow] = useState(() => new URLSearchParams(window.location.search).get('results_window') || 'night');
   const [propsDay, setPropsDay] = useState(() => new URLSearchParams(window.location.search).get('date') || todayET());
   const [market, setMarket] = useState('all');
@@ -47,9 +41,23 @@ export default function PropsPage() {
 
   useEffect(() => {
     let alive = true;
-    getJson('/api/web/me', { maxAge: 0 }).then((data) => {
-      if (alive) { setMe(data); setIdentityError(''); }
-    }).catch(() => { if (alive) setIdentityError('Could not verify your sign-in. Please retry.'); });
+    const loadMe = (attempt = 0) => getJson('/api/web/me', { maxAge: 0 }).then((data) => {
+      if (!alive) return;
+      if (typeof data?.loggedIn !== 'boolean' || typeof data?.premium !== 'boolean') {
+        throw new Error('bad me payload');
+      }
+      setMe(data);
+      setIdentityError('');
+    }).catch(() => {
+      if (!alive) return;
+      // One quiet retry — a single blip must not block a signed-in member.
+      if (attempt < 1) {
+        setTimeout(() => { if (alive) loadMe(attempt + 1); }, 400);
+        return;
+      }
+      setIdentityError('Could not verify your sign-in. Please retry.');
+    });
+    loadMe();
     return () => { alive = false; };
   }, [retry]);
 
@@ -73,12 +81,17 @@ export default function PropsPage() {
   useEffect(() => {
     if (!me?.premium || !me?.loggedIn) return undefined;
     let alive = true;
-    const query = new URLSearchParams({ date: day, window: resultWindow });
+    const query = new URLSearchParams({ window: resultWindow });
     let timer;
+    if (day) query.set('date', day);
     if (league) query.set('league', league);
     setResults(null);
     const load = () => getJson(`/api/web/props-results?${query}`, { maxAge: 0 }).then((data) => {
-      if (alive) { setResults(data); setResultsError(''); }
+      if (!alive) return;
+      setResults(data);
+      setResultsError('');
+      // First paint with no results_date: lock onto the night the API found with records.
+      if (!day && data?.result_date) setDay(data.result_date);
     }).catch(() => { if (alive) setResultsError('Could not load recorded results. Please retry.'); })
       .finally(() => { if (alive) timer = setTimeout(load, 60000); });
     load();
@@ -101,7 +114,8 @@ export default function PropsPage() {
   const sportCounts = Object.fromEntries((feed?.counts || []).map(item => [item.league, item]));
 
   function changeSport(code, date = propsDay, game = '', resultDate = day) {
-    const query = new URLSearchParams({ date, results_date: resultDate, results_window: resultWindow });
+    const query = new URLSearchParams({ date, results_window: resultWindow });
+    if (resultDate) query.set('results_date', resultDate);
     if (code) query.set('league', code);
     if (game) query.set('game', game);
     if (side !== 'all') query.set('side', side);
@@ -204,7 +218,8 @@ export default function PropsPage() {
           })}
         </>}
       </main>
-      <aside className={`pl-right pp-hub-results${pane !== 'results' ? ' pl-mobile-hidden' : ''}`} aria-label="Prop results">
+      <div className={`pl-right-stack${pane !== 'results' ? ' pl-mobile-hidden' : ''}`}>
+      <aside className="pl-right pp-hub-results" aria-label="Prop results">
         <h2 className="pl-right-title">{league ? `${nameOf(league)} Prop Results` : 'Prop Results'}</h2>
         {gate || <>
           <div className="pp-hub-filters">
@@ -278,6 +293,7 @@ export default function PropsPage() {
           </>}
         </>}
       </aside>
+      </div>
     </>
   );
 }

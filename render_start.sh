@@ -12,6 +12,8 @@ fi
 # Served picks/results HTML must live here — the app directory is wiped on
 # every deploy. Prediction slates already use /data/.cache/predictions.
 mkdir -p /data/.cache
+# Master boot clock for PL_BOOT_GRACE_S (gunicorn.conf.py also writes this).
+date +%s > /data/.cache/gunicorn_boot_at
 _saved=$(ls /data/.cache/served_*.html 2>/dev/null | wc -l | tr -d ' ')
 echo "[render_start] served-page cache /data/.cache (${_saved} saved page(s))"
 

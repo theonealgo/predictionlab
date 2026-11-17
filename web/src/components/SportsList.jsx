@@ -4,9 +4,7 @@ import { SOCCER_LEAGUES } from '../data/sportNav.js';
 import { publicPath } from '../data/sportSlugs.js';
 import { propsAvailabilityBadge } from '../propsView.js';
 
-// The left menu: every sport with its status, then a line, then the sports grouped by kind
-// (Football, Basketball, ...). A group with more than one entry opens into a list; the group holding
-// the open page starts open. A group's count is its sports' games today.
+// Grouped browse (soccer leagues, golf events, …) sits under All Sports / Props.
 const GROUPS = [
   { name: 'Football', keys: ['NFL', 'NCAAF', 'CFL'] },
   { name: 'Basketball', keys: ['NBA', 'NCAAB', 'NCAAW', 'WNBA'] },
@@ -25,6 +23,21 @@ function todayCount(sport) {
 
 function Count({ value }) {
   return value > 0 ? <span className="pl-nav-count">({value})</span> : null;
+}
+
+function SportLinks({ sports, propsMode, propsHref, propsBadge, activeKey, activeSlug }) {
+  return sports.map((sport) => (
+    <a
+      key={sport.slug}
+      href={propsMode ? propsHref(sport.key) : publicPath(sport.slug)}
+      className={`pl-sport-link${(propsMode ? sport.key === activeKey : sport.slug === activeSlug) ? ' is-active' : ''}`}
+    >
+      <span>{sport.name}</span>
+      <span className={`pl-sport-status${sport.status === 'Today' ? ' today' : ''}`}>
+        {propsMode ? propsBadge([sport.key]) : sport.statusText}
+      </span>
+    </a>
+  ));
 }
 
 export default function SportsList({ activeSlug, address }) {
@@ -98,35 +111,56 @@ export default function SportsList({ activeSlug, address }) {
     return <span className="pl-nav-count" title={reasons || undefined}>{propsAvailabilityBadge(keys.map(key => propsByKey[key]))}</span>;
   };
 
+  const listSports = shown.filter(sport => !propsMode || propsByKey[sport.key]);
+  const featured = listSports.filter((sport) => sport.status === 'Today' || todayCount(sport) > 0);
+  const other = listSports.filter((sport) => !(sport.status === 'Today' || todayCount(sport) > 0));
+  const todayTotal = shown.reduce((sum, sport) => sum + todayCount(sport), 0);
+
   return (
     <aside className={`pl-left${propsMode ? ' is-props-nav' : ''}`}>
-      <div className="pl-left-title">Sports</div>
       <nav className="pl-sport-nav">
-        {sports.length === 0 && Array.from({ length: 13 }, (_, n) => (
+        {sports.length === 0 && Array.from({ length: 8 }, (_, n) => (
           <span className="pl-sport-link is-placeholder" key={n} aria-hidden="true">&nbsp;</span>
         ))}
-        {shown.filter(sport => !propsMode || propsByKey[sport.key]).map((sport) => (
-          <a
-            key={sport.slug}
-            href={propsMode ? propsHref(sport.key) : publicPath(sport.slug)}
-            className={`pl-sport-link${(propsMode ? sport.key === activeKey : sport.slug === activeSlug) ? ' is-active' : ''}`}
-          >
-            <span>{sport.name}</span>
-            <span className={`pl-sport-status${sport.status === 'Today' ? ' today' : ''}`}>
-              {propsMode ? propsBadge([sport.key]) : sport.statusText}
-            </span>
-          </a>
-        ))}
+        {sports.length > 0 && (
+          <>
+            <div className="pl-left-title">Featured</div>
+            {featured.length === 0 && (
+              <span className="pl-nav-status pl-nav-empty">No games today</span>
+            )}
+            <SportLinks
+              sports={featured}
+              propsMode={propsMode}
+              propsHref={propsHref}
+              propsBadge={propsBadge}
+              activeKey={activeKey}
+              activeSlug={activeSlug}
+            />
+            {other.length > 0 && (
+              <>
+                <div className="pl-left-title pl-left-title-sub">Other sports</div>
+                <SportLinks
+                  sports={other}
+                  propsMode={propsMode}
+                  propsHref={propsHref}
+                  propsBadge={propsBadge}
+                  activeKey={activeKey}
+                  activeSlug={activeSlug}
+                />
+              </>
+            )}
+          </>
+        )}
       </nav>
       <hr className="pl-nav-divider" />
       <nav className="pl-nav">
+        <a href="/all-sports-predictions" className={`pl-nav-group-link${path === '/all-sports-predictions' || path === '/all-sports-picks' || path === '/all-sports-projections' ? ' is-active' : ''}`}>
+          <span>All Sports</span>
+          <Count value={todayTotal} />
+        </a>
         <a href={propsHref()} className={`pl-nav-group-link pl-props-link${propsMode ? ' is-active' : ''}`}>
           <span>Sports Props</span>
           {propsBadge((propsNav?.sports || []).map(item => item.league))}
-        </a>
-        <a href="/all-sports-predictions" className={`pl-nav-group-link${path === '/all-sports-predictions' ? ' is-active' : ''}`}>
-          <span>All sports</span>
-          <Count value={shown.reduce((sum, sport) => sum + todayCount(sport), 0)} />
         </a>
         {GROUPS.map((group) => {
           const members = group.keys.map((key) => byKey[key]).filter(Boolean);

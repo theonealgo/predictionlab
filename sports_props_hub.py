@@ -36,15 +36,26 @@ def preview(league, entry, limit=3, day=None):
     rows = []
     stamp = finite((entry or {}).get("ts"))
     try:
-        current = stamp is not None and datetime.fromtimestamp(stamp, ET).date() == datetime.now(ET).date()
+        written = datetime.fromtimestamp(stamp, ET).date() if stamp is not None else None
+        current = written == datetime.now(ET).date()
     except (ValueError, OverflowError, OSError):
+        written = None
         current = False
     payload = (entry or {}).get("payload") or {}
     target_day = day or datetime.now(ET).date().isoformat()
+    # Overnight snapshots for today's/upcoming slate stay usable: same requested_date
+    # with a ready availability must not disappear just because ts is yesterday.
+    exact_date = isinstance(payload, dict) and payload.get("requested_date") == target_day
+    usable = current or (
+        exact_date
+        and written is not None
+        and written >= datetime.now(ET).date() - timedelta(days=1)
+        and payload.get("availability") in {"ready", "slate_started", "no_verified_props", "no_fixtures"}
+    )
     players = {str(p.get("player_id")): p for p in payload.get("players") or [] if isinstance(p, dict)} \
         if isinstance(payload, dict) else {}
     dated = False
-    if current and isinstance(payload, dict):
+    if usable and isinstance(payload, dict):
         for row in payload.get("props") or []:
             if not isinstance(row, dict):
                 continue
@@ -92,8 +103,8 @@ def preview(league, entry, limit=3, day=None):
                          "strong_pick": bool(row.get("strong_pick")) if forecasts else False,
                          "model_reason": None if forecasts else row.get("model_reason") or
                          "Forecasts are updating or verified recent stats are unavailable."})
-    exact = payload.get("requested_date") == target_day if isinstance(payload, dict) else False
-    known = current and exact and payload.get("availability") in {"ready", "no_fixtures", "no_verified_props", "slate_started"}
+    exact = exact_date
+    known = usable and exact and payload.get("availability") in {"ready", "no_fixtures", "no_verified_props", "slate_started"}
     items = rows
     if limit is not None:
         if payload.get("player_pool_version"):
@@ -180,9 +191,15 @@ def model_type_summary(rows):
             for (league, model, prop), records in sorted(grouped.items())]
 
 
+def default_results_day(db_path, league=None):
+    """Last night that already has settled (or at least recorded) prop results."""
+    from prop_forecast_store import latest_results_date
+    return latest_results_date(db_path, league) or yesterday()
+
+
 def read_results(db_path, league=None, day=None, window="night"):
     """Read existing tables through mode=ro. Legacy records never become model-specific wins."""
-    day = day or yesterday()
+    day = day or default_results_day(db_path, league)
     if datetime.strptime(day, "%Y-%m-%d").strftime("%Y-%m-%d") != day:
         raise ValueError("Invalid date")
     if league and league not in LEAGUES:

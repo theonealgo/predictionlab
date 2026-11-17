@@ -226,7 +226,11 @@ export default function App() {
           {route.page === 'blog' && <BlogPage />}
           {route.page === 'tools' && <ToolsPage key={address} path={route.path} />}
           {route.page === 'models' && (
-            <ModelsPage key={address} classicPath={route.classicPath} title={route.title} />
+            <ModelsPage
+              key={route.classicPath || address}
+              classicPath={route.classicPath}
+              title={route.title}
+            />
           )}
           {route.page === 'sport' && <SportPage key={address} slug={route.slug} />}
           {route.page === 'all' && <AllSportsPage key={address} />}

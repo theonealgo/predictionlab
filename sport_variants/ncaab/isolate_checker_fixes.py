@@ -2272,10 +2272,41 @@ def add_missing_odds_section(html: str) -> str:
     return "".join(out)
 
 
+def _fill_model_cells_from_attrs(html: str) -> str:
+    """When data-pl-spread / data-xs-spread is set, keep the Odds table cell in sync."""
+    if not html or "data-pick-card" not in html:
+        return html
+    parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
+    out = [parts[0]]
+    for part in parts[1:]:
+        pl = re.search(r'data-pl-spread="([^"]*)"', part, flags=re.I)
+        xs = re.search(r'data-xs-spread="([^"]*)"', part, flags=re.I)
+        pl_v = (pl.group(1) if pl else "").strip()
+        xs_v = (xs.group(1) if xs else "").strip()
+
+        def _spread_row(match: re.Match) -> str:
+            row = match.group(0)
+            if pl_v and re.search(rf'(<td class="val-pl">){_DASH_CELL}|(<td class="val-pl">)(?:N/A)(</td>)', row, flags=re.I):
+                row = re.sub(r'(<td class="val-pl">)(.*?)(</td>)', rf"\1{pl_v}\3", row, count=1, flags=re.S)
+            if xs_v and re.search(rf'(<td class="val-xs">){_DASH_CELL}|(<td class="val-xs">)(?:N/A)(</td>)', row, flags=re.I):
+                row = re.sub(r'(<td class="val-xs">)(.*?)(</td>)', rf"\1{xs_v}\3", row, count=1, flags=re.S)
+            return row
+
+        part = re.sub(
+            r'<tr>\s*<td class="market-k">(?:Spread|Puck Line|Run Line)</td>[\s\S]*?</tr>',
+            _spread_row,
+            part,
+            flags=re.I,
+        )
+        out.append(part)
+    return "".join(out)
+
+
 def mark_missing_model_lines_na(html: str) -> str:
     """A model with no line for this matchup shows N/A, like Books with no posted line."""
     if not html or "data-pick-card" not in html:
         return html
+    html = _fill_model_cells_from_attrs(html)
     html = re.sub(
         rf'(<td class="val-(?:pl|xs)">){_DASH_CELL}(</td>)',
         r"\1N/A\2",

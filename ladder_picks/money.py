@@ -29,6 +29,24 @@ def american_to_decimal(american: int) -> Decimal:
     return Decimal(1) + Decimal(100) / (-a)
 
 
+def decimal_to_american(decimal_odds: Decimal) -> int:
+    """Parlay / multi-leg combined decimal odds → American price (nearest whole)."""
+    d = Decimal(decimal_odds)
+    if d <= 1:
+        raise ValueError("decimal odds must be greater than 1")
+    if d >= 2:
+        return int(((d - Decimal(1)) * Decimal(100)).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+    return int((Decimal(-100) / (d - Decimal(1))).quantize(Decimal(1), rounding=ROUND_HALF_UP))
+
+
+def combine_american(americans: list[int]) -> tuple[int, float]:
+    """Multiply leg prices into one American + decimal pair for a parlay."""
+    product = Decimal(1)
+    for raw in americans:
+        product *= american_to_decimal(int(raw))
+    return decimal_to_american(product), float(product)
+
+
 def implied_prob(american: int) -> float:
     return float(Decimal(1) / american_to_decimal(american))
 

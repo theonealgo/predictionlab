@@ -17,11 +17,8 @@
   line-height: 1.6;
 }
 
-.pl-blog-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
-  align-items: start;
+.pl-blog-page > .pl-blog-window {
+  margin-bottom: 22px;
 }
 
 .pl-blog-window {
@@ -205,21 +202,15 @@
 }
 
 @media (max-width: 900px) {
-  .pl-blog-columns {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
-  }
   .pl-blog-soro-frame {
     height: 380px;
   }
   .pl-blog-scroll {
     height: 780px;
     max-height: calc(90svh + 40px);
+    padding: 12px;
   }
   .pl-blog-window-head {
     padding: 16px;
-  }
-  .pl-blog-scroll {
-    padding: 12px;
   }
 }

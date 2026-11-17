@@ -63,6 +63,7 @@ _ESPN_PATHS = {
     'NBA':   'basketball/nba',
     'WNBA':  'basketball/wnba',
     'NCAAB': 'basketball/mens-college-basketball',
+    'NCAAW': 'basketball/womens-college-basketball',
     'NHL':   'hockey/nhl',
     'NFL':   'football/nfl',
     'NCAAF': 'football/college-football',
@@ -104,11 +105,18 @@ def _stat_value(stats_list, *candidate_names) -> Optional[float]:
     field names. Returns None if nothing matches.
 
     ESPN sometimes uses camelCase ('fieldGoalsAttempted'), sometimes a
-    `displayValue` string, sometimes just `name` + `value`.
+    `displayValue` string, sometimes just `name` + `value`. College basketball
+    often stores attempts as combined ``made-attempted`` display values
+    (e.g. ``32-65``).
     """
     if not stats_list:
         return None
     candidates_lower = {n.lower() for n in candidate_names}
+    # Prefer the attempts half of combined made-attempted rows.
+    combined_attempt_keys = {
+        'fieldgoalsattempted': ('fieldgoalsmade-fieldgoalsattempted', 'fgm-fga', 'fg'),
+        'freethrowsattempted': ('freethrowsmade-freethrowsattempted', 'ftm-fta', 'ft'),
+    }
     for s in stats_list:
         if not isinstance(s, dict):
             continue
@@ -126,6 +134,21 @@ def _stat_value(stats_list, *candidate_names) -> Optional[float]:
                     return float(dv)
                 except (TypeError, ValueError):
                     pass
+    # College/WNBA: parse "32-65" style made-attempted for FGA / FTA.
+    for cand in candidates_lower:
+        for combo in combined_attempt_keys.get(cand, ()):
+            for s in stats_list:
+                if not isinstance(s, dict):
+                    continue
+                name = (s.get('name') or s.get('abbreviation') or s.get('label') or '').lower()
+                if name != combo:
+                    continue
+                dv = str(s.get('displayValue') or s.get('value') or '')
+                if '-' in dv:
+                    try:
+                        return float(dv.split('-')[-1].strip())
+                    except (TypeError, ValueError):
+                        pass
     return None
 
 

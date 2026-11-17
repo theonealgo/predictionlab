@@ -60,9 +60,11 @@ function leagueOf(card) {
   return match ? match[1] : '';
 }
 
-// The tournament a tennis card names in its Event row.
+// The tournament a tennis card names (Event row, or data-event when the free face strips details).
 function eventOf(card) {
-  const match = /Event<\/span>\s*<span class="sf-val">([^<]*)/.exec(card.html);
+  const stamped = /data-event="([^"]*)"/.exec(card.html || '');
+  if (stamped) return stamped[1].trim();
+  const match = /Event<\/span>\s*<span class="sf-val">([^<]*)/.exec(card.html || '');
   return match ? match[1].trim() : '';
 }
 
@@ -128,6 +130,13 @@ export default function SportPage({ slug }) {
     if (league && sport === 'TENNIS') return league;
     return league && nav.filters && nav.filters.includes(league) ? league : 'All';
   });
+  // Tennis left-nav tournament links use ?league=…; free cards often have no Event row, so a
+  // dead filter would show an empty slate. Fall back to All when nothing matches.
+  useEffect(() => {
+    if (sport !== 'TENNIS' || filter === 'All' || !payload) return;
+    const hit = cards.some((card) => eventOf(card) === filter);
+    if (!hit) setFilter('All');
+  }, [sport, filter, payload, cards]);
   const [teamFilter, setTeamFilter] = useState(
     () => new URLSearchParams(window.location.search).get('team') || null,
   );
@@ -429,9 +438,6 @@ export default function SportPage({ slug }) {
                   {loadingMore ? 'Loading more games…' : 'Load more games'}
                 </button>
               </div>
-            )}
-            {payload && payload.shareImage && (
-              <div className="pl-share-image" dangerouslySetInnerHTML={{ __html: payload.shareImage }} />
             )}
           </>
         )}

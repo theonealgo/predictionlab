@@ -338,9 +338,20 @@ def _share_image(html):
 _SHARE_TOKEN_IN_HTML = re.compile(r'/share/predictions/([0-9a-f]{32})\.jpg', re.I)
 
 
+def _share_images_enabled() -> bool:
+    # Off by default on constrained hosts — reminting burns CPU/RAM; React no longer shows the block.
+    return (os.environ.get('PL_SHARE_IMAGES', '0') or '0') == '1'
+
+
 def _ensure_live_share_image(payload, slug):
     """Re-mint the Predictions Image when the web_cards feed still names an expired token."""
     if not isinstance(payload, dict):
+        return payload
+    if not _share_images_enabled():
+        if payload.get('shareImage'):
+            out = dict(payload)
+            out['shareImage'] = ''
+            return out
         return payload
     share = payload.get('shareImage') or ''
     m = _SHARE_TOKEN_IN_HTML.search(share)
@@ -616,10 +627,21 @@ _TENNIS_SYNC = {'at': 0.0, 'running': False}
 _TENNIS_SYNC_EVERY = int(os.environ.get('PL_TENNIS_SYNC_S', str(30 * 60)) or (30 * 60))
 _PROCESS_START = time.time()
 _BOOT_GRACE_S = float(os.environ.get('PL_BOOT_GRACE_S', '180') or 180)
+_BOOT_STAMP = Path(os.environ.get('PL_BOOT_STAMP', '/data/.cache/gunicorn_boot_at'))
+
+
+def _boot_started_at() -> float:
+    """Container/master start — not worker import (recycles must not re-arm grace)."""
+    try:
+        return float(_BOOT_STAMP.read_text().strip())
+    except (OSError, ValueError, TypeError):
+        return _PROCESS_START
 
 
 def _in_boot_grace() -> bool:
-    return (time.time() - _PROCESS_START) < _BOOT_GRACE_S
+    if _BOOT_GRACE_S <= 0:
+        return False
+    return (time.time() - _boot_started_at()) < _BOOT_GRACE_S
 
 
 def _tennis_sync_in_background():
@@ -656,6 +678,44 @@ def _tennis_slate_ids():
         return ids
     except Exception:
         return frozenset()
+
+
+def _stamp_tennis_events(cards):
+    """Put data-event on tennis cards so the React filter works when the free face strips Event."""
+    import html as _html
+    import sqlite3
+    if not cards:
+        return cards
+    try:
+        con = sqlite3.connect(f'file:{_TENNIS_DB}?mode=ro', uri=True, timeout=2)
+        rows = con.execute(
+            "SELECT player_a, player_b, tournament FROM matches "
+            "WHERE status != 'final' AND COALESCE(tournament, '') != ''"
+        ).fetchall()
+        con.close()
+    except Exception:
+        return cards
+    by_pair = {}
+    for a, b, tourney in rows:
+        if not tourney:
+            continue
+        by_pair[(a or '').strip().lower(), (b or '').strip().lower()] = tourney
+        by_pair[(b or '').strip().lower(), (a or '').strip().lower()] = tourney
+    for card in cards:
+        block = card.get('html') or ''
+        if 'data-event="' in block:
+            continue
+        away = (card.get('away') or '').strip().lower()
+        home = (card.get('home') or '').strip().lower()
+        tourney = by_pair.get((away, home))
+        if not tourney:
+            found = _TENNIS_EVENT.search(block)
+            tourney = found.group(1).strip() if found else ''
+        if not tourney:
+            continue
+        safe = _html.escape(tourney, quote=True)
+        card['html'] = block.replace('<div ', f'<div data-event="{safe}" ', 1)
+    return cards
 
 
 def _drop_saved_tennis_pages():
@@ -771,9 +831,19 @@ def api_me():
 
 @api.route('/api/web/season')
 def api_season():
-    from NHL77FINAL import _get_sport_ml_units_banner
-    items = [dict(item, label=_strip_emoji(item.get('label'))) for item in _get_sport_ml_units_banner()]
-    return jsonify({'items': items})
+    from NHL77FINAL import _get_sport_market_units_banner
+    market = (request.args.get('market') or 'moneyline').strip().lower()
+    if market in ('su', 'straight', 'straight_up', 'straight-up'):
+        market = 'moneyline'
+    elif market in ('ou', 'over_under', 'over-under', 'totals'):
+        market = 'total'
+    elif market not in ('moneyline', 'spread', 'total'):
+        market = 'moneyline'
+    items = [
+        dict(item, label=_strip_emoji(item.get('label')))
+        for item in _get_sport_market_units_banner(market)
+    ]
+    return jsonify({'items': items, 'market': market})
 
 
 _MEMBER_CHIP = re.compile(
@@ -843,6 +913,8 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
     if tier != 'member':
         for card in cards:
             card['html'] = _lock_member_chips(card['html'])
+    if sport == 'TENNIS':
+        cards = _stamp_tennis_events(cards)
     dates = _game_dates(sport) if any(not card['date'] for card in cards) else {}
     for card in cards:
         if not card['date']:
@@ -861,7 +933,8 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
         else:
             total, next_offset = page['total'], page['nextOffset']
     return _reword_cards({'cards': cards, 'total': total, 'css': _card_styles(html, app),
-                          'shareImage': _share_image(html), 'offset': offset,
+                          'shareImage': _share_image(html) if _share_images_enabled() else '',
+                          'offset': offset,
                           'nextOffset': next_offset, 'hasMore': next_offset is not None})
 
 
@@ -878,7 +951,12 @@ def _read_cards_file(path):
 
 
 def _usable_cards(payload):
-    return bool(payload and (payload.get('cards') or payload.get('picks')))
+    if not payload or not isinstance(payload, dict):
+        return False
+    if payload.get('cards') or payload.get('picks'):
+        return True
+    # Off-season / empty slate after a finished build — do not rebuild forever.
+    return 'cards' in payload and payload.get('total') == 0
 
 
 def _saved_cards(slug, tier):
@@ -1083,10 +1161,13 @@ def _card_page(slug, tier, app, offset, limit):
         return {'error': 'Games could not be loaded. Please retry.', 'cards': []}, 503
     # One cold build at a time (semaphore inside _start_full_cards). Homepage stays
     # serial so this does not stampede; sport pages poll building:true.
-    _start_full_cards(slug, tier, app)
+    started = _start_full_cards(slug, tier, app)
+    retry = 1
+    if not started and _in_boot_grace():
+        retry = max(2, int(_BOOT_GRACE_S - (time.time() - _boot_started_at())) + 1)
     return {'cards': [], 'total': None, 'css': '', 'shareImage': '', 'offset': offset,
             'nextOffset': offset, 'hasMore': True, 'building': True,
-            'refreshing': True, 'retryAfter': 1}, 202
+            'refreshing': True, 'retryAfter': retry}, 202
 
 
 @api.route('/api/web/sports/<slug>/cards')

@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
 import { getJson } from '../api.js';
 import ChartFrame from '../components/ChartFrame.jsx';
-import AllSportsResults from '../components/AllSportsResults.jsx';
+import SeasonRecord from '../components/SeasonRecord.jsx';
 import { publicPath } from '../data/sportSlugs.js';
 import { readCardPreview, readGolfPreview } from '../homePreview.js';
 
-// One existing card per sport, with the same viewer-specific access as its sport page.
-const CARDS_SHOWN = 1;
 // The sports that have a chart view on their results page.
 const CHART_SPORTS = new Set(['NHL', 'NBA', 'NCAAB', 'NCAAW', 'MLB', 'SOCCER', 'NFL', 'NCAAF', 'WNBA', 'CFL']);
 
+const wait = (seconds = 1) => new Promise((resolve) => {
+  const ms = Math.max(1, Math.min(15, Number(seconds) || 1)) * 1000;
+  setTimeout(resolve, ms);
+});
+
 export default function HomePage() {
   const [mode, setMode] = useState('cards');
-  const [mobilePane, setMobilePane] = useState('predictions');
   const [sports, setSports] = useState(null);
   const [chartSlug, setChartSlug] = useState('');
   const [noSports, setNoSports] = useState(false);
@@ -31,34 +33,63 @@ export default function HomePage() {
           return null;
         }
         setChartSlug((list.find((item) => item.status === 'Today') || list[0]).slug);
-        let next = 0;
-        const load = async () => {
-          while (!cancelled && next < list.length) {
-            const item = list[next++];
-            try {
-              const path = item.key === 'GOLF' ? '/api/web/golf' : `/api/web/sports/${item.slug}/cards?limit=5`;
-              let payload = await getJson(path);
-              while (!cancelled && payload.building) {
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-                payload = await getJson(path, { maxAge: 0 });
-              }
-              if (cancelled) return;
-              setFeeds((current) => ({
-                ...current,
-                [item.slug]: { total: payload.total, preview: item.key === 'GOLF' ? readGolfPreview(payload) : readCardPreview(payload.cards?.[0]) },
-              }));
-            } catch (error) {
-              if (!cancelled) setFeeds((current) => ({ ...current, [item.slug]: { error: 'Could not load this sport. Open its page to retry.' } }));
-            }
+
+        // Ask every in-season sport without waiting on the previous one's SSR.
+        const apply = (item, payload) => {
+          if (cancelled) return;
+          setFeeds((current) => ({
+            ...current,
+            [item.slug]: {
+              total: payload.total,
+              preview: item.key === 'GOLF' ? readGolfPreview(payload) : readCardPreview(payload.cards?.[0]),
+            },
+          }));
+        };
+        const fail = (item) => {
+          if (!cancelled) {
+            setFeeds((current) => ({
+              ...current,
+              [item.slug]: { error: 'Could not load this sport. Open its page to retry.' },
+            }));
           }
         };
-        // Original feeds may need a full render: do not start every sport at once.
-        return load();
+        const loadOne = async (item) => {
+          if (item.status === 'Offseason') {
+            if (!cancelled) {
+              setFeeds((current) => ({
+                ...current,
+                [item.slug]: { total: 0, preview: null },
+              }));
+            }
+            return;
+          }
+          const path = item.key === 'GOLF' ? '/api/web/golf' : `/api/web/sports/${item.slug}/cards?limit=1`;
+          try {
+            let payload = await getJson(path, { maxAge: 0 });
+            if (cancelled) return;
+            if (!payload?.building) {
+              apply(item, payload);
+              return;
+            }
+            for (let tries = 0; tries < 60 && !cancelled; tries += 1) {
+              await wait(payload.retryAfter);
+              payload = await getJson(path, { maxAge: 0 });
+              if (!payload?.building) {
+                apply(item, payload);
+                return;
+              }
+            }
+            fail(item);
+          } catch (error) {
+            fail(item);
+          }
+        };
+        list.forEach((item) => { loadOne(item); });
+        return null;
       })
       .catch(() => {
         if (!cancelled) setSportsError(true);
       });
-
 
     return () => {
       cancelled = true;
@@ -68,16 +99,7 @@ export default function HomePage() {
 
   return (
     <>
-      <div className="pl-mobile-switch" role="tablist" aria-label="Show predictions or results">
-        {[['predictions', 'Predictions'], ['results', 'Results']].map(([key, label]) => (
-          <button type="button" key={key} role="tab" aria-selected={mobilePane === key}
-            className={mobilePane === key ? 'active' : ''}
-            onClick={() => { setMobilePane(key); window.scrollTo({ top: 0 }); }}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <main className={mobilePane === 'predictions' ? 'pl-center' : 'pl-center pl-mobile-hidden'}>
+      <main className="pl-center">
         <div className="pl-home-head">
           <h1 className="pl-title">All sports</h1>
           <div className="pl-results-views" role="tablist">
@@ -155,8 +177,8 @@ export default function HomePage() {
           </section>
         )}
       </main>
-      <aside className={mobilePane === 'results' ? 'pl-right' : 'pl-right pl-mobile-hidden'}>
-        <AllSportsResults enabled={Object.keys(feeds).length > 0 || mobilePane === 'results'} />
+      <aside className="pl-right">
+        <SeasonRecord />
       </aside>
     </>
   );

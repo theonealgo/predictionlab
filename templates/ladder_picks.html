@@ -51,7 +51,7 @@
 {% block content %}
 <div class="ld-wrap">
   <h1>10-Day Ladder Picks</h1>
-  <p class="ld-lead">One pick at a time, backed by our graded record. The ladder starts at $10 and each win rolls the full amount into the next pick's wager, for up to 10 ladder days.</p>
+  <p class="ld-lead">One 3-leg parlay at a time (two −300 or heavier moneylines + one likely spread). The ladder starts at $10 and each win rolls the full amount into the next day's wager, for up to 10 ladder days.</p>
 
   {% if ladder %}
   <section class="ld-card">
@@ -72,16 +72,22 @@
     <h2>Today's pick</h2>
     {% if today_pick and not today_pick.locked %}
     <div class="ld-pick">
-      <div class="f"><div class="k">Pick</div><div class="v">{{ today_pick.pick }}</div></div>
-      <div class="f"><div class="k">Event</div><div class="v">{{ today_pick.event }}</div></div>
-      <div class="f"><div class="k">Sport</div><div class="v">{{ today_pick.sport }}</div></div>
-      <div class="f"><div class="k">Odds</div><div class="v">{{ today_pick.odds }} ({{ today_pick.decimal }})</div></div>
-      <div class="f"><div class="k">Record on this pick type</div><div class="v">{{ today_pick.record }}</div></div>
-      <div class="f"><div class="k">Needed to break even at these odds</div><div class="v">{{ today_pick.break_even }}</div></div>
-      <div class="f"><div class="k">Expected return per $1 at this record</div><div class="v">{{ today_pick.expected }}</div></div>
+      <div class="f"><div class="k">Parlay</div><div class="v">{{ today_pick.pick }}</div></div>
+      <div class="f"><div class="k">Combined odds</div><div class="v">{{ today_pick.odds }} ({{ today_pick.decimal }})</div></div>
       <div class="f"><div class="k">Wager</div><div class="v">{{ today_pick.stake }}</div></div>
+      <div class="f"><div class="k">Needed to break even</div><div class="v">{{ today_pick.break_even }}</div></div>
     </div>
-    <p class="ld-muted" style="margin-top:8px;">{% if today_pick.start %}Starts {{ today_pick.start }} · {% endif %}{{ today_pick.market }}{% if today_pick.pick_type %} · {{ today_pick.pick_type }}{% endif %} · Odds locked when the pick was published</p>
+    {% if today_pick.legs %}
+    <div class="ld-scroll" style="margin-top:12px;"><table class="ld-table">
+      <thead><tr><th>Leg</th><th>Sport</th><th>Pick</th><th>Odds</th></tr></thead>
+      <tbody>
+      {% for leg in today_pick.legs %}
+      <tr><td>{{ loop.index }}</td><td>{{ leg.sport }}</td><td><strong>{{ leg.pick }}</strong><div class="ld-muted">{{ leg.event }}</div></td><td>{{ leg.odds }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% endif %}
+    <p class="ld-muted" style="margin-top:8px;">{% if today_pick.start %}First leg starts {{ today_pick.start }} · {% endif %}{{ today_pick.market }}{% if today_pick.pick_type %} · {{ today_pick.pick_type }}{% endif %} · Odds locked when published</p>
     {% elif today_pick %}
     <div class="ld-lock">
       <p><strong>Day {{ today_pick.day }} is live.</strong> Today's ladder pick, odds and wager are for premium members.</p>
@@ -164,13 +170,13 @@
   <section class="ld-card">
     <h2>How the ladder works</h2>
     <ul class="ld-rules">
-      <li>Day 1 starts with a $10 wager on one moneyline, spread or total pick from our published predictions, priced between -150 and +150.</li>
-      <li>Every sport is checked each day. A pick qualifies only when its kind of pick has at least 100 graded picks against pre-game sportsbook lines, has made money at the prices it was graded at, and hits more often than the pick's odds need to break even. The kind with the biggest margin is taken. Past records do not guarantee future results.</li>
-      <li>A win adds the profit, at the odds recorded when the pick was published, to the next day's wager.</li>
-      <li>A loss ends the ladder. A push or void is not a loss: the wager carries to the next day unchanged.</li>
-      <li>If no pick meets our requirements on a given date, no pick is forced: the ladder waits for the next qualifying pick. Ladder days count picks, not calendar days.</li>
+      <li>Each ladder day is a 3-leg parlay: two moneylines at −300 or heavier, plus one spread that is likely to cover, from three different games.</li>
+      <li>Every sport is checked. Each leg still needs a pick type with at least 100 graded picks against pre-game lines, a positive return at those prices, and a hit rate above break-even for that leg's price. Past records do not guarantee future results.</li>
+      <li>The wager uses the combined parlay price locked when the day was published. A win rolls stake + profit into the next day.</li>
+      <li>A loss on any leg ends the ladder. A push or void is not a loss: the wager carries to the next day unchanged.</li>
+      <li>If no full parlay can be built on a date, the ladder waits. Ladder days count published parlays, not calendar days.</li>
       <li>A ladder that wins through Day 10 is complete. One ladder runs at a time.</li>
-      <li>Picks never change after they are published.</li>
+      <li>Parlays never change after they are published.</li>
     </ul>
   </section>
 
