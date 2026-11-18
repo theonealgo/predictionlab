@@ -109,9 +109,18 @@ def api_props_hub():
             raise ValueError
     except ValueError:
         return jsonify(error='Choose a valid YYYY-MM-DD props date.'), 400
+    # Default 3 rows per league; ?limit=all (or a higher int) loads the rest on demand.
+    raw_limit = (request.args.get('limit') or '3').strip().lower()
+    if raw_limit == 'all':
+        item_limit = None
+    else:
+        try:
+            item_limit = max(1, min(500, int(raw_limit)))
+        except ValueError:
+            item_limit = 3
     if day < datetime.now(ZoneInfo('America/New_York')).date().isoformat():
         from props_navigation import game_catalog, bind_games
-        data = historical_catalog(site.DATABASE, day, selected, limit=None if selected else 3)
+        data = historical_catalog(site.DATABASE, day, selected, limit=item_limit)
         catalog = game_catalog(site.DATABASE, day)
         for section in data['sections']:
             bind_games(section, catalog)
@@ -121,16 +130,17 @@ def api_props_hub():
         return response
     sections = []
     from props_navigation import game_catalog, bind_games
-    from props_service import entries as prop_entries, ensure, building as prop_building
-    if not current_app.testing:
-        ensure(site, day, selected or None)
+    from props_service import entries as prop_entries, ensure_selected, building as prop_building
+    # A visit only reads the saved props. Load=1 publishes the one sport they chose.
+    if not current_app.testing and request.args.get('load') == '1' and selected:
+        ensure_selected(site, day, selected)
     entries = prop_entries(site, day)
     catalog = game_catalog(site.DATABASE, day)
     counts = []
     for league in LEAGUES:
         entry = entries.get(league)
         building = prop_building(site, league, day)
-        section = preview(league, entry, limit=None if selected else 3, day=day)
+        section = preview(league, entry, limit=item_limit, day=day)
         bind_games(section, catalog, entry)
         section['building'] = building
         counts.append({'league': league, 'count': section['total'], 'kind': 'available',
@@ -167,21 +177,57 @@ def api_props_hub():
     return response
 
 
+@api.route('/api/web/props-streaks')
+def api_props_streaks():
+    denied = _props_hub_access()
+    if denied is not None:
+        return denied
+    from NHL77FINAL import _query_prop_streaks
+    league = (request.args.get('league') or '').strip().upper()
+    leagues = [league] if league else ['NBA', 'NHL', 'NFL', 'MLB', 'WNBA', 'NCAAB', 'NCAAW', 'NCAAF']
+    items = []
+    for name in leagues:
+        try:
+            data = _query_prop_streaks(name, limit=20 if league else 6)
+        except Exception:
+            current_app.logger.exception('Prop streaks unavailable for %s', name)
+            continue
+        for item in data.get('items') or []:
+            item['league'] = name
+            items.append(item)
+    response = jsonify(league=league or None, items=items)
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.vary.add('Cookie')
+    return response
+
+
 @api.route('/api/web/props-results')
 def api_props_results():
     denied = _props_hub_access()
     if denied is not None:
         return denied
-    from sports_props_hub import read_results
+    from sports_props_hub import grade_ungraded_night, read_results
     from NHL77FINAL import DATABASE
+    league = (request.args.get('league') or '').upper() or None
+    day = request.args.get('date') or None
+    if not current_app.config.get('TESTING') and day:
+        try:
+            grade_ungraded_night(DATABASE, league, day)
+        except Exception:
+            current_app.logger.exception('Prop grade for %s %s failed', league, day)
     try:
-        data = read_results(DATABASE, (request.args.get('league') or '').upper() or None,
-                            request.args.get('date') or None, window=request.args.get('window') or 'night')
+        data = read_results(DATABASE, league, day, window=request.args.get('window') or 'night')
     except ValueError:
         return jsonify(error='Choose a supported sport and a valid YYYY-MM-DD date.'), 400
     except Exception:
         current_app.logger.exception('Read-only props results unavailable')
         return jsonify(error='Recorded prop results could not be loaded. Please retry.'), 503
+    # items=0 → model tables only. The per-player card list is huge; the React page
+    # loads it later so the worker is not holding that JSON on every props visit.
+    if str(request.args.get('items') or '1').strip() in ('0', 'false', 'no'):
+        data = dict(data)
+        data['items'] = []
+        data['items_deferred'] = True
     response = jsonify(data)
     response.headers['Cache-Control'] = 'private, no-store'
     response.vary.add('Cookie')
@@ -1142,15 +1188,32 @@ def _start_full_cards(slug, tier, app):
     return True
 
 
-def _card_page(slug, tier, app, offset, limit):
+def _card_in_span(card, span):
+    """Today, and `span` calendar days after today. Blank dates stay (undated upcoming bouts)."""
+    today = datetime.now(ZoneInfo("America/New_York")).date()
+    end = today + timedelta(days=span)
+    raw = str((card or {}).get("date") or "")[:10]
+    if not raw:
+        return True
+    try:
+        day = datetime.strptime(raw, "%Y-%m-%d").date()
+    except ValueError:
+        return True
+    return today <= day <= end
+
+
+def _card_page(slug, tier, app, offset, limit, span=None):
     from slate_freshness import current_payload
     saved = _cards_for_tier(slug, tier)
     if saved and time.time()-saved[0] < _CARDS_KEEP:
         payload = _ensure_live_share_image(current_payload(saved[1]), slug)
         if payload is not saved[1] and payload.get('shareImage') != (saved[1] or {}).get('shareImage'):
             _save_cards(slug, tier, payload, allow_empty=True)
-        cards = payload['cards'][offset:offset+limit]
-        total = len(payload['cards'])
+        source = payload['cards']
+        if span is not None:
+            source = [card for card in source if _card_in_span(card, span)]
+        total = len(source)
+        cards = source[offset:offset+limit]
         next_offset = offset+len(cards) if offset+len(cards) < total else None
         # Never flag refreshing when cards are already on hand — the client skips
         # caching refreshing payloads and the homepage would refetch every sport.
@@ -1187,9 +1250,33 @@ def api_cards(slug):
             offset = int(request.args.get('offset', '0'))
             if not 1 <= limit <= 50 or not 0 <= offset <= 10000:
                 raise ValueError
+            span = request.args.get('span')
+            span = None if span is None else int(span)
+            if span not in (None, 0, 2):
+                raise ValueError
         except (ValueError, TypeError):
             return jsonify(error='Choose a valid game page.'), 400
-        payload, status = _card_page(slug, tier, app, offset, limit)
+        if request.args.get('cached') == '1':
+            saved = _cards_for_tier(slug, tier)
+            if not saved:
+                payload = {
+                    'cards': [], 'total': 0, 'css': '', 'shareImage': '',
+                    'offset': 0, 'nextOffset': None, 'hasMore': False,
+                    'building': False, 'refreshing': False,
+                }
+            else:
+                full = saved[1] or {}
+                cards = list(full.get('cards') or [])[:limit]
+                payload = dict(
+                    full, cards=cards, total=len(full.get('cards') or []),
+                    offset=0, nextOffset=None, hasMore=False,
+                    building=False, refreshing=False,
+                )
+            response = jsonify(payload)
+            response.headers['Cache-Control'] = 'private, max-age=30'
+            response.vary.add('Cookie')
+            return response
+        payload, status = _card_page(slug, tier, app, offset, limit, span)
         if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NBA'}:
             from market_card_refresh import refresh as refresh_market_cards
             from NHL77FINAL import DATABASE

@@ -529,6 +529,15 @@ def init_auth(app, db_path=None):
     def _make_session_permanent():
         if not session.permanent:
             session.permanent = True
+        # The Docker smoke test sets RENDER=1, which would pin cookies to
+        # predictionlab.io and Secure. A browser on http://127.0.0.1 cannot
+        # store that cookie, so Sports Props never sees the sign-in.
+        host = (request.host or "").split(":")[0]
+        if host in {"127.0.0.1", "localhost"}:
+            app.config["SESSION_COOKIE_SECURE"] = False
+            app.config["REMEMBER_COOKIE_SECURE"] = False
+            app.config["SESSION_COOKIE_DOMAIN"] = None
+            app.config["REMEMBER_COOKIE_DOMAIN"] = None
 
     # Flask-Login setup
     _login_manager.init_app(app)

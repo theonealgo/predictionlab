@@ -55,7 +55,7 @@ worker_class = "gthread"
 _default_threads = "4" if (
     os.path.isdir("/data") or os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID")
 ) else "8"
-threads = max(2, int(os.environ.get("GUNICORN_THREADS", _default_threads) or _default_threads))
+threads = max(1, int(os.environ.get("GUNICORN_THREADS", _default_threads) or _default_threads))
 timeout = 120
 # Recycle the worker before RAM creep OOMs the 2–4 GB Render box.
 # Jitter spreads restarts so a traffic spike does not coincide with recycle.

@@ -3,6 +3,7 @@ import Header from './components/Header.jsx';
 import LiveStrip from './components/LiveStrip.jsx';
 import Footer from './components/Footer.jsx';
 import SportsList from './components/SportsList.jsx';
+import PropsNav from './components/PropsNav.jsx';
 import SportPage from './pages/SportPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import PropsPage from './pages/PropsPage.jsx';
@@ -126,7 +127,7 @@ function appLink(event) {
 function preload(route) {
   if (route.page === 'sport' && route.slug !== 'golf-picks') prefetchJson(`/api/web/sports/${route.slug}/cards?limit=5`);
   if (route.page === 'all') prefetchJson('/api/web/all-sports');
-  if (route.page === 'blog' || route.page === 'models' || route.page === 'tools') prefetchJson('/api/web/blog');
+  if (route.page === 'blog') prefetchJson('/api/web/blog');
 }
 
 function currentAddress() {
@@ -220,7 +221,9 @@ export default function App() {
       <Header />
       {!wideLayout && <LiveStrip />}
       <div className={wideLayout ? 'pl-body pl-body-wide' : 'pl-body'}>
-        {!wideLayout && <SportsList activeSlug={route.slug} address={address} />}
+        {!wideLayout && (route.page === 'props'
+          ? <PropsNav address={address} />
+          : <SportsList activeSlug={route.slug} />)}
         <div className="pl-stage">
           {route.page === 'props' && <PropsPage key={address} />}
           {route.page === 'blog' && <BlogPage />}

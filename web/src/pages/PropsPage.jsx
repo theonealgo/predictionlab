@@ -13,9 +13,10 @@ function todayET() {
 }
 
 export default function PropsPage() {
-  const requested = (new URLSearchParams(window.location.search).get('league') || '').toUpperCase();
-  const league = SPORTS.includes(requested) ? requested : '';
-  const selectedGame = new URLSearchParams(window.location.search).get('game') || '';
+  const opening = new URLSearchParams(window.location.search);
+  const requested = (opening.get('league') || '').toUpperCase();
+  const [league, setLeague] = useState(SPORTS.includes(requested) ? requested : '');
+  const [selectedGame, setSelectedGame] = useState(opening.get('game') || '');
   const [me, setMe] = useState(null);
   const [identityError, setIdentityError] = useState('');
   const [retry, setRetry] = useState(0);
@@ -23,11 +24,13 @@ export default function PropsPage() {
   const [feed, setFeed] = useState(null);
   const [feedError, setFeedError] = useState('');
   const [results, setResults] = useState(null);
+  const [resultView, setResultView] = useState('results');
+  const [streaks, setStreaks] = useState(null);
   const [resultsError, setResultsError] = useState('');
   // Empty until the API names the latest night with records — calendar yesterday is often all N/A.
   const [day, setDay] = useState(() => new URLSearchParams(window.location.search).get('results_date') || '');
   const [resultWindow, setResultWindow] = useState(() => new URLSearchParams(window.location.search).get('results_window') || 'night');
-  const [propsDay, setPropsDay] = useState(() => new URLSearchParams(window.location.search).get('date') || todayET());
+  const [propsDay, setPropsDay] = useState(() => opening.get('date') || todayET());
   const [market, setMarket] = useState('all');
   const [model, setModel] = useState('all');
   const [lineType, setLineType] = useState('all');
@@ -36,8 +39,14 @@ export default function PropsPage() {
     return ['OVER', 'UNDER'].includes(requestedSide) ? requestedSide : 'all';
   });
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('player') || '');
-  const [visibleResults, setVisibleResults] = useState(80);
-  useEffect(() => { setVisibleResults(80); }, [day, resultWindow, league, model, market, search, lineType, side]);
+  const [visibleResults, setVisibleResults] = useState(3);
+  const [itemsReady, setItemsReady] = useState(false);
+  const [propsQuery, setPropsQuery] = useState(null);
+  const [resultsQuery, setResultsQuery] = useState(null);
+  useEffect(() => {
+    setVisibleResults(3);
+    setItemsReady(false);
+  }, [day, resultWindow, league, model, market, search, lineType, side]);
 
   useEffect(() => {
     let alive = true;
@@ -62,43 +71,110 @@ export default function PropsPage() {
   }, [retry]);
 
   useEffect(() => {
-    if (!me?.premium || !me?.loggedIn) return undefined;
+    if (!propsQuery || !me?.premium || !me?.loggedIn) return undefined;
     let alive = true;
     let timer;
-    const params = new URLSearchParams({ date: propsDay });
-    if (league) params.set('league', league);
-    const query = `?${params}`;
-    const load = () => getJson(`/api/web/props-hub${query}`, { maxAge: 0 }).then((data) => {
-      if (!alive) return;
-      setFeed(data); setFeedError('');
-      if (data.sections?.some((section) => section.building)) timer = setTimeout(load, 5000);
-    }).catch(() => { if (alive) setFeedError('Could not load props. Please retry.'); });
+    let tries = 0;
+    const params = new URLSearchParams({
+      date: propsQuery.date,
+      limit: String(propsQuery.limit),
+      league: propsQuery.league,
+    });
+    const load = (startBuild) => {
+      const query = new URLSearchParams(params);
+      if (startBuild) query.set('load', '1');
+      return getJson(`/api/web/props-hub?${query}`, { maxAge: 0 }).then((data) => {
+        if (!alive) return;
+        setFeed(data);
+        setFeedError('');
+        const building = data.sections?.some((section) => section.building);
+        if (building && tries < 24) {
+          tries += 1;
+          timer = setTimeout(() => load(false), 5000);
+        }
+      }).catch(() => { if (alive) setFeedError('Could not load props. Please retry.'); });
+    };
     setFeed(null);
-    load();
+    load(true);
     return () => { alive = false; clearTimeout(timer); };
-  }, [me, league, propsDay, retry]);
+  }, [me, propsQuery, retry]);
+
+  // Prop results: desktop shows the results column; mobile loads when Results tab is open.
+  // Individual recorded props are a second, deferred request.
+  useEffect(() => {
+    if (!resultsQuery || !me?.premium || !me?.loggedIn) return undefined;
+    const desktop = typeof window !== 'undefined'
+      && window.matchMedia('(min-width: 761px)').matches;
+    const needResults = pane === 'results' || desktop;
+    if (!needResults) return undefined;
+    let alive = true;
+    let pollTimer = 0;
+    let itemsTimer = 0;
+    let boot = 0;
+    const baseQuery = () => {
+      const query = new URLSearchParams({ window: resultsQuery.window });
+      if (resultsQuery.day) query.set('date', resultsQuery.day);
+      if (resultsQuery.league) query.set('league', resultsQuery.league);
+      return query;
+    };
+    const loadSummary = () => {
+      const query = baseQuery();
+      query.set('items', '0');
+      return getJson(`/api/web/props-results?${query}`, { maxAge: 60_000 }).then((data) => {
+        if (!alive) return;
+        setResults((prev) => ({
+          ...data,
+          items: Array.isArray(prev?.items) && prev.items.length ? prev.items : (data.items || []),
+          items_deferred: !(prev?.items?.length) && (data.items_deferred || !(data.items || []).length),
+        }));
+        setResultsError('');
+        if (!day && data?.result_date) setDay(data.result_date);
+      }).catch(() => { if (alive) setResultsError('Could not load recorded results. Please retry.'); });
+    };
+    const loadItems = () => {
+      const query = baseQuery();
+      query.set('items', '1');
+      return getJson(`/api/web/props-results?${query}`, { maxAge: 120_000 }).then((data) => {
+        if (!alive) return;
+        setResults(data);
+        setItemsReady(true);
+        setResultsError('');
+        if (!day && data?.result_date) setDay(data.result_date);
+      }).catch(() => { if (alive) setResultsError('Could not load recorded results. Please retry.'); });
+    };
+    setResults(null);
+    setItemsReady(false);
+    // Let props-hub paint first; results are secondary.
+    boot = window.setTimeout(() => {
+      if (!alive) return;
+      loadSummary().then(() => {
+        if (!alive) return;
+        // Per-player history: only after Results tab (mobile) or a long pause on desktop.
+        const delay = pane === 'results' ? 1200 : 8000;
+        itemsTimer = window.setTimeout(() => { if (alive) loadItems(); }, delay);
+      });
+      pollTimer = window.setInterval(() => { if (alive) loadSummary(); }, 180000);
+    }, pane === 'results' ? 200 : 2000);
+    return () => {
+      alive = false;
+      clearTimeout(boot);
+      clearTimeout(itemsTimer);
+      clearInterval(pollTimer);
+    };
+  }, [me, resultsQuery, retry, pane]);
 
   useEffect(() => {
-    if (!me?.premium || !me?.loggedIn) return undefined;
+    if (resultView !== 'streaks' || !resultsQuery || !me?.premium || !me?.loggedIn) return undefined;
     let alive = true;
-    const query = new URLSearchParams({ window: resultWindow });
-    let timer;
-    if (day) query.set('date', day);
-    if (league) query.set('league', league);
-    setResults(null);
-    const load = () => getJson(`/api/web/props-results?${query}`, { maxAge: 0 }).then((data) => {
-      if (!alive) return;
-      setResults(data);
-      setResultsError('');
-      // First paint with no results_date: lock onto the night the API found with records.
-      if (!day && data?.result_date) setDay(data.result_date);
-    }).catch(() => { if (alive) setResultsError('Could not load recorded results. Please retry.'); })
-      .finally(() => { if (alive) timer = setTimeout(load, 60000); });
-    load();
-    return () => { alive = false; clearTimeout(timer); };
-  }, [me, league, day, resultWindow, retry, feed?.captured_forecasts]);
-
-  const sections = feed?.sections || [];
+    const query = league ? `?league=${league}` : '';
+    getJson(`/api/web/props-streaks${query}`, { maxAge: 60_000 })
+      .then((data) => { if (alive) setStreaks(data.items || []); })
+      .catch(() => { if (alive) setStreaks([]); });
+    return () => { alive = false; };
+  }, [me, league, resultView]);
+  const propsCurrent = propsQuery && propsQuery.league === league && propsQuery.date === propsDay;
+  const visibleFeed = propsCurrent ? feed : null;
+  const sections = visibleFeed?.sections || [];
   const types = [...new Set([
     ...sections.flatMap((section) => (section.items || []).map((row) => row.prop_type)),
     ...(results?.items || []).map((row) => row.prop_type),
@@ -111,19 +187,23 @@ export default function PropsPage() {
   const firstModelDate = (results?.models || [])
     .filter(item => (model === 'all' ? !item.id.startsWith('pl_') : item.id === model))
     .map(item => item.first_recorded_date).filter(Boolean).sort()[0];
-  const sportCounts = Object.fromEntries((feed?.counts || []).map(item => [item.league, item]));
+  const sportCounts = Object.fromEntries((visibleFeed?.counts || []).map(item => [item.league, item]));
+  const loadedResultDay = resultsQuery?.day || results?.result_date || '';
+  const resultsCurrent = Boolean(resultsQuery)
+    && resultsQuery.league === league
+    && resultsQuery.window === resultWindow
+    && (!day || !loadedResultDay || day === loadedResultDay);
 
-  function changeSport(code, date = propsDay, game = '', resultDate = day) {
-    const query = new URLSearchParams({ date, results_window: resultWindow });
-    if (resultDate) query.set('results_date', resultDate);
-    if (code) query.set('league', code);
-    if (game) query.set('game', game);
-    if (side !== 'all') query.set('side', side);
-    const link = document.createElement('a');
-    link.href = `/sports-props?${query}`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  function pressLoadProps() {
+    if (!league) return;
+    setFeedError('');
+    setSelectedGame('');
+    setPropsQuery({ league, date: propsDay, limit: 3, n: Date.now() });
+  }
+
+  function pressLoadResults() {
+    setResultsError('');
+    setResultsQuery({ league, day, window: resultWindow, n: Date.now() });
   }
 
   const gate = identityError ? (
@@ -141,23 +221,22 @@ export default function PropsPage() {
       <main className={`pl-center pp-hub-main${pane !== 'props' ? ' pl-mobile-hidden' : ''}`}>
         <h1 className="pl-title">{league ? `${nameOf(league)} Props` : 'Sports Props'}</h1>
         <div className="pp-hub-filters pp-hub-navigation">
-          <label>Sport<select aria-label="Props sport" value={league} onChange={(e) => changeSport(e.target.value)}>
-            <option value="">All sports</option>
+          <label>Sport<select aria-label="Props sport" value={league} onChange={(e) => { setLeague(e.target.value); setSelectedGame(''); }}>
+            <option value="">Choose a sport</option>
             {SPORTS.map(code => {
               const count = sportCounts[code];
-              const suffix = !me?.premium ? '' : !count || ['not_loaded', 'queued', 'building'].includes(count.status) ? ' — Updating…' : count.count == null ? ' — Unavailable'
-                : ` (${count.count} ${count.kind} props)`;
+              const suffix = count && count.count != null ? ` (${count.count} ${count.kind} props)` : '';
               return <option key={code} value={code}>{nameOf(code)}{suffix}</option>;
             })}
           </select></label>
           <label>Props date<input aria-label="Props date" type="date" value={propsDay} onChange={(e) => {
-            if (e.target.value) changeSport(league, e.target.value, '', e.target.value);
+            if (e.target.value) setPropsDay(e.target.value);
           }} /></label>
         </div>
         {gate || <>
           <div className="pp-hub-filters">
             {league && <label>Game<select aria-label="Prop game" value={selectedGame}
-              onChange={e => changeSport(league, propsDay, e.target.value)}>
+              onChange={e => setSelectedGame(e.target.value)}>
               <option value="">All games</option>
               {[...new Map(sections.flatMap(section => section.items || []).filter(row => row.game_id)
                 .map(row => [row.game_id, row.game_label])).entries()].map(([id, label]) =>
@@ -171,14 +250,17 @@ export default function PropsPage() {
               <option value="all">All line types</option><option value="market">Market lines</option>
               <option value="pl">PL lines</option>
             </select></label>
-            <label>Over / Under<select aria-label="Prop pick side" value={side} onChange={e => setSide(e.target.value)}>
+            <label>Over / Under<select aria-label="Prop prediction side" value={side} onChange={e => setSide(e.target.value)}>
               <option value="all">Both</option><option value="OVER">Over</option><option value="UNDER">Under</option>
             </select></label>
+            <button type="button" className="pp-hub-load" disabled={!league} onClick={pressLoadProps}>Load props</button>
           </div>
           {feedError && <p className="pl-empty" role="alert">{feedError} <button onClick={() => setRetry((v) => v + 1)}>Retry</button></p>}
-          {!feed && !feedError && <p className="pl-empty">Loading props…</p>}
-          {feed?.tracking_available === false && <p className="pl-empty" role="alert">Forecasts loaded, but result tracking is unavailable. Please retry.</p>}
-          {feed && <p className="pp-hub-muted">Prop percentages are estimates, not historical win rates.</p>}
+          {!league && <p className="pl-empty">Pick a sport, then press Load props.</p>}
+          {league && !propsCurrent && !feedError && <p className="pl-empty">Press Load props to load {nameOf(league)} for {propsDay}.</p>}
+          {propsCurrent && !visibleFeed && !feedError && <p className="pl-empty">Loading props…</p>}
+          {propsCurrent && visibleFeed?.tracking_available === false && <p className="pl-empty" role="alert">Forecasts loaded, but result tracking is unavailable. Please retry.</p>}
+          {propsCurrent && visibleFeed && <p className="pp-hub-muted">Prop percentages are estimates, not historical win rates.</p>}
           {sections.map((section) => {
             const rows = (section.items || []).filter((row) => (!selectedGame || row.game_id === selectedGame)
               && (market === 'all' || market === row.prop_type)
@@ -186,24 +268,24 @@ export default function PropsPage() {
               && matchesPropSide(row, side)
               && (!search || row.player_name.toLowerCase().includes(search.toLowerCase())));
             return <section key={section.league} className="pp-hub-section" data-props-sport={section.league}>
-              <div className="pp-hub-section-head"><h2>{nameOf(section.league)}</h2>
-                {!league && <a href={`/sports-props?league=${section.league}&date=${propsDay}${side !== 'all' ? `&side=${side}` : ''}`}>Open {nameOf(section.league)} props →</a>}</div>
+              <div className="pp-hub-section-head"><h2>{nameOf(section.league)}</h2></div>
               {side !== 'all' && <p className="pp-hub-muted">Showing {rows.length} {side === 'OVER' ? 'Over' : 'Under'} selections matching your filters. Individual models may favor the other side.</p>}
-              {!league && section.total > (section.items || []).length && <p className="pp-hub-muted">
-                Previewing {(section.items || []).length} props. Open {nameOf(section.league)} to view all {section.total}.
+              {section.total > (section.items || []).length && <p className="pp-hub-muted">
+                Showing {(section.items || []).length} of {section.total} props.
+                {' '}<button type="button" onClick={() => setPropsQuery((current) => current ? { ...current, limit: 'all' } : current)}>Show more props</button>
               </p>}
-              {section.building && <p className="pl-empty">Updating this sport’s props…</p>}
+              {section.building && <p className="pl-empty">Loading this sport’s props…</p>}
               {section.refresh_notice && <p className="pp-hub-muted">{section.refresh_notice}</p>}
               {!rows.length && !section.building && <p className="pl-empty">{section.reason || 'No props match these filters.'}</p>}
               {!rows.length && section.next_date && <p className="pp-hub-muted">
-                <a href={`/sports-props?league=${section.league}&date=${section.next_date}${side !== 'all' ? `&side=${side}` : ''}`}>Next scheduled date: {section.next_date}</a>
+                <button type="button" onClick={() => setPropsDay(section.next_date)}>Next scheduled date: {section.next_date}. Press Load props.</button>
               </p>}
               {rows.map((row, index) => <article className="pp-hub-card" key={`${row.player_id}-${row.prop_type}-${row.line}-${index}`}>
                 <h3>{row.player_name}</h3><p className="pp-hub-muted">{row.team}</p>
                 <div className="pp-hub-market"><strong>{labelOf(row.prop_type)}</strong>
                   <span>{row.line_type === 'pl' ? 'PL line' : row.line_type === 'legacy' ? 'Recorded line' : 'Market line'} · Over / Under {row.line}</span></div>
                 {row.pick && <div className="pp-hub-selection">
-                  <strong>{row.strong_pick ? 'PL pick' : 'PL lean'}: {row.pick} {row.line}</strong>
+                  <strong>{row.strong_pick ? 'PL prediction' : 'PL lean'}: {row.pick} {row.line}</strong>
                   <strong className="pp-hub-probability">{percentOf(row.pick_probability)}</strong>
                 </div>}
                 {row.recorded_side && <p>Recorded selection: {row.recorded_side} {row.line}</p>}
@@ -223,28 +305,58 @@ export default function PropsPage() {
         <h2 className="pl-right-title">{league ? `${nameOf(league)} Prop Results` : 'Prop Results'}</h2>
         {gate || <>
           <div className="pp-hub-filters">
-            <label>Results date<input type="date" value={day} onChange={(e) => { if (e.target.value) setDay(e.target.value); }} /></label>
-            <label>Period<select aria-label="Prop results period" value={resultWindow} onChange={e => setResultWindow(e.target.value)}>
-              <option value="night">Selected night</option><option value="7">Last 7 days</option>
-              <option value="30">Last 30 days</option><option value="season">Season</option>
+            <label>Date<select aria-label="Prop results date" value={day} onChange={(e) => { if (e.target.value) setDay(e.target.value); }}>
+              {day && !(results?.dates || []).includes(day) && <option value={day}>{day}</option>}
+              {(results?.dates || []).map((item) => <option key={item} value={item}>{item}</option>)}
+            </select></label>
+            <label>Range<select aria-label="Prop results period" value={resultWindow} onChange={e => setResultWindow(e.target.value)}>
+              <option value="night">This date only</option><option value="7">7 days ending this date</option>
+              <option value="30">30 days ending this date</option><option value="season">Season through this date</option>
             </select></label>
             <label>Model<select value={model} onChange={(e) => setModel(e.target.value)}>
-              <option value="all">All models</option>{(results?.models || []).map((item) =>
+              <option value="all">Saved picks</option>{(results?.models || []).filter((item) => item.decided || item.first_recorded_date).map((item) =>
                 <option key={item.id} value={item.id}>{item.name}</option>)}
             </select></label>
-            <label>Over / Under<select aria-label="Prop results pick side" value={side} onChange={e => setSide(e.target.value)}>
+            <label>Over / Under<select aria-label="Prop results prediction side" value={side} onChange={e => setSide(e.target.value)}>
               <option value="all">Both</option><option value="OVER">Over</option><option value="UNDER">Under</option>
             </select></label>
+            <button type="button" className="pp-hub-load" onClick={pressLoadResults}>Load results</button>
           </div>
           {resultsError && <p className="pl-empty" role="alert">{resultsError} <button onClick={() => setRetry((v) => v + 1)}>Retry</button></p>}
-          {!results && !resultsError && <p className="pl-empty">Loading results…</p>}
-          {results && <>
-            {results.window !== 'night' && <p className="pp-hub-muted">{results.start_date} through {results.result_date}, inclusive.</p>}
+          {!resultsCurrent && !resultsError && <p className="pl-empty">Press Load results for the sport, date, and range above.</p>}
+          {resultsCurrent && !results && !resultsError && <p className="pl-empty">Loading results…</p>}
+          {resultsCurrent && results && <>
+            <p className="pp-hub-muted">{results.window === 'night'
+              ? `Showing ${results.result_date} only.`
+              : `Showing ${results.start_date} through ${results.result_date}.`}</p>
             <p className="pp-hub-muted">{results.notice}</p>
+            <div className="pp-hub-filters" role="tablist" aria-label="Results or streaks">
+              <button type="button" className={resultView === 'results' ? 'is-active' : ''} onClick={() => setResultView('results')}>Results</button>
+              <button type="button" className={resultView === 'streaks' ? 'is-active' : ''} onClick={() => setResultView('streaks')}>Streaks</button>
+            </div>
+            {resultView === 'streaks' && <>
+              {!streaks && <p className="pp-hub-muted">Loading streaks…</p>}
+              {streaks && !streaks.length && <p className="pl-empty">No graded streaks yet.</p>}
+              {streaks && streaks.length > 0 && (
+                <div className="pp-hub-table" role="region" aria-label="Players on streaks" tabIndex={0}><table>
+                  <thead><tr><th>Player</th><th>Prop</th><th>Streak</th><th>Record</th><th>Hit %</th></tr></thead>
+                  <tbody>{streaks.map((item) => (
+                    <tr key={`${item.league}-${item.player_name}-${item.prop_type}`}>
+                      <th scope="row">{item.player_name}{!league && ` · ${item.league}`}</th>
+                      <td>{labelOf(item.prop_type)}</td>
+                      <td>{item.streak_type === 'HIT' ? `W${item.streak_len}` : `L${item.streak_len}`}</td>
+                      <td>{item.hits}-{item.misses}</td>
+                      <td>{item.hit_rate}%</td>
+                    </tr>
+                  ))}</tbody>
+                </table></div>
+              )}
+            </>}
+            {resultView === 'results' && <>
             {firstModelDate && day < firstModelDate && <p className="pl-empty">
               {model === 'all' ? 'Named-model prop tracking' : `${results.models.find(item => item.id === model)?.name || 'Model'} prop tracking`}
               {' '}began on {firstModelDate}. This date range ends before those records begin; earlier selections cannot be counted as model-specific results.
-              {' '}<button type="button" onClick={() => { setDay(firstModelDate); setResultWindow('night'); }}>View {firstModelDate} results</button>
+              {' '}<button type="button" onClick={() => { setDay(firstModelDate); setResultWindow('night'); setResultsQuery({ league, day: firstModelDate, window: 'night', n: Date.now() }); }}>View {firstModelDate} results</button>
             </p>}
             <div className="pp-hub-table" role="region" aria-label="Results by model" tabIndex={0}><table>
               <thead><tr><th>Model</th><th>Wins</th><th>Losses</th><th>Pushes</th><th>Win rate</th></tr></thead>
@@ -267,29 +379,28 @@ export default function PropsPage() {
                   <td className={item.win_rate == null ? '' : 'pp-hub-percentage'}>{item.win_rate == null ? 'N/A' : `${item.win_rate.toFixed(1)}%`}</td></tr>)}</tbody>
             </table></div>
             <h3>Individual recorded props</h3>
-            {!filtered.length && <p className="pl-empty">{model !== 'all'
+            {!itemsReady && (results.items_deferred || !(results.items || []).length) && (
+              <p className="pp-hub-muted">Loading individual recorded props in the background…</p>
+            )}
+            {itemsReady && !filtered.length && <p className="pl-empty">{model !== 'all'
               ? `No separate ${results.models.find(item => item.id === model)?.name || 'model'} predictions were recorded for this date and these filters. Select All models to view any older unassigned records.`
               : 'No recorded props match this date and these filters.'}</p>}
             {filtered.slice(0, visibleResults).map((row) => <article className="pp-hub-card" key={`${row.league}-${row.id}`}>
               <h4>{row.player_name} · {labelOf(row.prop_type)}</h4>
               <p className="pp-hub-muted">{row.league} · {row.pick_date} · {row.team}</p>
-              <p><strong>{row.model_name || 'Model not recorded'}</strong>
-                {row.model_id && row.probability != null && <span className="pp-hub-probability">{percentOf(row.probability)}</span>}</p>
-              {row.line_type && <p className="pp-hub-muted">{row.line_type === 'pl' ? 'PL line' : row.line_type === 'legacy'
-                ? 'Recorded line — market source not verified' : 'Market line'}</p>}
-              <p>{row.pick} {row.line} · Actual{row.actual_label ? ` (${row.actual_label})` : ''}: {row.actual ?? 'N/A'}</p>
-              {row.model_id ? <p>Model result: {row.result}{row.reason ? ` — ${row.reason}` : ''}</p>
-                : <>
-                  <p>Saved selection result: {row.selection_result || 'N/A'}{row.actual_reason ? ` — ${row.actual_reason}` : ''}</p>
-                  <p className="pp-hub-muted">{row.pregame_verified === false && row.selection_result && 'Pregame timing could not be verified. '}
-                    Model not recorded; this selection is excluded from model performance.</p>
-                </>}
-              {row.recorded_result && <p className="pp-hub-muted">Stored grade: {row.recorded_result === 'HIT' ? 'Win' : row.recorded_result === 'MISS' ? 'Loss' : row.recorded_result} (not a verified model-specific result)</p>}
+              {row.model_id && (
+                <p><strong>{row.model_name}</strong>
+                  {row.probability != null && <span className="pp-hub-probability">{percentOf(row.probability)}</span>}
+                </p>
+              )}
+              <p>{row.pick} {row.line} · Actual: {row.actual ?? 'not in yet'} · {row.model_id ? `Model ${row.result}` : (row.selection_result || 'not graded')}</p>
+              {row.model_id && row.reason ? <p className="pp-hub-muted">{row.reason}</p> : null}
             </article>)}
             {filtered.length > visibleResults && <p className="pp-hub-muted">
               Showing {visibleResults} of {filtered.length} records. Summary tables include all matching records.
-              {' '}<button type="button" onClick={() => setVisibleResults(count => count+80)}>Show more results</button>
+              {' '}<button type="button" onClick={() => setVisibleResults(count => count + 40)}>Show more results</button>
             </p>}
+            </>}
           </>}
         </>}
       </aside>

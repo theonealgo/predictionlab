@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import BlogFeedBox from '../components/BlogFeedBox.jsx';
 import { trimFrame, whenFrameParsed } from '../frameTools.js';
 
 /**
@@ -31,7 +30,6 @@ export default function ModelsPage({ classicPath, title }) {
           onLoad={() => trimFrame(frame.current)}
         />
       </main>
-      {!isLadder && <BlogFeedBox className="pl-models-blogs" />}
     </div>
   );
 }

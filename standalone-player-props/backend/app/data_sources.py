@@ -798,6 +798,168 @@ def enrich_mlb_players_with_metrics(players: List[Dict], player_ids: Optional[Li
                 pass
 
 
+_BASKET_LEADER_MARKETS = {
+    "pointsPerGame": "points",
+    "reboundsPerGame": "rebounds",
+    "assistsPerGame": "assists",
+    "3PointsMadePerGame": "threes",
+}
+_FOOTBALL_LEADER_MARKETS = {
+    "passingYards": "passing_yards",
+    "rushingYards": "rushing_yards",
+    "receivingYards": "receiving_yards",
+    "receptions": "receptions",
+}
+_NHL_LEADER_MARKETS = {
+    "goals": "goals",
+    "assists": "assists",
+    "points": "points",
+}
+# sport path, season year, category map, athlete sport path for names
+_LEADER_BOARDS = {
+    "NBA": ("basketball/leagues/nba", "2027", _BASKET_LEADER_MARKETS, "basketball/nba"),
+    "WNBA": ("basketball/leagues/wnba", "2026", _BASKET_LEADER_MARKETS, "basketball/wnba"),
+    "NCAAB": ("basketball/leagues/mens-college-basketball", "2027", _BASKET_LEADER_MARKETS, "basketball/mens-college-basketball"),
+    "NCAAW": ("basketball/leagues/womens-college-basketball", "2027", _BASKET_LEADER_MARKETS, "basketball/womens-college-basketball"),
+    "NHL": ("hockey/leagues/nhl", "2026", _NHL_LEADER_MARKETS, "hockey/nhl"),
+    "NFL": ("football/leagues/nfl", "2026", _FOOTBALL_LEADER_MARKETS, "football/nfl"),
+    "NCAAF": ("football/leagues/college-football", "2026", _FOOTBALL_LEADER_MARKETS, "football/college-football"),
+}
+
+
+def _espn_ref_id(ref: object) -> str:
+    if not isinstance(ref, str):
+        return ""
+    match = re.search(r"/(\d+)(?:\?|$)", ref)
+    return match.group(1) if match else ""
+
+
+def playing_leaders(
+    league: str,
+    schedule: List[Dict],
+    markets: List[str],
+    per_market: int = 10,
+    board: int = 50,
+    names: bool = True,
+) -> tuple:
+    """ESPN season leaders who play on this slate: 10 per prop type."""
+    spec = _LEADER_BOARDS.get(league)
+    if not spec:
+        return [], {"league": league, "source": "espn_season_leaders", "error": "no board"}
+    path, season, category_map, athlete_path = spec
+    per_market = max(1, int(per_market))
+    board = max(per_market, int(board))
+    team_ids = set()
+    next_game_by_team = {}
+    team_name_by_id = {}
+    for game in schedule:
+        for side in ("home", "away"):
+            tid = str(game.get(f"{side}_team_id") or "")
+            if not tid:
+                continue
+            team_ids.add(tid)
+            team_name_by_id[tid] = game.get(f"{side}_team") or tid
+            next_game_by_team.setdefault(
+                tid,
+                {
+                    "event_id": game.get("event_id"),
+                    "date": game.get("date"),
+                    "opponent": game.get("away_team") if side == "home" else game.get("home_team"),
+                    "home_away": side,
+                },
+            )
+    wanted = [m for m in markets if m in set(category_map.values())]
+    audit = {
+        "league": league,
+        "source": "espn_season_leaders",
+        "per_market": per_market,
+        "board": board,
+        "teams_tonight": len(team_ids),
+        "selected": {},
+        "players": 0,
+    }
+    if not team_ids or not wanted:
+        return [], audit
+    url = (
+        "https://sports.core.api.espn.com/v2/sports/"
+        f"{path}/seasons/{season}/types/2/leaders?limit={board}"
+    )
+    try:
+        response = requests.get(url, timeout=20)
+        response.raise_for_status()
+        payload = response.json()
+    except Exception as exc:
+        audit["error"] = str(exc)
+        return [], audit
+    chosen = {}
+    for category in payload.get("categories") or []:
+        market = category_map.get(str(category.get("name") or ""))
+        if market not in wanted:
+            continue
+        kept = 0
+        for row in category.get("leaders") or []:
+            if kept >= per_market:
+                break
+            athlete_id = _espn_ref_id((row.get("athlete") or {}).get("$ref"))
+            team_id = _espn_ref_id((row.get("team") or {}).get("$ref"))
+            if not athlete_id or team_id not in team_ids:
+                continue
+            player = chosen.setdefault(
+                athlete_id,
+                {
+                    "player_id": athlete_id,
+                    "team_id": team_id,
+                    "team": team_name_by_id.get(team_id, team_id),
+                    "league": league,
+                    "is_available": True,
+                    "next_game": next_game_by_team.get(team_id, {}),
+                    "market_rankings": {},
+                    "season_rank": {},
+                },
+            )
+            player["market_rankings"][market] = kept + 1
+            player["season_rank"][market] = kept + 1
+            kept += 1
+        audit["selected"][market] = kept
+    if names:
+        for athlete_id, player in chosen.items():
+            try:
+                info = requests.get(
+                    "https://site.api.espn.com/apis/common/v3/sports/"
+                    + athlete_path + "/athletes/" + athlete_id,
+                    timeout=12,
+                ).json()
+                athlete = info.get("athlete") if isinstance(info.get("athlete"), dict) else info
+            except Exception:
+                athlete = {}
+            name = (athlete.get("displayName") or athlete.get("fullName") or "").strip()
+            player["name"] = name or ("Player " + athlete_id)
+            pos = athlete.get("position") if isinstance(athlete.get("position"), dict) else {}
+            pos_abbr = (pos.get("abbreviation") or "").strip().upper()
+            player["position"] = pos_abbr
+            player["role"] = position_to_role(league, pos_abbr) or "F"
+            player["minutes_band"] = "starter"
+        players = [p for p in chosen.values() if p.get("name")]
+    else:
+        for player in chosen.values():
+            player["name"] = player["player_id"]
+            player["role"] = "F"
+        players = list(chosen.values())
+    audit["players"] = len(players)
+    return players, audit
+
+
+def nba_playing_leaders(
+    schedule: List[Dict],
+    markets: List[str],
+    per_market: int = 10,
+    board: int = 50,
+) -> tuple:
+    """ESPN season leaders who play tonight: 10 per prop type."""
+    return playing_leaders("NBA", schedule, markets, per_market, board)
+
+
+
 def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
     players: List[Dict] = []
     excluded: List[Dict] = []

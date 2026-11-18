@@ -206,8 +206,16 @@ def building(site, league, day):
         return _STATE.get(_key(site, league, day), {}).get("status") in ("queued", "building")
 
 
+def _publish_leagues():
+    raw = os.getenv("PL_PROPS_LEAGUES", "").strip()
+    if not raw:
+        return None
+    return {part.strip().upper() for part in raw.split(",") if part.strip()}
+
+
 def _enqueue(site, league, day, priority=10):
-    if league in UNSUPPORTED:
+    allowed = _publish_leagues()
+    if league in UNSUPPORTED or (allowed is not None and league not in allowed):
         return
     key = _key(site, league, day)
     with _LOCK:
@@ -220,6 +228,55 @@ def _enqueue(site, league, day, priority=10):
         if priority == 10 and league in ("NCAAB", "NCAAW"):
             priority = 20
         _QUEUE.put((priority, next(_COUNTER), site, league, day))
+
+
+def ensure_selected(site, league, day):
+    """Load the one sport a visitor asked for. Other sports stay untouched."""
+    if league not in LEAGUES or league in UNSUPPORTED:
+        return
+    today = datetime.now(ET).date()
+    try:
+        requested = datetime.strptime(day, "%Y-%m-%d").date()
+    except ValueError:
+        return
+    if requested < today or requested > today + timedelta(days=7):
+        return
+    current = entries(site, day).get(league)
+    shown = preview(league, current, limit=0, day=day) if current else None
+    if shown and shown.get("status") == "ready" and shown.get("total"):
+        return
+    key = _key(site, league, day)
+    with _LOCK:
+        if (_STATE.get(key) or {}).get("status") in ("queued", "building"):
+            return
+        _STATE[key] = {"status": "queued", "ts": time.time()}
+    threading.Thread(
+        target=_publish_selected, args=(site, league, day), daemon=True, name=f"props-{league}",
+    ).start()
+
+
+def _publish_selected(site, league, day):
+    key = _key(site, league, day)
+    previous = entries(site, day).get(league)
+    with _LOCK:
+        _STATE[key] = {"status": "building", "ts": time.time()}
+    try:
+        entry = run_isolated(site, league, day)
+    except Exception:
+        logger.exception("Prop publication unavailable for %s %s", league, day)
+        if previous and preview(league, previous, limit=0, day=day)["total"] is not None:
+            entry = {**previous, "payload": {**previous["payload"],
+                     "refresh_notice": "The latest refresh is unavailable. Showing the last verified props for this date."}}
+        else:
+            entry = {"ts": time.time(), "payload": {"requested_date": day,
+                     "availability": "unavailable", "availability_reason":
+                     "The current fixture or player-stat service could not be verified. Please retry later."}}
+    with _LOCK:
+        _CACHE[key] = entry
+        _STATE[key] = {
+            "status": "unavailable" if entry["payload"].get("refresh_notice") else entry["payload"].get("availability"),
+            "ts": time.time(),
+        }
 
 
 def ensure(site, day, selected=None):

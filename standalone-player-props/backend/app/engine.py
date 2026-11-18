@@ -26,7 +26,7 @@ try:
 except Exception:
     _ODDS_ENGINE = None
 from .data_sources import (
-    build_validated_nba_player_pool,
+    playing_leaders,
     build_top_players,
     enrich_mlb_players_with_metrics,
     fetch_prop_lines,
@@ -439,14 +439,13 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     use_real = schedule_override is None or allow_live_lines
     excluded = []
     pool_audit: Dict = {}
-    if league == "NBA":
-        validated = build_validated_nba_player_pool(schedule)
-        players = validated["players"]
-        excluded = validated["excluded"]
-        for p in players:
-            if not p.get("role"):
-                p["role"] = position_to_role(league, p.get("position") or p.get("role") or "G") or "G"
-    else:
+    players = []
+    markets = _LEAGUE_PROP_TYPES.get(league, [])
+    leader_slate = False
+    if league in ("NBA", "WNBA", "NCAAB", "NCAAW", "NHL", "NFL", "NCAAF"):
+        players, pool_audit = playing_leaders(league, schedule, markets, per_market=10, board=200)
+        leader_slate = bool(players)
+    if not leader_slate:
         players = build_top_players(league, schedule)
         pool_audit = {
             "league": league,
@@ -457,12 +456,12 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             r = p.get("role") or ""
             pool_audit.setdefault("roles", {})
             pool_audit["roles"][r] = pool_audit["roles"].get(r, 0) + 1
-    markets = _LEAGUE_PROP_TYPES.get(league, [])
     def ranking_allowed(player, prop_type):
         return market_allowed(league, player.get("role") or position_to_role(league, player.get("position")),
                               prop_type, line_source="espn_props")
     players = hydrate_market_histories(league, players, markets, ranking_allowed)
-    players, pool_audit = select_market_players(players, league, markets, ranking_allowed)
+    if not leader_slate:
+        players, pool_audit = select_market_players(players, league, markets, ranking_allowed)
     prop_lines = fetch_prop_lines(league, players, use_real=use_real)
     # Drop lines that violate position/market rules before EV ranking.
     by_id_pre = {str(p["player_id"]): p for p in players}
@@ -511,7 +510,12 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
                 probs = consensus["probabilities"] if consensus else {
                     key: statistics.mean(row["probabilities"][key] for row in available)
                     for key in ("over", "under", "push")}
-                side = "OVER" if probs["over"] > probs["under"] else "UNDER" if probs["under"] > probs["over"] else None
+                projection = pl_row.get("projection")
+                line = float(prop["line"])
+                if projection is not None and float(projection) != line:
+                    side = "OVER" if float(projection) > line else "UNDER"
+                else:
+                    side = "OVER" if probs["over"] > probs["under"] else "UNDER" if probs["under"] > probs["over"] else None
                 recent = sum((as_of-_aware_model(row["date"])).days <= 60 for row in history)
                 pl_row.update(probabilities=probs, over_probability=100*probs["over"],
                               under_probability=100*probs["under"], push_probability=100*probs["push"],
@@ -557,7 +561,7 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     )
     for row in projections:
         row["category_ranking"] = by_id[row["player_id"]]["market_rankings"][row["prop_type"]]
-    for market, coverage in pool_audit["by_market"].items():
+    for market, coverage in (pool_audit.get("by_market") or {}).items():
         coverage["published_players"] = len({str(row["player_id"]) for row in projections if row["prop_type"] == market})
     projections.sort(key=lambda row: (
         row["prop_type"], row["category_ranking"]["rank"],
@@ -624,6 +628,12 @@ _ACTUAL_STAT_LABELS: Dict[str, Dict[str, List[str]]] = {
     },
     # Football uses group-scoped labels (passing/rushing/receiving all have YDS).
     "football": {},
+    "hockey": {  # NHL. Points are goals + assists when the sheet has no PTS column.
+        "goals": ["G"],
+        "assists": ["A"],
+        "points": ["PTS"],
+        "shots_on_goal": ["SOG"],
+    },
 }
 
 # Football box-score category name -> {prop_type: column label}.
@@ -711,6 +721,8 @@ def _fetch_event_actuals(league: str, event_id: str) -> Dict[str, Dict[str, floa
                     v = _stat_from_row(pt, idx, vals, sport)
                     if v is not None:
                         rec[pt] = v
+                if sport == "hockey" and "points" not in rec and rec.get("goals") is not None and rec.get("assists") is not None:
+                    rec["points"] = rec["goals"] + rec["assists"]
     return out
 
 

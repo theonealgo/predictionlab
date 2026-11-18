@@ -17,24 +17,24 @@
       "body": [
         "A 32-point victory for New York Knicks produced the largest winning margin among the 6 confirmed NBA finals from Tuesday, November 10.",
         "Phoenix Suns recorded the highest single-team score in this set of completed games, finishing with 133 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "New York Knicks defeated Milwaukee Bucks 117\u201385, a difference of 32 points. The game was played at Madison Square Garden.",
-        "Phoenix Suns defeated LA Clippers 133\u2013110, a difference of 23 points. The game was played at Mortgage Matchup Center.",
-        "Boston Celtics defeated Philadelphia 76ers 123\u2013101, a difference of 22 points. The game was played at Xfinity Mobile Arena.",
-        "Portland Trail Blazers defeated Oklahoma City Thunder 123\u2013103, a difference of 20 points. The game was played at Moda Center.",
-        "Orlando Magic defeated Sacramento Kings 107\u2013100, a difference of 7 points. The game was played at Golden 1 Center.",
-        "Miami Heat defeated Utah Jazz 115\u2013109, a difference of 6 points. The game was played at Delta Center.",
+        "New York Knicks defeated Milwaukee Bucks 117–85, a difference of 32 points. The game was played at Madison Square Garden.",
+        "Phoenix Suns defeated LA Clippers 133–110, a difference of 23 points. The game was played at Mortgage Matchup Center.",
+        "Boston Celtics defeated Philadelphia 76ers 123–101, a difference of 22 points. The game was played at Xfinity Mobile Arena.",
+        "Portland Trail Blazers defeated Oklahoma City Thunder 123–103, a difference of 20 points. The game was played at Moda Center.",
+        "Orlando Magic defeated Sacramento Kings 107–100, a difference of 7 points. The game was played at Golden 1 Center.",
+        "Miami Heat defeated Utah Jazz 115–109, a difference of 6 points. The game was played at Delta Center.",
         "The 6 finals produced 1326 points between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 3. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 32-point victory for New York Knicks produced the largest winning margin among the 6 confirmed NBA finals from Tuesday, November 10.",
           "Phoenix Suns recorded the highest single-team score in this set of completed games, finishing with 133 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "New York Knicks defeated Milwaukee Bucks 117\u201385, a difference of 32 points. The game was played at Madison Square Garden.",
-          "Phoenix Suns defeated LA Clippers 133\u2013110, a difference of 23 points. The game was played at Mortgage Matchup Center.",
-          "Boston Celtics defeated Philadelphia 76ers 123\u2013101, a difference of 22 points. The game was played at Xfinity Mobile Arena.",
-          "Portland Trail Blazers defeated Oklahoma City Thunder 123\u2013103, a difference of 20 points. The game was played at Moda Center.",
-          "Orlando Magic defeated Sacramento Kings 107\u2013100, a difference of 7 points. The game was played at Golden 1 Center.",
-          "Miami Heat defeated Utah Jazz 115\u2013109, a difference of 6 points. The game was played at Delta Center.",
+          "New York Knicks defeated Milwaukee Bucks 117–85, a difference of 32 points. The game was played at Madison Square Garden.",
+          "Phoenix Suns defeated LA Clippers 133–110, a difference of 23 points. The game was played at Mortgage Matchup Center.",
+          "Boston Celtics defeated Philadelphia 76ers 123–101, a difference of 22 points. The game was played at Xfinity Mobile Arena.",
+          "Portland Trail Blazers defeated Oklahoma City Thunder 123–103, a difference of 20 points. The game was played at Moda Center.",
+          "Orlando Magic defeated Sacramento Kings 107–100, a difference of 7 points. The game was played at Golden 1 Center.",
+          "Miami Heat defeated Utah Jazz 115–109, a difference of 6 points. The game was played at Delta Center.",
           "The 6 finals produced 1326 points between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 3. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -46,37 +46,37 @@
       "news_items": [
         {
           "sport": "NBA",
-          "topic": "Milwaukee Bucks at New York Knicks \u2014 final box score",
+          "topic": "Milwaukee Bucks at New York Knicks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909960"
         },
         {
           "sport": "NBA",
-          "topic": "Boston Celtics at Philadelphia 76ers \u2014 final box score",
+          "topic": "Boston Celtics at Philadelphia 76ers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909961"
         },
         {
           "sport": "NBA",
-          "topic": "LA Clippers at Phoenix Suns \u2014 final box score",
+          "topic": "LA Clippers at Phoenix Suns — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909962"
         },
         {
           "sport": "NBA",
-          "topic": "Miami Heat at Utah Jazz \u2014 final box score",
+          "topic": "Miami Heat at Utah Jazz — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909963"
         },
         {
           "sport": "NBA",
-          "topic": "Orlando Magic at Sacramento Kings \u2014 final box score",
+          "topic": "Orlando Magic at Sacramento Kings — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909964"
         },
         {
           "sport": "NBA",
-          "topic": "Oklahoma City Thunder at Portland Trail Blazers \u2014 final box score",
+          "topic": "Oklahoma City Thunder at Portland Trail Blazers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909965"
         }
@@ -191,26 +191,26 @@
       "body": [
         "A 3-goal victory for Colorado Avalanche produced the largest winning margin among the 7 confirmed NHL finals from Tuesday, November 10.",
         "Colorado Avalanche recorded the highest single-team score in this set of completed games, finishing with 6 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "Colorado Avalanche defeated Toronto Maple Leafs 6\u20133, a difference of 3 goals. The game was played at Scotiabank Arena.",
-        "Florida Panthers defeated Columbus Blue Jackets 4\u20131, a difference of 3 goals. The game was played at Nationwide Arena.",
-        "Nashville Predators defeated Los Angeles Kings 3\u20130, a difference of 3 goals. The game was played at crypto.com Arena.",
-        "Winnipeg Jets defeated New Jersey Devils 4\u20132, a difference of 2 goals. The game was played at Canada Life Centre.",
-        "Minnesota Wild defeated Montreal Canadiens 2\u20131, a difference of 1 goals. The game was played at Bell Centre. The final was decided after overtime.",
-        "Washington Capitals defeated Ottawa Senators 3\u20132, a difference of 1 goals. The game was played at Canadian Tire Centre. The final was decided after overtime.",
-        "St. Louis Blues defeated Detroit Red Wings 3\u20132, a difference of 1 goals. The game was played at Enterprise Center.",
+        "Colorado Avalanche defeated Toronto Maple Leafs 6–3, a difference of 3 goals. The game was played at Scotiabank Arena.",
+        "Florida Panthers defeated Columbus Blue Jackets 4–1, a difference of 3 goals. The game was played at Nationwide Arena.",
+        "Nashville Predators defeated Los Angeles Kings 3–0, a difference of 3 goals. The game was played at crypto.com Arena.",
+        "Winnipeg Jets defeated New Jersey Devils 4–2, a difference of 2 goals. The game was played at Canada Life Centre.",
+        "Minnesota Wild defeated Montreal Canadiens 2–1, a difference of 1 goals. The game was played at Bell Centre. The final was decided after overtime.",
+        "Washington Capitals defeated Ottawa Senators 3–2, a difference of 1 goals. The game was played at Canadian Tire Centre. The final was decided after overtime.",
+        "St. Louis Blues defeated Detroit Red Wings 3–2, a difference of 1 goals. The game was played at Enterprise Center.",
         "The 7 finals produced 36 goals between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 5. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 3-goal victory for Colorado Avalanche produced the largest winning margin among the 7 confirmed NHL finals from Tuesday, November 10.",
           "Colorado Avalanche recorded the highest single-team score in this set of completed games, finishing with 6 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "Colorado Avalanche defeated Toronto Maple Leafs 6\u20133, a difference of 3 goals. The game was played at Scotiabank Arena.",
-          "Florida Panthers defeated Columbus Blue Jackets 4\u20131, a difference of 3 goals. The game was played at Nationwide Arena.",
-          "Nashville Predators defeated Los Angeles Kings 3\u20130, a difference of 3 goals. The game was played at crypto.com Arena.",
-          "Winnipeg Jets defeated New Jersey Devils 4\u20132, a difference of 2 goals. The game was played at Canada Life Centre.",
-          "Minnesota Wild defeated Montreal Canadiens 2\u20131, a difference of 1 goals. The game was played at Bell Centre. The final was decided after overtime.",
-          "Washington Capitals defeated Ottawa Senators 3\u20132, a difference of 1 goals. The game was played at Canadian Tire Centre. The final was decided after overtime.",
-          "St. Louis Blues defeated Detroit Red Wings 3\u20132, a difference of 1 goals. The game was played at Enterprise Center.",
+          "Colorado Avalanche defeated Toronto Maple Leafs 6–3, a difference of 3 goals. The game was played at Scotiabank Arena.",
+          "Florida Panthers defeated Columbus Blue Jackets 4–1, a difference of 3 goals. The game was played at Nationwide Arena.",
+          "Nashville Predators defeated Los Angeles Kings 3–0, a difference of 3 goals. The game was played at crypto.com Arena.",
+          "Winnipeg Jets defeated New Jersey Devils 4–2, a difference of 2 goals. The game was played at Canada Life Centre.",
+          "Minnesota Wild defeated Montreal Canadiens 2–1, a difference of 1 goals. The game was played at Bell Centre. The final was decided after overtime.",
+          "Washington Capitals defeated Ottawa Senators 3–2, a difference of 1 goals. The game was played at Canadian Tire Centre. The final was decided after overtime.",
+          "St. Louis Blues defeated Detroit Red Wings 3–2, a difference of 1 goals. The game was played at Enterprise Center.",
           "The 7 finals produced 36 goals between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 5. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -222,43 +222,43 @@
       "news_items": [
         {
           "sport": "NHL",
-          "topic": "Colorado Avalanche at Toronto Maple Leafs \u2014 final box score",
+          "topic": "Colorado Avalanche at Toronto Maple Leafs — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892683"
         },
         {
           "sport": "NHL",
-          "topic": "Minnesota Wild at Montreal Canadiens \u2014 final box score",
+          "topic": "Minnesota Wild at Montreal Canadiens — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892684"
         },
         {
           "sport": "NHL",
-          "topic": "Washington Capitals at Ottawa Senators \u2014 final box score",
+          "topic": "Washington Capitals at Ottawa Senators — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892685"
         },
         {
           "sport": "NHL",
-          "topic": "Florida Panthers at Columbus Blue Jackets \u2014 final box score",
+          "topic": "Florida Panthers at Columbus Blue Jackets — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892686"
         },
         {
           "sport": "NHL",
-          "topic": "Detroit Red Wings at St. Louis Blues \u2014 final box score",
+          "topic": "Detroit Red Wings at St. Louis Blues — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892687"
         },
         {
           "sport": "NHL",
-          "topic": "New Jersey Devils at Winnipeg Jets \u2014 final box score",
+          "topic": "New Jersey Devils at Winnipeg Jets — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892688"
         },
         {
           "sport": "NHL",
-          "topic": "Nashville Predators at Los Angeles Kings \u2014 final box score",
+          "topic": "Nashville Predators at Los Angeles Kings — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892689"
         }
@@ -386,18 +386,18 @@
       "body": [
         "A 28-point victory for Western Michigan Broncos produced the largest winning margin among the 3 confirmed college football finals from Tuesday, November 10.",
         "Western Michigan Broncos recorded the highest single-team score in this set of completed games, finishing with 42 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "Western Michigan Broncos defeated Akron Zips 42\u201314, a difference of 28 points. The game was played at InfoCision Stadium.",
-        "Miami (OH) RedHawks defeated Ohio Bobcats 34\u201317, a difference of 17 points. The game was played at Yager Stadium.",
-        "Bowling Green Falcons defeated Kent State Golden Flashes 33\u201328, a difference of 5 points. The game was played at Doyt L. Perry Stadium.",
+        "Western Michigan Broncos defeated Akron Zips 42–14, a difference of 28 points. The game was played at InfoCision Stadium.",
+        "Miami (OH) RedHawks defeated Ohio Bobcats 34–17, a difference of 17 points. The game was played at Yager Stadium.",
+        "Bowling Green Falcons defeated Kent State Golden Flashes 33–28, a difference of 5 points. The game was played at Doyt L. Perry Stadium.",
         "The 3 finals produced 168 points between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 1. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 28-point victory for Western Michigan Broncos produced the largest winning margin among the 3 confirmed college football finals from Tuesday, November 10.",
           "Western Michigan Broncos recorded the highest single-team score in this set of completed games, finishing with 42 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "Western Michigan Broncos defeated Akron Zips 42\u201314, a difference of 28 points. The game was played at InfoCision Stadium.",
-          "Miami (OH) RedHawks defeated Ohio Bobcats 34\u201317, a difference of 17 points. The game was played at Yager Stadium.",
-          "Bowling Green Falcons defeated Kent State Golden Flashes 33\u201328, a difference of 5 points. The game was played at Doyt L. Perry Stadium.",
+          "Western Michigan Broncos defeated Akron Zips 42–14, a difference of 28 points. The game was played at InfoCision Stadium.",
+          "Miami (OH) RedHawks defeated Ohio Bobcats 34–17, a difference of 17 points. The game was played at Yager Stadium.",
+          "Bowling Green Falcons defeated Kent State Golden Flashes 33–28, a difference of 5 points. The game was played at Doyt L. Perry Stadium.",
           "The 3 finals produced 168 points between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 1. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -409,19 +409,19 @@
       "news_items": [
         {
           "sport": "NCAAF",
-          "topic": "Western Michigan Broncos at Akron Zips \u2014 final box score",
+          "topic": "Western Michigan Broncos at Akron Zips — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866458"
         },
         {
           "sport": "NCAAF",
-          "topic": "Kent State Golden Flashes at Bowling Green Falcons \u2014 final box score",
+          "topic": "Kent State Golden Flashes at Bowling Green Falcons — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866459"
         },
         {
           "sport": "NCAAF",
-          "topic": "Ohio Bobcats at Miami (OH) RedHawks \u2014 final box score",
+          "topic": "Ohio Bobcats at Miami (OH) RedHawks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866460"
         }
@@ -498,28 +498,28 @@
       "body": [
         "A 34-point victory for Brooklyn Nets produced the largest winning margin among the 10 confirmed NBA finals from Wednesday, November 11.",
         "Brooklyn Nets recorded the highest single-team score in this set of completed games, finishing with 145 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "Brooklyn Nets defeated New Orleans Pelicans 145\u2013111, a difference of 34 points. The game was played at Smoothie King Center.",
-        "Orlando Magic defeated Utah Jazz 123\u2013108, a difference of 15 points. The game was played at Delta Center.",
-        "Indiana Pacers defeated Washington Wizards 114\u2013101, a difference of 13 points. The game was played at Gainbridge Fieldhouse.",
-        "Los Angeles Lakers defeated Milwaukee Bucks 123\u2013112, a difference of 11 points. The game was played at Fiserv Forum.",
-        "Portland Trail Blazers defeated Oklahoma City Thunder 118\u2013108, a difference of 10 points. The game was played at Moda Center.",
-        "Cleveland Cavaliers defeated New York Knicks 115\u2013107, a difference of 8 points. The game was played at Madison Square Garden.",
-        "Houston Rockets defeated Golden State Warriors 115\u2013108, a difference of 7 points. The game was played at Toyota Center (Houston).",
-        "Boston Celtics defeated Toronto Raptors 98\u201393, a difference of 5 points. The game was played at Scotiabank Arena.",
+        "Brooklyn Nets defeated New Orleans Pelicans 145–111, a difference of 34 points. The game was played at Smoothie King Center.",
+        "Orlando Magic defeated Utah Jazz 123–108, a difference of 15 points. The game was played at Delta Center.",
+        "Indiana Pacers defeated Washington Wizards 114–101, a difference of 13 points. The game was played at Gainbridge Fieldhouse.",
+        "Los Angeles Lakers defeated Milwaukee Bucks 123–112, a difference of 11 points. The game was played at Fiserv Forum.",
+        "Portland Trail Blazers defeated Oklahoma City Thunder 118–108, a difference of 10 points. The game was played at Moda Center.",
+        "Cleveland Cavaliers defeated New York Knicks 115–107, a difference of 8 points. The game was played at Madison Square Garden.",
+        "Houston Rockets defeated Golden State Warriors 115–108, a difference of 7 points. The game was played at Toyota Center (Houston).",
+        "Boston Celtics defeated Toronto Raptors 98–93, a difference of 5 points. The game was played at Scotiabank Arena.",
         "The 10 finals produced 2283 points between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 7. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 34-point victory for Brooklyn Nets produced the largest winning margin among the 10 confirmed NBA finals from Wednesday, November 11.",
           "Brooklyn Nets recorded the highest single-team score in this set of completed games, finishing with 145 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "Brooklyn Nets defeated New Orleans Pelicans 145\u2013111, a difference of 34 points. The game was played at Smoothie King Center.",
-          "Orlando Magic defeated Utah Jazz 123\u2013108, a difference of 15 points. The game was played at Delta Center.",
-          "Indiana Pacers defeated Washington Wizards 114\u2013101, a difference of 13 points. The game was played at Gainbridge Fieldhouse.",
-          "Los Angeles Lakers defeated Milwaukee Bucks 123\u2013112, a difference of 11 points. The game was played at Fiserv Forum.",
-          "Portland Trail Blazers defeated Oklahoma City Thunder 118\u2013108, a difference of 10 points. The game was played at Moda Center.",
-          "Cleveland Cavaliers defeated New York Knicks 115\u2013107, a difference of 8 points. The game was played at Madison Square Garden.",
-          "Houston Rockets defeated Golden State Warriors 115\u2013108, a difference of 7 points. The game was played at Toyota Center (Houston).",
-          "Boston Celtics defeated Toronto Raptors 98\u201393, a difference of 5 points. The game was played at Scotiabank Arena.",
+          "Brooklyn Nets defeated New Orleans Pelicans 145–111, a difference of 34 points. The game was played at Smoothie King Center.",
+          "Orlando Magic defeated Utah Jazz 123–108, a difference of 15 points. The game was played at Delta Center.",
+          "Indiana Pacers defeated Washington Wizards 114–101, a difference of 13 points. The game was played at Gainbridge Fieldhouse.",
+          "Los Angeles Lakers defeated Milwaukee Bucks 123–112, a difference of 11 points. The game was played at Fiserv Forum.",
+          "Portland Trail Blazers defeated Oklahoma City Thunder 118–108, a difference of 10 points. The game was played at Moda Center.",
+          "Cleveland Cavaliers defeated New York Knicks 115–107, a difference of 8 points. The game was played at Madison Square Garden.",
+          "Houston Rockets defeated Golden State Warriors 115–108, a difference of 7 points. The game was played at Toyota Center (Houston).",
+          "Boston Celtics defeated Toronto Raptors 98–93, a difference of 5 points. The game was played at Scotiabank Arena.",
           "The 10 finals produced 2283 points between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 7. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -531,61 +531,61 @@
       "news_items": [
         {
           "sport": "NBA",
-          "topic": "Washington Wizards at Indiana Pacers \u2014 final box score",
+          "topic": "Washington Wizards at Indiana Pacers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909966"
         },
         {
           "sport": "NBA",
-          "topic": "Cleveland Cavaliers at New York Knicks \u2014 final box score",
+          "topic": "Cleveland Cavaliers at New York Knicks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909967"
         },
         {
           "sport": "NBA",
-          "topic": "Boston Celtics at Toronto Raptors \u2014 final box score",
+          "topic": "Boston Celtics at Toronto Raptors — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909968"
         },
         {
           "sport": "NBA",
-          "topic": "San Antonio Spurs at Chicago Bulls \u2014 final box score",
+          "topic": "San Antonio Spurs at Chicago Bulls — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909969"
         },
         {
           "sport": "NBA",
-          "topic": "Denver Nuggets at Memphis Grizzlies \u2014 final box score",
+          "topic": "Denver Nuggets at Memphis Grizzlies — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909970"
         },
         {
           "sport": "NBA",
-          "topic": "Los Angeles Lakers at Milwaukee Bucks \u2014 final box score",
+          "topic": "Los Angeles Lakers at Milwaukee Bucks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909971"
         },
         {
           "sport": "NBA",
-          "topic": "Brooklyn Nets at New Orleans Pelicans \u2014 final box score",
+          "topic": "Brooklyn Nets at New Orleans Pelicans — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909972"
         },
         {
           "sport": "NBA",
-          "topic": "Orlando Magic at Utah Jazz \u2014 final box score",
+          "topic": "Orlando Magic at Utah Jazz — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909973"
         },
         {
           "sport": "NBA",
-          "topic": "Golden State Warriors at Houston Rockets \u2014 final box score",
+          "topic": "Golden State Warriors at Houston Rockets — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909974"
         },
         {
           "sport": "NBA",
-          "topic": "Oklahoma City Thunder at Portland Trail Blazers \u2014 final box score",
+          "topic": "Oklahoma City Thunder at Portland Trail Blazers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909975"
         }
@@ -753,24 +753,24 @@
       "body": [
         "A 5-goal victory for Tampa Bay Lightning produced the largest winning margin among the 6 confirmed NHL finals from Wednesday, November 11.",
         "Tampa Bay Lightning recorded the highest single-team score in this set of completed games, finishing with 8 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "Tampa Bay Lightning defeated Buffalo Sabres 8\u20133, a difference of 5 goals. The game was played at KeyBank Center.",
-        "New York Rangers defeated Calgary Flames 3\u20131, a difference of 2 goals. The game was played at Scotiabank Saddledome.",
-        "Vegas Golden Knights defeated Utah Mammoth 5\u20133, a difference of 2 goals. The game was played at T-Mobile Arena.",
-        "Nashville Predators defeated Anaheim Ducks 4\u20132, a difference of 2 goals. The game was played at Honda Center.",
-        "Edmonton Oilers defeated Philadelphia Flyers 3\u20132, a difference of 1 goals. The game was played at Rogers Place. The final was decided after overtime.",
-        "Pittsburgh Penguins defeated San Jose Sharks 3\u20132, a difference of 1 goals. The game was played at SAP Center at San Jose.",
+        "Tampa Bay Lightning defeated Buffalo Sabres 8–3, a difference of 5 goals. The game was played at KeyBank Center.",
+        "New York Rangers defeated Calgary Flames 3–1, a difference of 2 goals. The game was played at Scotiabank Saddledome.",
+        "Vegas Golden Knights defeated Utah Mammoth 5–3, a difference of 2 goals. The game was played at T-Mobile Arena.",
+        "Nashville Predators defeated Anaheim Ducks 4–2, a difference of 2 goals. The game was played at Honda Center.",
+        "Edmonton Oilers defeated Philadelphia Flyers 3–2, a difference of 1 goals. The game was played at Rogers Place. The final was decided after overtime.",
+        "Pittsburgh Penguins defeated San Jose Sharks 3–2, a difference of 1 goals. The game was played at SAP Center at San Jose.",
         "The 6 finals produced 39 goals between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 4. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 5-goal victory for Tampa Bay Lightning produced the largest winning margin among the 6 confirmed NHL finals from Wednesday, November 11.",
           "Tampa Bay Lightning recorded the highest single-team score in this set of completed games, finishing with 8 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "Tampa Bay Lightning defeated Buffalo Sabres 8\u20133, a difference of 5 goals. The game was played at KeyBank Center.",
-          "New York Rangers defeated Calgary Flames 3\u20131, a difference of 2 goals. The game was played at Scotiabank Saddledome.",
-          "Vegas Golden Knights defeated Utah Mammoth 5\u20133, a difference of 2 goals. The game was played at T-Mobile Arena.",
-          "Nashville Predators defeated Anaheim Ducks 4\u20132, a difference of 2 goals. The game was played at Honda Center.",
-          "Edmonton Oilers defeated Philadelphia Flyers 3\u20132, a difference of 1 goals. The game was played at Rogers Place. The final was decided after overtime.",
-          "Pittsburgh Penguins defeated San Jose Sharks 3\u20132, a difference of 1 goals. The game was played at SAP Center at San Jose.",
+          "Tampa Bay Lightning defeated Buffalo Sabres 8–3, a difference of 5 goals. The game was played at KeyBank Center.",
+          "New York Rangers defeated Calgary Flames 3–1, a difference of 2 goals. The game was played at Scotiabank Saddledome.",
+          "Vegas Golden Knights defeated Utah Mammoth 5–3, a difference of 2 goals. The game was played at T-Mobile Arena.",
+          "Nashville Predators defeated Anaheim Ducks 4–2, a difference of 2 goals. The game was played at Honda Center.",
+          "Edmonton Oilers defeated Philadelphia Flyers 3–2, a difference of 1 goals. The game was played at Rogers Place. The final was decided after overtime.",
+          "Pittsburgh Penguins defeated San Jose Sharks 3–2, a difference of 1 goals. The game was played at SAP Center at San Jose.",
           "The 6 finals produced 39 goals between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 4. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -782,37 +782,37 @@
       "news_items": [
         {
           "sport": "NHL",
-          "topic": "Tampa Bay Lightning at Buffalo Sabres \u2014 final box score",
+          "topic": "Tampa Bay Lightning at Buffalo Sabres — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892690"
         },
         {
           "sport": "NHL",
-          "topic": "New York Rangers at Calgary Flames \u2014 final box score",
+          "topic": "New York Rangers at Calgary Flames — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892691"
         },
         {
           "sport": "NHL",
-          "topic": "Philadelphia Flyers at Edmonton Oilers \u2014 final box score",
+          "topic": "Philadelphia Flyers at Edmonton Oilers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892692"
         },
         {
           "sport": "NHL",
-          "topic": "Utah Mammoth at Vegas Golden Knights \u2014 final box score",
+          "topic": "Utah Mammoth at Vegas Golden Knights — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892693"
         },
         {
           "sport": "NHL",
-          "topic": "Nashville Predators at Anaheim Ducks \u2014 final box score",
+          "topic": "Nashville Predators at Anaheim Ducks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892694"
         },
         {
           "sport": "NHL",
-          "topic": "Pittsburgh Penguins at San Jose Sharks \u2014 final box score",
+          "topic": "Pittsburgh Penguins at San Jose Sharks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892695"
         }
@@ -928,18 +928,18 @@
       "body": [
         "A 24-point victory for Toledo Rockets produced the largest winning margin among the 3 confirmed college football finals from Wednesday, November 11.",
         "Buffalo Bulls recorded the highest single-team score in this set of completed games, finishing with 28 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "Toledo Rockets defeated Massachusetts Minutemen 24\u20130, a difference of 24 points. The game was played at Glass Bowl.",
-        "Buffalo Bulls defeated Ball State Cardinals 28\u20137, a difference of 21 points. The game was played at Scheumann Stadium.",
-        "Central Michigan Chippewas defeated Sacramento State Hornets 28\u20137, a difference of 21 points. The game was played at Kelly/Shorts Stadium.",
+        "Toledo Rockets defeated Massachusetts Minutemen 24–0, a difference of 24 points. The game was played at Glass Bowl.",
+        "Buffalo Bulls defeated Ball State Cardinals 28–7, a difference of 21 points. The game was played at Scheumann Stadium.",
+        "Central Michigan Chippewas defeated Sacramento State Hornets 28–7, a difference of 21 points. The game was played at Kelly/Shorts Stadium.",
         "The 3 finals produced 94 points between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 1. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 24-point victory for Toledo Rockets produced the largest winning margin among the 3 confirmed college football finals from Wednesday, November 11.",
           "Buffalo Bulls recorded the highest single-team score in this set of completed games, finishing with 28 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "Toledo Rockets defeated Massachusetts Minutemen 24\u20130, a difference of 24 points. The game was played at Glass Bowl.",
-          "Buffalo Bulls defeated Ball State Cardinals 28\u20137, a difference of 21 points. The game was played at Scheumann Stadium.",
-          "Central Michigan Chippewas defeated Sacramento State Hornets 28\u20137, a difference of 21 points. The game was played at Kelly/Shorts Stadium.",
+          "Toledo Rockets defeated Massachusetts Minutemen 24–0, a difference of 24 points. The game was played at Glass Bowl.",
+          "Buffalo Bulls defeated Ball State Cardinals 28–7, a difference of 21 points. The game was played at Scheumann Stadium.",
+          "Central Michigan Chippewas defeated Sacramento State Hornets 28–7, a difference of 21 points. The game was played at Kelly/Shorts Stadium.",
           "The 3 finals produced 94 points between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 1. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -951,19 +951,19 @@
       "news_items": [
         {
           "sport": "NCAAF",
-          "topic": "Buffalo Bulls at Ball State Cardinals \u2014 final box score",
+          "topic": "Buffalo Bulls at Ball State Cardinals — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866461"
         },
         {
           "sport": "NCAAF",
-          "topic": "Sacramento State Hornets at Central Michigan Chippewas \u2014 final box score",
+          "topic": "Sacramento State Hornets at Central Michigan Chippewas — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866462"
         },
         {
           "sport": "NCAAF",
-          "topic": "Massachusetts Minutemen at Toledo Rockets \u2014 final box score",
+          "topic": "Massachusetts Minutemen at Toledo Rockets — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866463"
         }
@@ -1040,28 +1040,28 @@
       "body": [
         "A 37-point victory for Boston Celtics produced the largest winning margin among the 9 confirmed NBA finals from Sunday, November 15.",
         "Houston Rockets recorded the highest single-team score in this set of completed games, finishing with 147 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "Boston Celtics defeated Dallas Mavericks 131\u201394, a difference of 37 points. The game was played at TD Garden.",
-        "Houston Rockets defeated Washington Wizards 147\u2013119, a difference of 28 points. The game was played at Capital One Arena.",
-        "Oklahoma City Thunder defeated Sacramento Kings 125\u2013103, a difference of 22 points. The game was played at Golden 1 Center.",
-        "Los Angeles Lakers defeated Phoenix Suns 131\u2013123, a difference of 8 points. The game was played at Mortgage Matchup Center.",
-        "LA Clippers defeated Charlotte Hornets 113\u2013105, a difference of 8 points. The game was played at Intuit Dome.",
-        "San Antonio Spurs defeated Utah Jazz 110\u2013102, a difference of 8 points. The game was played at Delta Center.",
-        "Philadelphia 76ers defeated Indiana Pacers 131\u2013124, a difference of 7 points. The game was played at Xfinity Mobile Arena.",
-        "Atlanta Hawks defeated Milwaukee Bucks 113\u2013106, a difference of 7 points. The game was played at Fiserv Forum.",
+        "Boston Celtics defeated Dallas Mavericks 131–94, a difference of 37 points. The game was played at TD Garden.",
+        "Houston Rockets defeated Washington Wizards 147–119, a difference of 28 points. The game was played at Capital One Arena.",
+        "Oklahoma City Thunder defeated Sacramento Kings 125–103, a difference of 22 points. The game was played at Golden 1 Center.",
+        "Los Angeles Lakers defeated Phoenix Suns 131–123, a difference of 8 points. The game was played at Mortgage Matchup Center.",
+        "LA Clippers defeated Charlotte Hornets 113–105, a difference of 8 points. The game was played at Intuit Dome.",
+        "San Antonio Spurs defeated Utah Jazz 110–102, a difference of 8 points. The game was played at Delta Center.",
+        "Philadelphia 76ers defeated Indiana Pacers 131–124, a difference of 7 points. The game was played at Xfinity Mobile Arena.",
+        "Atlanta Hawks defeated Milwaukee Bucks 113–106, a difference of 7 points. The game was played at Fiserv Forum.",
         "The 9 finals produced 2097 points between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 6. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 37-point victory for Boston Celtics produced the largest winning margin among the 9 confirmed NBA finals from Sunday, November 15.",
           "Houston Rockets recorded the highest single-team score in this set of completed games, finishing with 147 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "Boston Celtics defeated Dallas Mavericks 131\u201394, a difference of 37 points. The game was played at TD Garden.",
-          "Houston Rockets defeated Washington Wizards 147\u2013119, a difference of 28 points. The game was played at Capital One Arena.",
-          "Oklahoma City Thunder defeated Sacramento Kings 125\u2013103, a difference of 22 points. The game was played at Golden 1 Center.",
-          "Los Angeles Lakers defeated Phoenix Suns 131\u2013123, a difference of 8 points. The game was played at Mortgage Matchup Center.",
-          "LA Clippers defeated Charlotte Hornets 113\u2013105, a difference of 8 points. The game was played at Intuit Dome.",
-          "San Antonio Spurs defeated Utah Jazz 110\u2013102, a difference of 8 points. The game was played at Delta Center.",
-          "Philadelphia 76ers defeated Indiana Pacers 131\u2013124, a difference of 7 points. The game was played at Xfinity Mobile Arena.",
-          "Atlanta Hawks defeated Milwaukee Bucks 113\u2013106, a difference of 7 points. The game was played at Fiserv Forum.",
+          "Boston Celtics defeated Dallas Mavericks 131–94, a difference of 37 points. The game was played at TD Garden.",
+          "Houston Rockets defeated Washington Wizards 147–119, a difference of 28 points. The game was played at Capital One Arena.",
+          "Oklahoma City Thunder defeated Sacramento Kings 125–103, a difference of 22 points. The game was played at Golden 1 Center.",
+          "Los Angeles Lakers defeated Phoenix Suns 131–123, a difference of 8 points. The game was played at Mortgage Matchup Center.",
+          "LA Clippers defeated Charlotte Hornets 113–105, a difference of 8 points. The game was played at Intuit Dome.",
+          "San Antonio Spurs defeated Utah Jazz 110–102, a difference of 8 points. The game was played at Delta Center.",
+          "Philadelphia 76ers defeated Indiana Pacers 131–124, a difference of 7 points. The game was played at Xfinity Mobile Arena.",
+          "Atlanta Hawks defeated Milwaukee Bucks 113–106, a difference of 7 points. The game was played at Fiserv Forum.",
           "The 9 finals produced 2097 points between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 6. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -1073,55 +1073,55 @@
       "news_items": [
         {
           "sport": "NBA",
-          "topic": "Indiana Pacers at Philadelphia 76ers \u2014 final box score",
+          "topic": "Indiana Pacers at Philadelphia 76ers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909985"
         },
         {
           "sport": "NBA",
-          "topic": "Los Angeles Lakers at Phoenix Suns \u2014 final box score",
+          "topic": "Los Angeles Lakers at Phoenix Suns — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909986"
         },
         {
           "sport": "NBA",
-          "topic": "Charlotte Hornets at LA Clippers \u2014 final box score",
+          "topic": "Charlotte Hornets at LA Clippers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909987"
         },
         {
           "sport": "NBA",
-          "topic": "San Antonio Spurs at Utah Jazz \u2014 final box score",
+          "topic": "San Antonio Spurs at Utah Jazz — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909988"
         },
         {
           "sport": "NBA",
-          "topic": "Dallas Mavericks at Boston Celtics \u2014 final box score",
+          "topic": "Dallas Mavericks at Boston Celtics — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909989"
         },
         {
           "sport": "NBA",
-          "topic": "New York Knicks at Toronto Raptors \u2014 final box score",
+          "topic": "New York Knicks at Toronto Raptors — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909990"
         },
         {
           "sport": "NBA",
-          "topic": "Houston Rockets at Washington Wizards \u2014 final box score",
+          "topic": "Houston Rockets at Washington Wizards — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909991"
         },
         {
           "sport": "NBA",
-          "topic": "Atlanta Hawks at Milwaukee Bucks \u2014 final box score",
+          "topic": "Atlanta Hawks at Milwaukee Bucks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909992"
         },
         {
           "sport": "NBA",
-          "topic": "Oklahoma City Thunder at Sacramento Kings \u2014 final box score",
+          "topic": "Oklahoma City Thunder at Sacramento Kings — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nba/boxscore/_/gameId/401909993"
         }
@@ -1276,22 +1276,22 @@
       "body": [
         "A 5-goal victory for Anaheim Ducks produced the largest winning margin among the 5 confirmed NHL finals from Sunday, November 15.",
         "Anaheim Ducks recorded the highest single-team score in this set of completed games, finishing with 6 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "Anaheim Ducks defeated Calgary Flames 6\u20131, a difference of 5 goals. The game was played at Honda Center.",
-        "Edmonton Oilers defeated Philadelphia Flyers 5\u20132, a difference of 3 goals. The game was played at Xfinity Mobile Arena.",
-        "Vancouver Canucks defeated Vegas Golden Knights 6\u20133, a difference of 3 goals. The game was played at T-Mobile Arena.",
-        "San Jose Sharks defeated Nashville Predators 4\u20132, a difference of 2 goals. The game was played at SAP Center at San Jose.",
-        "Dallas Stars defeated Florida Panthers 2\u20131, a difference of 1 goals. The game was played at American Airlines Center. The final was decided after overtime.",
+        "Anaheim Ducks defeated Calgary Flames 6–1, a difference of 5 goals. The game was played at Honda Center.",
+        "Edmonton Oilers defeated Philadelphia Flyers 5–2, a difference of 3 goals. The game was played at Xfinity Mobile Arena.",
+        "Vancouver Canucks defeated Vegas Golden Knights 6–3, a difference of 3 goals. The game was played at T-Mobile Arena.",
+        "San Jose Sharks defeated Nashville Predators 4–2, a difference of 2 goals. The game was played at SAP Center at San Jose.",
+        "Dallas Stars defeated Florida Panthers 2–1, a difference of 1 goals. The game was played at American Airlines Center. The final was decided after overtime.",
         "The 5 finals produced 32 goals between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 2. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 5-goal victory for Anaheim Ducks produced the largest winning margin among the 5 confirmed NHL finals from Sunday, November 15.",
           "Anaheim Ducks recorded the highest single-team score in this set of completed games, finishing with 6 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "Anaheim Ducks defeated Calgary Flames 6\u20131, a difference of 5 goals. The game was played at Honda Center.",
-          "Edmonton Oilers defeated Philadelphia Flyers 5\u20132, a difference of 3 goals. The game was played at Xfinity Mobile Arena.",
-          "Vancouver Canucks defeated Vegas Golden Knights 6\u20133, a difference of 3 goals. The game was played at T-Mobile Arena.",
-          "San Jose Sharks defeated Nashville Predators 4\u20132, a difference of 2 goals. The game was played at SAP Center at San Jose.",
-          "Dallas Stars defeated Florida Panthers 2\u20131, a difference of 1 goals. The game was played at American Airlines Center. The final was decided after overtime.",
+          "Anaheim Ducks defeated Calgary Flames 6–1, a difference of 5 goals. The game was played at Honda Center.",
+          "Edmonton Oilers defeated Philadelphia Flyers 5–2, a difference of 3 goals. The game was played at Xfinity Mobile Arena.",
+          "Vancouver Canucks defeated Vegas Golden Knights 6–3, a difference of 3 goals. The game was played at T-Mobile Arena.",
+          "San Jose Sharks defeated Nashville Predators 4–2, a difference of 2 goals. The game was played at SAP Center at San Jose.",
+          "Dallas Stars defeated Florida Panthers 2–1, a difference of 1 goals. The game was played at American Airlines Center. The final was decided after overtime.",
           "The 5 finals produced 32 goals between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 2. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -1303,31 +1303,31 @@
       "news_items": [
         {
           "sport": "NHL",
-          "topic": "Edmonton Oilers at Philadelphia Flyers \u2014 final box score",
+          "topic": "Edmonton Oilers at Philadelphia Flyers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892721"
         },
         {
           "sport": "NHL",
-          "topic": "Florida Panthers at Dallas Stars \u2014 final box score",
+          "topic": "Florida Panthers at Dallas Stars — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892722"
         },
         {
           "sport": "NHL",
-          "topic": "Calgary Flames at Anaheim Ducks \u2014 final box score",
+          "topic": "Calgary Flames at Anaheim Ducks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892723"
         },
         {
           "sport": "NHL",
-          "topic": "Vancouver Canucks at Vegas Golden Knights \u2014 final box score",
+          "topic": "Vancouver Canucks at Vegas Golden Knights — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892724"
         },
         {
           "sport": "NHL",
-          "topic": "Nashville Predators at San Jose Sharks \u2014 final box score",
+          "topic": "Nashville Predators at San Jose Sharks — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892725"
         }
@@ -1430,28 +1430,28 @@
       "body": [
         "A 28-point victory for Los Angeles Rams produced the largest winning margin among the 12 confirmed NFL finals from Sunday, November 15.",
         "San Francisco 49ers recorded the highest single-team score in this set of completed games, finishing with 46 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-        "Los Angeles Rams defeated Arizona Cardinals 34\u20136, a difference of 28 points. The game was played at State Farm Stadium.",
-        "Detroit Lions defeated New England Patriots 35\u201310, a difference of 25 points. The game was played at FC Bayern Munich Stadium.",
-        "Kansas City Chiefs defeated Atlanta Falcons 35\u201313, a difference of 22 points. The game was played at Mercedes-Benz Stadium.",
-        "Minnesota Vikings defeated Green Bay Packers 30\u201310, a difference of 20 points. The game was played at Lambeau Field.",
-        "Cincinnati Bengals defeated Pittsburgh Steelers 38\u201318, a difference of 20 points. The game was played at Paycor Stadium.",
-        "Buffalo Bills defeated New York Jets 31\u201312, a difference of 19 points. The game was played at MetLife Stadium.",
-        "Jacksonville Jaguars defeated Tennessee Titans 40\u201323, a difference of 17 points. The game was played at Nissan Stadium.",
-        "Seattle Seahawks defeated Las Vegas Raiders 21\u201313, a difference of 8 points. The game was played at Allegiant Stadium.",
+        "Los Angeles Rams defeated Arizona Cardinals 34–6, a difference of 28 points. The game was played at State Farm Stadium.",
+        "Detroit Lions defeated New England Patriots 35–10, a difference of 25 points. The game was played at FC Bayern Munich Stadium.",
+        "Kansas City Chiefs defeated Atlanta Falcons 35–13, a difference of 22 points. The game was played at Mercedes-Benz Stadium.",
+        "Minnesota Vikings defeated Green Bay Packers 30–10, a difference of 20 points. The game was played at Lambeau Field.",
+        "Cincinnati Bengals defeated Pittsburgh Steelers 38–18, a difference of 20 points. The game was played at Paycor Stadium.",
+        "Buffalo Bills defeated New York Jets 31–12, a difference of 19 points. The game was played at MetLife Stadium.",
+        "Jacksonville Jaguars defeated Tennessee Titans 40–23, a difference of 17 points. The game was played at Nissan Stadium.",
+        "Seattle Seahawks defeated Las Vegas Raiders 21–13, a difference of 8 points. The game was played at Allegiant Stadium.",
         "The 12 finals produced 589 points between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 8. Individual final box scores are linked below for the complete game details."
       ],
       "sections": {
         "intro": [
           "A 28-point victory for Los Angeles Rams produced the largest winning margin among the 12 confirmed NFL finals from Sunday, November 15.",
           "San Francisco 49ers recorded the highest single-team score in this set of completed games, finishing with 46 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
-          "Los Angeles Rams defeated Arizona Cardinals 34\u20136, a difference of 28 points. The game was played at State Farm Stadium.",
-          "Detroit Lions defeated New England Patriots 35\u201310, a difference of 25 points. The game was played at FC Bayern Munich Stadium.",
-          "Kansas City Chiefs defeated Atlanta Falcons 35\u201313, a difference of 22 points. The game was played at Mercedes-Benz Stadium.",
-          "Minnesota Vikings defeated Green Bay Packers 30\u201310, a difference of 20 points. The game was played at Lambeau Field.",
-          "Cincinnati Bengals defeated Pittsburgh Steelers 38\u201318, a difference of 20 points. The game was played at Paycor Stadium.",
-          "Buffalo Bills defeated New York Jets 31\u201312, a difference of 19 points. The game was played at MetLife Stadium.",
-          "Jacksonville Jaguars defeated Tennessee Titans 40\u201323, a difference of 17 points. The game was played at Nissan Stadium.",
-          "Seattle Seahawks defeated Las Vegas Raiders 21\u201313, a difference of 8 points. The game was played at Allegiant Stadium.",
+          "Los Angeles Rams defeated Arizona Cardinals 34–6, a difference of 28 points. The game was played at State Farm Stadium.",
+          "Detroit Lions defeated New England Patriots 35–10, a difference of 25 points. The game was played at FC Bayern Munich Stadium.",
+          "Kansas City Chiefs defeated Atlanta Falcons 35–13, a difference of 22 points. The game was played at Mercedes-Benz Stadium.",
+          "Minnesota Vikings defeated Green Bay Packers 30–10, a difference of 20 points. The game was played at Lambeau Field.",
+          "Cincinnati Bengals defeated Pittsburgh Steelers 38–18, a difference of 20 points. The game was played at Paycor Stadium.",
+          "Buffalo Bills defeated New York Jets 31–12, a difference of 19 points. The game was played at MetLife Stadium.",
+          "Jacksonville Jaguars defeated Tennessee Titans 40–23, a difference of 17 points. The game was played at Nissan Stadium.",
+          "Seattle Seahawks defeated Las Vegas Raiders 21–13, a difference of 8 points. The game was played at Allegiant Stadium.",
           "The 12 finals produced 589 points between the teams. Among games not listed at a neutral venue, home teams won 3 and away teams won 8. Individual final box scores are linked below for the complete game details."
         ],
         "models": [],
@@ -1463,73 +1463,73 @@
       "news_items": [
         {
           "sport": "NFL",
-          "topic": "New England Patriots at Detroit Lions \u2014 final box score",
+          "topic": "New England Patriots at Detroit Lions — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873053"
         },
         {
           "sport": "NFL",
-          "topic": "Buffalo Bills at New York Jets \u2014 final box score",
+          "topic": "Buffalo Bills at New York Jets — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873054"
         },
         {
           "sport": "NFL",
-          "topic": "Carolina Panthers at New Orleans Saints \u2014 final box score",
+          "topic": "Carolina Panthers at New Orleans Saints — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873055"
         },
         {
           "sport": "NFL",
-          "topic": "Houston Texans at Cleveland Browns \u2014 final box score",
+          "topic": "Houston Texans at Cleveland Browns — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873056"
         },
         {
           "sport": "NFL",
-          "topic": "Jacksonville Jaguars at Tennessee Titans \u2014 final box score",
+          "topic": "Jacksonville Jaguars at Tennessee Titans — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873057"
         },
         {
           "sport": "NFL",
-          "topic": "Kansas City Chiefs at Atlanta Falcons \u2014 final box score",
+          "topic": "Kansas City Chiefs at Atlanta Falcons — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873058"
         },
         {
           "sport": "NFL",
-          "topic": "Miami Dolphins at Indianapolis Colts \u2014 final box score",
+          "topic": "Miami Dolphins at Indianapolis Colts — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873059"
         },
         {
           "sport": "NFL",
-          "topic": "Minnesota Vikings at Green Bay Packers \u2014 final box score",
+          "topic": "Minnesota Vikings at Green Bay Packers — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873060"
         },
         {
           "sport": "NFL",
-          "topic": "Los Angeles Rams at Arizona Cardinals \u2014 final box score",
+          "topic": "Los Angeles Rams at Arizona Cardinals — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873061"
         },
         {
           "sport": "NFL",
-          "topic": "Seattle Seahawks at Las Vegas Raiders \u2014 final box score",
+          "topic": "Seattle Seahawks at Las Vegas Raiders — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873062"
         },
         {
           "sport": "NFL",
-          "topic": "San Francisco 49ers at Dallas Cowboys \u2014 final box score",
+          "topic": "San Francisco 49ers at Dallas Cowboys — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873063"
         },
         {
           "sport": "NFL",
-          "topic": "Pittsburgh Steelers at Cincinnati Bengals \u2014 final box score",
+          "topic": "Pittsburgh Steelers at Cincinnati Bengals — final box score",
           "source": "ESPN",
           "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873064"
         }
@@ -1704,6 +1704,924 @@
         "instagram": "Los Angeles Rams wins by 28: Sunday, November 15's NFL roundup\n\nA 28-point victory for Los Angeles Rams produced the largest winning margin among the 12 confirmed NFL finals from Sunday, November 15.\n\nRead more at predictionlab.io.",
         "requires": "Article review and explicit Meta publishing authorization"
       }
+    },
+    {
+      "slug": "nba-daily-recap-2026-11-16",
+      "title": "New Orleans Pelicans wins by 21: Monday, November 16's NBA roundup",
+      "sport_tag": "NBA",
+      "kind": "sports_news",
+      "status": "draft",
+      "date": "2026-11-17",
+      "game_date": "2026-11-16",
+      "created_date": "2026-11-17",
+      "date_published": "2026-11-17T14:00:46.119328+00:00",
+      "date_modified": "2026-11-17T14:00:46.119328+00:00",
+      "canonical_path": "/blog/nba/nba-daily-recap-2026-11-16",
+      "article_url": "/blog/nba/nba-daily-recap-2026-11-16",
+      "excerpt": "A 21-point victory for New Orleans Pelicans produced the largest winning margin among the 8 confirmed NBA finals from Monday, November 16.",
+      "meta_description": "A 21-point victory for New Orleans Pelicans produced the largest winning margin among the 8 confirmed NBA finals from Monday, November 16.",
+      "body": [
+        "A 21-point victory for New Orleans Pelicans produced the largest winning margin among the 8 confirmed NBA finals from Monday, November 16.",
+        "Memphis Grizzlies recorded the highest single-team score in this set of completed games, finishing with 136 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+        "New Orleans Pelicans defeated Golden State Warriors 115–94, a difference of 21 points. The game was played at Smoothie King Center.",
+        "Miami Heat defeated Houston Rockets 128–110, a difference of 18 points. The game was played at Kaseya Center.",
+        "Memphis Grizzlies defeated Washington Wizards 136–120, a difference of 16 points. The game was played at Capital One Arena.",
+        "Philadelphia 76ers defeated Brooklyn Nets 135–123, a difference of 12 points. The game was played at Barclays Center.",
+        "Phoenix Suns defeated Denver Nuggets 117–105, a difference of 12 points. The game was played at Ball Arena.",
+        "Cleveland Cavaliers defeated Chicago Bulls 126–115, a difference of 11 points. The game was played at Rocket Arena.",
+        "Orlando Magic defeated Boston Celtics 115–105, a difference of 10 points. The game was played at TD Garden.",
+        "Minnesota Timberwolves defeated Portland Trail Blazers 106–98, a difference of 8 points. The game was played at Target Center.",
+        "The 8 finals produced 1848 points between the teams. Among games not listed at a neutral venue, home teams won 4 and away teams won 4. Individual final box scores are linked below for the complete game details."
+      ],
+      "sections": {
+        "intro": [
+          "A 21-point victory for New Orleans Pelicans produced the largest winning margin among the 8 confirmed NBA finals from Monday, November 16.",
+          "Memphis Grizzlies recorded the highest single-team score in this set of completed games, finishing with 136 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+          "New Orleans Pelicans defeated Golden State Warriors 115–94, a difference of 21 points. The game was played at Smoothie King Center.",
+          "Miami Heat defeated Houston Rockets 128–110, a difference of 18 points. The game was played at Kaseya Center.",
+          "Memphis Grizzlies defeated Washington Wizards 136–120, a difference of 16 points. The game was played at Capital One Arena.",
+          "Philadelphia 76ers defeated Brooklyn Nets 135–123, a difference of 12 points. The game was played at Barclays Center.",
+          "Phoenix Suns defeated Denver Nuggets 117–105, a difference of 12 points. The game was played at Ball Arena.",
+          "Cleveland Cavaliers defeated Chicago Bulls 126–115, a difference of 11 points. The game was played at Rocket Arena.",
+          "Orlando Magic defeated Boston Celtics 115–105, a difference of 10 points. The game was played at TD Garden.",
+          "Minnesota Timberwolves defeated Portland Trail Blazers 106–98, a difference of 8 points. The game was played at Target Center.",
+          "The 8 finals produced 1848 points between the teams. Among games not listed at a neutral venue, home teams won 4 and away teams won 4. Individual final box scores are linked below for the complete game details."
+        ],
+        "models": [],
+        "markets": {},
+        "game_info": {}
+      },
+      "image": "/static/pl-logo.svg",
+      "author": "Prediction Lab",
+      "news_items": [
+        {
+          "sport": "NBA",
+          "topic": "Orlando Magic at Boston Celtics — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401909994"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Chicago Bulls at Cleveland Cavaliers — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401909995"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Memphis Grizzlies at Washington Wizards — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401909996"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Philadelphia 76ers at Brooklyn Nets — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401909997"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Houston Rockets at Miami Heat — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401909998"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Portland Trail Blazers at Minnesota Timberwolves — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401909999"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Golden State Warriors at New Orleans Pelicans — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401910000"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Phoenix Suns at Denver Nuggets — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401910001"
+        }
+      ],
+      "provenance": {
+        "facts": [
+          {
+            "event_id": "401909994",
+            "sport": "NBA",
+            "date": "2026-11-16",
+            "home": "Boston Celtics",
+            "away": "Orlando Magic",
+            "home_score": 105,
+            "away_score": 115,
+            "venue": "TD Garden",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401909994"
+          },
+          {
+            "event_id": "401909995",
+            "sport": "NBA",
+            "date": "2026-11-16",
+            "home": "Cleveland Cavaliers",
+            "away": "Chicago Bulls",
+            "home_score": 126,
+            "away_score": 115,
+            "venue": "Rocket Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401909995"
+          },
+          {
+            "event_id": "401909996",
+            "sport": "NBA",
+            "date": "2026-11-16",
+            "home": "Washington Wizards",
+            "away": "Memphis Grizzlies",
+            "home_score": 120,
+            "away_score": 136,
+            "venue": "Capital One Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401909996"
+          },
+          {
+            "event_id": "401909997",
+            "sport": "NBA",
+            "date": "2026-11-16",
+            "home": "Brooklyn Nets",
+            "away": "Philadelphia 76ers",
+            "home_score": 123,
+            "away_score": 135,
+            "venue": "Barclays Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401909997"
+          },
+          {
+            "event_id": "401909998",
+            "sport": "NBA",
+            "date": "2026-11-16",
+            "home": "Miami Heat",
+            "away": "Houston Rockets",
+            "home_score": 128,
+            "away_score": 110,
+            "venue": "Kaseya Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401909998"
+          },
+          {
+            "event_id": "401909999",
+            "sport": "NBA",
+            "date": "2026-11-16",
+            "home": "Minnesota Timberwolves",
+            "away": "Portland Trail Blazers",
+            "home_score": 106,
+            "away_score": 98,
+            "venue": "Target Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401909999"
+          },
+          {
+            "event_id": "401910000",
+            "sport": "NBA",
+            "date": "2026-11-16",
+            "home": "New Orleans Pelicans",
+            "away": "Golden State Warriors",
+            "home_score": 115,
+            "away_score": 94,
+            "venue": "Smoothie King Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401910000"
+          },
+          {
+            "event_id": "401910001",
+            "sport": "NBA",
+            "date": "2026-11-16",
+            "home": "Denver Nuggets",
+            "away": "Phoenix Suns",
+            "home_score": 105,
+            "away_score": 117,
+            "venue": "Ball Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401910001"
+          }
+        ],
+        "sha256": "4da4a776b5b33138b07146faf18a0951a2a41cbe9503eb6c7693ea6734b87282",
+        "checked_at": "2026-11-17T14:00:46.119328+00:00",
+        "method": "Original prose from structured final-game facts"
+      },
+      "social_drafts": {
+        "status": "draft",
+        "ready_for_delivery": false,
+        "facebook": "New Orleans Pelicans wins by 21: Monday, November 16's NBA roundup\n\nA 21-point victory for New Orleans Pelicans produced the largest winning margin among the 8 confirmed NBA finals from Monday, November 16.\n\nhttps://predictionlab.io/blog/nba/nba-daily-recap-2026-11-16",
+        "instagram": "New Orleans Pelicans wins by 21: Monday, November 16's NBA roundup\n\nA 21-point victory for New Orleans Pelicans produced the largest winning margin among the 8 confirmed NBA finals from Monday, November 16.\n\nRead more at predictionlab.io.",
+        "requires": "Article review and explicit Meta publishing authorization"
+      }
+    },
+    {
+      "slug": "nhl-daily-recap-2026-11-16",
+      "title": "New York Rangers wins by 2: Monday, November 16's NHL roundup",
+      "sport_tag": "NHL",
+      "kind": "sports_news",
+      "status": "draft",
+      "date": "2026-11-17",
+      "game_date": "2026-11-16",
+      "created_date": "2026-11-17",
+      "date_published": "2026-11-17T14:00:46.119328+00:00",
+      "date_modified": "2026-11-17T14:00:46.119328+00:00",
+      "canonical_path": "/blog/nhl/nhl-daily-recap-2026-11-16",
+      "article_url": "/blog/nhl/nhl-daily-recap-2026-11-16",
+      "excerpt": "A 2-goal victory for New York Rangers produced the largest winning margin among the 2 confirmed NHL finals from Monday, November 16.",
+      "meta_description": "A 2-goal victory for New York Rangers produced the largest winning margin among the 2 confirmed NHL finals from Monday, November 16.",
+      "body": [
+        "A 2-goal victory for New York Rangers produced the largest winning margin among the 2 confirmed NHL finals from Monday, November 16.",
+        "New York Rangers recorded the highest single-team score in this set of completed games, finishing with 3 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+        "New York Rangers defeated Montreal Canadiens 3–1, a difference of 2 goals. The game was played at Madison Square Garden.",
+        "Vancouver Canucks defeated Utah Mammoth 3–2, a difference of 1 goals. The game was played at Delta Center.",
+        "The 2 finals produced 9 goals between the teams. Among games not listed at a neutral venue, home teams won 1 and away teams won 1. Individual final box scores are linked below for the complete game details."
+      ],
+      "sections": {
+        "intro": [
+          "A 2-goal victory for New York Rangers produced the largest winning margin among the 2 confirmed NHL finals from Monday, November 16.",
+          "New York Rangers recorded the highest single-team score in this set of completed games, finishing with 3 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+          "New York Rangers defeated Montreal Canadiens 3–1, a difference of 2 goals. The game was played at Madison Square Garden.",
+          "Vancouver Canucks defeated Utah Mammoth 3–2, a difference of 1 goals. The game was played at Delta Center.",
+          "The 2 finals produced 9 goals between the teams. Among games not listed at a neutral venue, home teams won 1 and away teams won 1. Individual final box scores are linked below for the complete game details."
+        ],
+        "models": [],
+        "markets": {},
+        "game_info": {}
+      },
+      "image": "/static/pl-logo.svg",
+      "author": "Prediction Lab",
+      "news_items": [
+        {
+          "sport": "NHL",
+          "topic": "Montreal Canadiens at New York Rangers — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892726"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Vancouver Canucks at Utah Mammoth — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892727"
+        }
+      ],
+      "provenance": {
+        "facts": [
+          {
+            "event_id": "401892726",
+            "sport": "NHL",
+            "date": "2026-11-16",
+            "home": "New York Rangers",
+            "away": "Montreal Canadiens",
+            "home_score": 3,
+            "away_score": 1,
+            "venue": "Madison Square Garden",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892726"
+          },
+          {
+            "event_id": "401892727",
+            "sport": "NHL",
+            "date": "2026-11-16",
+            "home": "Utah Mammoth",
+            "away": "Vancouver Canucks",
+            "home_score": 2,
+            "away_score": 3,
+            "venue": "Delta Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892727"
+          }
+        ],
+        "sha256": "f3841f6b468f720d45558cad3df4d2ece1ce3902a9e21fc8790ab6f4b0c3d666",
+        "checked_at": "2026-11-17T14:00:46.119328+00:00",
+        "method": "Original prose from structured final-game facts"
+      },
+      "social_drafts": {
+        "status": "draft",
+        "ready_for_delivery": false,
+        "facebook": "New York Rangers wins by 2: Monday, November 16's NHL roundup\n\nA 2-goal victory for New York Rangers produced the largest winning margin among the 2 confirmed NHL finals from Monday, November 16.\n\nhttps://predictionlab.io/blog/nhl/nhl-daily-recap-2026-11-16",
+        "instagram": "New York Rangers wins by 2: Monday, November 16's NHL roundup\n\nA 2-goal victory for New York Rangers produced the largest winning margin among the 2 confirmed NHL finals from Monday, November 16.\n\nRead more at predictionlab.io.",
+        "requires": "Article review and explicit Meta publishing authorization"
+      }
+    },
+    {
+      "slug": "nfl-daily-recap-2026-11-16",
+      "title": "Los Angeles Chargers wins by 3: Monday, November 16's NFL roundup",
+      "sport_tag": "NFL",
+      "kind": "sports_news",
+      "status": "draft",
+      "date": "2026-11-17",
+      "game_date": "2026-11-16",
+      "created_date": "2026-11-17",
+      "date_published": "2026-11-17T14:00:46.119328+00:00",
+      "date_modified": "2026-11-17T14:00:46.119328+00:00",
+      "canonical_path": "/blog/nfl/nfl-daily-recap-2026-11-16",
+      "article_url": "/blog/nfl/nfl-daily-recap-2026-11-16",
+      "excerpt": "A 3-point victory for Los Angeles Chargers produced the largest winning margin among the 1 confirmed NFL finals from Monday, November 16.",
+      "meta_description": "A 3-point victory for Los Angeles Chargers produced the largest winning margin among the 1 confirmed NFL finals from Monday, November 16.",
+      "body": [
+        "A 3-point victory for Los Angeles Chargers produced the largest winning margin among the 1 confirmed NFL finals from Monday, November 16.",
+        "Los Angeles Chargers recorded the highest single-team score in this set of completed games, finishing with 23 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+        "Los Angeles Chargers defeated Baltimore Ravens 23–20, a difference of 3 points. The game was played at M&T Bank Stadium.",
+        "The 1 finals produced 43 points between the teams. Among games not listed at a neutral venue, home teams won 0 and away teams won 1. Individual final box scores are linked below for the complete game details."
+      ],
+      "sections": {
+        "intro": [
+          "A 3-point victory for Los Angeles Chargers produced the largest winning margin among the 1 confirmed NFL finals from Monday, November 16.",
+          "Los Angeles Chargers recorded the highest single-team score in this set of completed games, finishing with 23 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+          "Los Angeles Chargers defeated Baltimore Ravens 23–20, a difference of 3 points. The game was played at M&T Bank Stadium.",
+          "The 1 finals produced 43 points between the teams. Among games not listed at a neutral venue, home teams won 0 and away teams won 1. Individual final box scores are linked below for the complete game details."
+        ],
+        "models": [],
+        "markets": {},
+        "game_info": {}
+      },
+      "image": "/static/pl-logo.svg",
+      "author": "Prediction Lab",
+      "news_items": [
+        {
+          "sport": "NFL",
+          "topic": "Los Angeles Chargers at Baltimore Ravens — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nfl/boxscore/_/gameId/401873065"
+        }
+      ],
+      "provenance": {
+        "facts": [
+          {
+            "event_id": "401873065",
+            "sport": "NFL",
+            "date": "2026-11-16",
+            "home": "Baltimore Ravens",
+            "away": "Los Angeles Chargers",
+            "home_score": 20,
+            "away_score": 23,
+            "venue": "M&T Bank Stadium",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nfl/boxscore/_/gameId/401873065"
+          }
+        ],
+        "sha256": "bbccbb807ef0be7c49d33f80463c70f6cb0c05074a179c6f7eb9a20a78afcb65",
+        "checked_at": "2026-11-17T14:00:46.119328+00:00",
+        "method": "Original prose from structured final-game facts"
+      },
+      "social_drafts": {
+        "status": "draft",
+        "ready_for_delivery": false,
+        "facebook": "Los Angeles Chargers wins by 3: Monday, November 16's NFL roundup\n\nA 3-point victory for Los Angeles Chargers produced the largest winning margin among the 1 confirmed NFL finals from Monday, November 16.\n\nhttps://predictionlab.io/blog/nfl/nfl-daily-recap-2026-11-16",
+        "instagram": "Los Angeles Chargers wins by 3: Monday, November 16's NFL roundup\n\nA 3-point victory for Los Angeles Chargers produced the largest winning margin among the 1 confirmed NFL finals from Monday, November 16.\n\nRead more at predictionlab.io.",
+        "requires": "Article review and explicit Meta publishing authorization"
+      }
+    },
+    {
+      "slug": "nba-daily-recap-2026-11-17",
+      "title": "Utah Jazz wins by 25: Tuesday, November 17's NBA roundup",
+      "sport_tag": "NBA",
+      "kind": "sports_news",
+      "status": "draft",
+      "date": "2026-11-18",
+      "game_date": "2026-11-17",
+      "created_date": "2026-11-18",
+      "date_published": "2026-11-18T14:00:48.092361+00:00",
+      "date_modified": "2026-11-18T14:00:48.092361+00:00",
+      "canonical_path": "/blog/nba/nba-daily-recap-2026-11-17",
+      "article_url": "/blog/nba/nba-daily-recap-2026-11-17",
+      "excerpt": "A 25-point victory for Utah Jazz produced the largest winning margin among the 5 confirmed NBA finals from Tuesday, November 17.",
+      "meta_description": "A 25-point victory for Utah Jazz produced the largest winning margin among the 5 confirmed NBA finals from Tuesday, November 17.",
+      "body": [
+        "A 25-point victory for Utah Jazz produced the largest winning margin among the 5 confirmed NBA finals from Tuesday, November 17.",
+        "Utah Jazz recorded the highest single-team score in this set of completed games, finishing with 132 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+        "Utah Jazz defeated LA Clippers 132–107, a difference of 25 points. The game was played at Intuit Dome.",
+        "Detroit Pistons defeated San Antonio Spurs 105–93, a difference of 12 points. The game was played at Frost Bank Center.",
+        "New York Knicks defeated Toronto Raptors 111–102, a difference of 9 points. The game was played at Scotiabank Arena.",
+        "Los Angeles Lakers defeated Charlotte Hornets 118–114, a difference of 4 points. The game was played at crypto.com Arena. The final was decided after overtime.",
+        "Minnesota Timberwolves defeated Portland Trail Blazers 106–105, a difference of 1 points. The game was played at Target Center.",
+        "The 5 finals produced 1093 points between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 3. Individual final box scores are linked below for the complete game details."
+      ],
+      "sections": {
+        "intro": [
+          "A 25-point victory for Utah Jazz produced the largest winning margin among the 5 confirmed NBA finals from Tuesday, November 17.",
+          "Utah Jazz recorded the highest single-team score in this set of completed games, finishing with 132 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+          "Utah Jazz defeated LA Clippers 132–107, a difference of 25 points. The game was played at Intuit Dome.",
+          "Detroit Pistons defeated San Antonio Spurs 105–93, a difference of 12 points. The game was played at Frost Bank Center.",
+          "New York Knicks defeated Toronto Raptors 111–102, a difference of 9 points. The game was played at Scotiabank Arena.",
+          "Los Angeles Lakers defeated Charlotte Hornets 118–114, a difference of 4 points. The game was played at crypto.com Arena. The final was decided after overtime.",
+          "Minnesota Timberwolves defeated Portland Trail Blazers 106–105, a difference of 1 points. The game was played at Target Center.",
+          "The 5 finals produced 1093 points between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 3. Individual final box scores are linked below for the complete game details."
+        ],
+        "models": [],
+        "markets": {},
+        "game_info": {}
+      },
+      "image": "/static/pl-logo.svg",
+      "author": "Prediction Lab",
+      "news_items": [
+        {
+          "sport": "NBA",
+          "topic": "New York Knicks at Toronto Raptors — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401910002"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Portland Trail Blazers at Minnesota Timberwolves — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401910003"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Detroit Pistons at San Antonio Spurs — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401910004"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Charlotte Hornets at Los Angeles Lakers — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401910005"
+        },
+        {
+          "sport": "NBA",
+          "topic": "Utah Jazz at LA Clippers — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nba/boxscore/_/gameId/401910006"
+        }
+      ],
+      "provenance": {
+        "facts": [
+          {
+            "event_id": "401910002",
+            "sport": "NBA",
+            "date": "2026-11-17",
+            "home": "Toronto Raptors",
+            "away": "New York Knicks",
+            "home_score": 102,
+            "away_score": 111,
+            "venue": "Scotiabank Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401910002"
+          },
+          {
+            "event_id": "401910003",
+            "sport": "NBA",
+            "date": "2026-11-17",
+            "home": "Minnesota Timberwolves",
+            "away": "Portland Trail Blazers",
+            "home_score": 106,
+            "away_score": 105,
+            "venue": "Target Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401910003"
+          },
+          {
+            "event_id": "401910004",
+            "sport": "NBA",
+            "date": "2026-11-17",
+            "home": "San Antonio Spurs",
+            "away": "Detroit Pistons",
+            "home_score": 93,
+            "away_score": 105,
+            "venue": "Frost Bank Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401910004"
+          },
+          {
+            "event_id": "401910005",
+            "sport": "NBA",
+            "date": "2026-11-17",
+            "home": "Los Angeles Lakers",
+            "away": "Charlotte Hornets",
+            "home_score": 118,
+            "away_score": 114,
+            "venue": "crypto.com Arena",
+            "neutral": false,
+            "overtime": true,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401910005"
+          },
+          {
+            "event_id": "401910006",
+            "sport": "NBA",
+            "date": "2026-11-17",
+            "home": "LA Clippers",
+            "away": "Utah Jazz",
+            "home_score": 107,
+            "away_score": 132,
+            "venue": "Intuit Dome",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nba/boxscore/_/gameId/401910006"
+          }
+        ],
+        "sha256": "31c9c89e36c64758bd2c2b330961209b5b9684b1e8954a044a843a035e5397d8",
+        "checked_at": "2026-11-18T14:00:48.092361+00:00",
+        "method": "Original prose from structured final-game facts"
+      },
+      "social_drafts": {
+        "status": "draft",
+        "ready_for_delivery": false,
+        "facebook": "Utah Jazz wins by 25: Tuesday, November 17's NBA roundup\n\nA 25-point victory for Utah Jazz produced the largest winning margin among the 5 confirmed NBA finals from Tuesday, November 17.\n\nhttps://predictionlab.io/blog/nba/nba-daily-recap-2026-11-17",
+        "instagram": "Utah Jazz wins by 25: Tuesday, November 17's NBA roundup\n\nA 25-point victory for Utah Jazz produced the largest winning margin among the 5 confirmed NBA finals from Tuesday, November 17.\n\nRead more at predictionlab.io.",
+        "requires": "Article review and explicit Meta publishing authorization"
+      }
+    },
+    {
+      "slug": "nhl-daily-recap-2026-11-17",
+      "title": "New York Islanders wins by 4: Tuesday, November 17's NHL roundup",
+      "sport_tag": "NHL",
+      "kind": "sports_news",
+      "status": "draft",
+      "date": "2026-11-18",
+      "game_date": "2026-11-17",
+      "created_date": "2026-11-18",
+      "date_published": "2026-11-18T14:00:48.092361+00:00",
+      "date_modified": "2026-11-18T14:00:48.092361+00:00",
+      "canonical_path": "/blog/nhl/nhl-daily-recap-2026-11-17",
+      "article_url": "/blog/nhl/nhl-daily-recap-2026-11-17",
+      "excerpt": "A 4-goal victory for New York Islanders produced the largest winning margin among the 11 confirmed NHL finals from Tuesday, November 17.",
+      "meta_description": "A 4-goal victory for New York Islanders produced the largest winning margin among the 11 confirmed NHL finals from Tuesday, November 17.",
+      "body": [
+        "A 4-goal victory for New York Islanders produced the largest winning margin among the 11 confirmed NHL finals from Tuesday, November 17.",
+        "St. Louis Blues recorded the highest single-team score in this set of completed games, finishing with 8 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+        "New York Islanders defeated Columbus Blue Jackets 5–1, a difference of 4 goals. The game was played at UBS Arena.",
+        "Minnesota Wild defeated Nashville Predators 7–3, a difference of 4 goals. The game was played at Grand Casino Arena.",
+        "Los Angeles Kings defeated Boston Bruins 3–0, a difference of 3 goals. The game was played at TD Garden.",
+        "Tampa Bay Lightning defeated Washington Capitals 5–2, a difference of 3 goals. The game was played at Benchmark International Arena.",
+        "Edmonton Oilers defeated Florida Panthers 5–2, a difference of 3 goals. The game was played at Amerant Bank Arena.",
+        "Chicago Blackhawks defeated Toronto Maple Leafs 6–3, a difference of 3 goals. The game was played at United Center.",
+        "Calgary Flames defeated San Jose Sharks 5–2, a difference of 3 goals. The game was played at SAP Center at San Jose.",
+        "St. Louis Blues defeated Anaheim Ducks 8–6, a difference of 2 goals. The game was played at Enterprise Center.",
+        "The 11 finals produced 80 goals between the teams. Among games not listed at a neutral venue, home teams won 6 and away teams won 5. Individual final box scores are linked below for the complete game details."
+      ],
+      "sections": {
+        "intro": [
+          "A 4-goal victory for New York Islanders produced the largest winning margin among the 11 confirmed NHL finals from Tuesday, November 17.",
+          "St. Louis Blues recorded the highest single-team score in this set of completed games, finishing with 8 goals. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+          "New York Islanders defeated Columbus Blue Jackets 5–1, a difference of 4 goals. The game was played at UBS Arena.",
+          "Minnesota Wild defeated Nashville Predators 7–3, a difference of 4 goals. The game was played at Grand Casino Arena.",
+          "Los Angeles Kings defeated Boston Bruins 3–0, a difference of 3 goals. The game was played at TD Garden.",
+          "Tampa Bay Lightning defeated Washington Capitals 5–2, a difference of 3 goals. The game was played at Benchmark International Arena.",
+          "Edmonton Oilers defeated Florida Panthers 5–2, a difference of 3 goals. The game was played at Amerant Bank Arena.",
+          "Chicago Blackhawks defeated Toronto Maple Leafs 6–3, a difference of 3 goals. The game was played at United Center.",
+          "Calgary Flames defeated San Jose Sharks 5–2, a difference of 3 goals. The game was played at SAP Center at San Jose.",
+          "St. Louis Blues defeated Anaheim Ducks 8–6, a difference of 2 goals. The game was played at Enterprise Center.",
+          "The 11 finals produced 80 goals between the teams. Among games not listed at a neutral venue, home teams won 6 and away teams won 5. Individual final box scores are linked below for the complete game details."
+        ],
+        "models": [],
+        "markets": {},
+        "game_info": {}
+      },
+      "image": "/static/pl-logo.svg",
+      "author": "Prediction Lab",
+      "news_items": [
+        {
+          "sport": "NHL",
+          "topic": "Los Angeles Kings at Boston Bruins — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892728"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Washington Capitals at Tampa Bay Lightning — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892729"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Edmonton Oilers at Florida Panthers — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892730"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Columbus Blue Jackets at New York Islanders — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892731"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Buffalo Sabres at Philadelphia Flyers — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892732"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Toronto Maple Leafs at Chicago Blackhawks — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892733"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Anaheim Ducks at St. Louis Blues — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892734"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Nashville Predators at Minnesota Wild — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892735"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Ottawa Senators at Winnipeg Jets — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892736"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Dallas Stars at Vegas Golden Knights — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892737"
+        },
+        {
+          "sport": "NHL",
+          "topic": "Calgary Flames at San Jose Sharks — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/nhl/boxscore/_/gameId/401892738"
+        }
+      ],
+      "provenance": {
+        "facts": [
+          {
+            "event_id": "401892728",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "Boston Bruins",
+            "away": "Los Angeles Kings",
+            "home_score": 0,
+            "away_score": 3,
+            "venue": "TD Garden",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892728"
+          },
+          {
+            "event_id": "401892729",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "Tampa Bay Lightning",
+            "away": "Washington Capitals",
+            "home_score": 5,
+            "away_score": 2,
+            "venue": "Benchmark International Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892729"
+          },
+          {
+            "event_id": "401892730",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "Florida Panthers",
+            "away": "Edmonton Oilers",
+            "home_score": 2,
+            "away_score": 5,
+            "venue": "Amerant Bank Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892730"
+          },
+          {
+            "event_id": "401892731",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "New York Islanders",
+            "away": "Columbus Blue Jackets",
+            "home_score": 5,
+            "away_score": 1,
+            "venue": "UBS Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892731"
+          },
+          {
+            "event_id": "401892732",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "Philadelphia Flyers",
+            "away": "Buffalo Sabres",
+            "home_score": 4,
+            "away_score": 3,
+            "venue": "Xfinity Mobile Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892732"
+          },
+          {
+            "event_id": "401892733",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "Chicago Blackhawks",
+            "away": "Toronto Maple Leafs",
+            "home_score": 6,
+            "away_score": 3,
+            "venue": "United Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892733"
+          },
+          {
+            "event_id": "401892734",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "St. Louis Blues",
+            "away": "Anaheim Ducks",
+            "home_score": 8,
+            "away_score": 6,
+            "venue": "Enterprise Center",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892734"
+          },
+          {
+            "event_id": "401892735",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "Minnesota Wild",
+            "away": "Nashville Predators",
+            "home_score": 7,
+            "away_score": 3,
+            "venue": "Grand Casino Arena",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892735"
+          },
+          {
+            "event_id": "401892736",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "Winnipeg Jets",
+            "away": "Ottawa Senators",
+            "home_score": 1,
+            "away_score": 2,
+            "venue": "Canada Life Centre",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892736"
+          },
+          {
+            "event_id": "401892737",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "Vegas Golden Knights",
+            "away": "Dallas Stars",
+            "home_score": 3,
+            "away_score": 4,
+            "venue": "T-Mobile Arena",
+            "neutral": false,
+            "overtime": true,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892737"
+          },
+          {
+            "event_id": "401892738",
+            "sport": "NHL",
+            "date": "2026-11-17",
+            "home": "San Jose Sharks",
+            "away": "Calgary Flames",
+            "home_score": 2,
+            "away_score": 5,
+            "venue": "SAP Center at San Jose",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/nhl/boxscore/_/gameId/401892738"
+          }
+        ],
+        "sha256": "e988d854f167e538028b3109d22e4b7b5ae113ebb9fb65b348a41bf683545c3f",
+        "checked_at": "2026-11-18T14:00:48.092361+00:00",
+        "method": "Original prose from structured final-game facts"
+      },
+      "social_drafts": {
+        "status": "draft",
+        "ready_for_delivery": false,
+        "facebook": "New York Islanders wins by 4: Tuesday, November 17's NHL roundup\n\nA 4-goal victory for New York Islanders produced the largest winning margin among the 11 confirmed NHL finals from Tuesday, November 17.\n\nhttps://predictionlab.io/blog/nhl/nhl-daily-recap-2026-11-17",
+        "instagram": "New York Islanders wins by 4: Tuesday, November 17's NHL roundup\n\nA 4-goal victory for New York Islanders produced the largest winning margin among the 11 confirmed NHL finals from Tuesday, November 17.\n\nRead more at predictionlab.io.",
+        "requires": "Article review and explicit Meta publishing authorization"
+      }
+    },
+    {
+      "slug": "ncaaf-daily-recap-2026-11-17",
+      "title": "Miami (OH) RedHawks wins by 17: Tuesday, November 17's college football roundup",
+      "sport_tag": "NCAAF",
+      "kind": "sports_news",
+      "status": "draft",
+      "date": "2026-11-18",
+      "game_date": "2026-11-17",
+      "created_date": "2026-11-18",
+      "date_published": "2026-11-18T14:00:48.092361+00:00",
+      "date_modified": "2026-11-18T14:00:48.092361+00:00",
+      "canonical_path": "/blog/ncaaf/ncaaf-daily-recap-2026-11-17",
+      "article_url": "/blog/ncaaf/ncaaf-daily-recap-2026-11-17",
+      "excerpt": "A 17-point victory for Miami (OH) RedHawks produced the largest winning margin among the 3 confirmed college football finals from Tuesday, November 17.",
+      "meta_description": "A 17-point victory for Miami (OH) RedHawks produced the largest winning margin among the 3 confirmed college football finals from Tuesday, November 17.",
+      "body": [
+        "A 17-point victory for Miami (OH) RedHawks produced the largest winning margin among the 3 confirmed college football finals from Tuesday, November 17.",
+        "Ohio Bobcats recorded the highest single-team score in this set of completed games, finishing with 35 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+        "Miami (OH) RedHawks defeated Kent State Golden Flashes 20–3, a difference of 17 points. The game was played at Zoeller Field at Dix Stadium.",
+        "Ohio Bobcats defeated Ball State Cardinals 35–28, a difference of 7 points. The game was played at Peden Stadium.",
+        "Western Michigan Broncos defeated Eastern Michigan Eagles 34–27, a difference of 7 points. The game was played at Waldo Stadium.",
+        "The 3 finals produced 147 points between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 1. Individual final box scores are linked below for the complete game details."
+      ],
+      "sections": {
+        "intro": [
+          "A 17-point victory for Miami (OH) RedHawks produced the largest winning margin among the 3 confirmed college football finals from Tuesday, November 17.",
+          "Ohio Bobcats recorded the highest single-team score in this set of completed games, finishing with 35 points. The results below cover confirmed finals only; games that were still in progress when the scores were checked are not included.",
+          "Miami (OH) RedHawks defeated Kent State Golden Flashes 20–3, a difference of 17 points. The game was played at Zoeller Field at Dix Stadium.",
+          "Ohio Bobcats defeated Ball State Cardinals 35–28, a difference of 7 points. The game was played at Peden Stadium.",
+          "Western Michigan Broncos defeated Eastern Michigan Eagles 34–27, a difference of 7 points. The game was played at Waldo Stadium.",
+          "The 3 finals produced 147 points between the teams. Among games not listed at a neutral venue, home teams won 2 and away teams won 1. Individual final box scores are linked below for the complete game details."
+        ],
+        "models": [],
+        "markets": {},
+        "game_info": {}
+      },
+      "image": "/static/pl-logo.svg",
+      "author": "Prediction Lab",
+      "news_items": [
+        {
+          "sport": "NCAAF",
+          "topic": "Ball State Cardinals at Ohio Bobcats — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866464"
+        },
+        {
+          "sport": "NCAAF",
+          "topic": "Eastern Michigan Eagles at Western Michigan Broncos — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866465"
+        },
+        {
+          "sport": "NCAAF",
+          "topic": "Miami (OH) RedHawks at Kent State Golden Flashes — final box score",
+          "source": "ESPN",
+          "url": "https://www.espn.com/college-football/boxscore/_/gameId/401866466"
+        }
+      ],
+      "provenance": {
+        "facts": [
+          {
+            "event_id": "401866464",
+            "sport": "NCAAF",
+            "date": "2026-11-17",
+            "home": "Ohio Bobcats",
+            "away": "Ball State Cardinals",
+            "home_score": 35,
+            "away_score": 28,
+            "venue": "Peden Stadium",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/college-football/boxscore/_/gameId/401866464"
+          },
+          {
+            "event_id": "401866465",
+            "sport": "NCAAF",
+            "date": "2026-11-17",
+            "home": "Western Michigan Broncos",
+            "away": "Eastern Michigan Eagles",
+            "home_score": 34,
+            "away_score": 27,
+            "venue": "Waldo Stadium",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/college-football/boxscore/_/gameId/401866465"
+          },
+          {
+            "event_id": "401866466",
+            "sport": "NCAAF",
+            "date": "2026-11-17",
+            "home": "Kent State Golden Flashes",
+            "away": "Miami (OH) RedHawks",
+            "home_score": 3,
+            "away_score": 20,
+            "venue": "Zoeller Field at Dix Stadium",
+            "neutral": false,
+            "overtime": false,
+            "source_url": "https://www.espn.com/college-football/boxscore/_/gameId/401866466"
+          }
+        ],
+        "sha256": "b168702becffc63ab45f733fda1413656350a6494e7b737a73159341824db29c",
+        "checked_at": "2026-11-18T14:00:48.092361+00:00",
+        "method": "Original prose from structured final-game facts"
+      },
+      "social_drafts": {
+        "status": "draft",
+        "ready_for_delivery": false,
+        "facebook": "Miami (OH) RedHawks wins by 17: Tuesday, November 17's college football roundup\n\nA 17-point victory for Miami (OH) RedHawks produced the largest winning margin among the 3 confirmed college football finals from Tuesday, November 17.\n\nhttps://predictionlab.io/blog/ncaaf/ncaaf-daily-recap-2026-11-17",
+        "instagram": "Miami (OH) RedHawks wins by 17: Tuesday, November 17's college football roundup\n\nA 17-point victory for Miami (OH) RedHawks produced the largest winning margin among the 3 confirmed college football finals from Tuesday, November 17.\n\nRead more at predictionlab.io.",
+        "requires": "Article review and explicit Meta publishing authorization"
+      }
     }
   ],
   "runs": [
@@ -1806,6 +2724,71 @@
         "nfl-daily-recap-2026-11-15"
       ],
       "finished_at": "2026-11-16T19:06:39.461847+00:00"
+    },
+    {
+      "id": "3f98d267d5c14a47bdc451db1d83da34",
+      "date": "2026-11-17",
+      "game_date": "2026-11-16",
+      "started_at": "2026-11-17T14:00:46.119328+00:00",
+      "status": "complete",
+      "sports": [
+        {
+          "sport": "NBA",
+          "status": "generated",
+          "games": 8
+        },
+        {
+          "sport": "NHL",
+          "status": "generated",
+          "games": 2
+        },
+        {
+          "sport": "NFL",
+          "status": "generated",
+          "games": 1
+        }
+      ],
+      "slugs": [
+        "nba-daily-recap-2026-11-16",
+        "nhl-daily-recap-2026-11-16",
+        "nfl-daily-recap-2026-11-16"
+      ],
+      "finished_at": "2026-11-17T14:00:46.587626+00:00"
+    },
+    {
+      "id": "e17d21be529547568ee4d23d5b3fdab3",
+      "date": "2026-11-18",
+      "game_date": "2026-11-17",
+      "started_at": "2026-11-18T14:00:48.092361+00:00",
+      "status": "complete",
+      "sports": [
+        {
+          "sport": "NBA",
+          "status": "generated",
+          "games": 5
+        },
+        {
+          "sport": "NHL",
+          "status": "generated",
+          "games": 11
+        },
+        {
+          "sport": "NFL",
+          "status": "empty",
+          "games": 0
+        },
+        {
+          "sport": "NCAAF",
+          "status": "generated",
+          "games": 3
+        }
+      ],
+      "slugs": [
+        "nba-daily-recap-2026-11-17",
+        "nhl-daily-recap-2026-11-17",
+        "ncaaf-daily-recap-2026-11-17"
+      ],
+      "finished_at": "2026-11-18T14:00:48.587701+00:00"
     }
   ]
 }

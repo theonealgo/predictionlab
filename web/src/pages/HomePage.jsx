@@ -8,14 +8,12 @@ import { readCardPreview, readGolfPreview } from '../homePreview.js';
 // The sports that have a chart view on their results page.
 const CHART_SPORTS = new Set(['NHL', 'NBA', 'NCAAB', 'NCAAW', 'MLB', 'SOCCER', 'NFL', 'NCAAF', 'WNBA', 'CFL']);
 
-const wait = (seconds = 1) => new Promise((resolve) => {
-  const ms = Math.max(1, Math.min(15, Number(seconds) || 1)) * 1000;
-  setTimeout(resolve, ms);
-});
+const FEATURED_CARDS = 6;
 
 export default function HomePage() {
   const [mode, setMode] = useState('cards');
   const [sports, setSports] = useState(null);
+  const [featured, setFeatured] = useState([]);
   const [chartSlug, setChartSlug] = useState('');
   const [noSports, setNoSports] = useState(false);
   const [sportsError, setSportsError] = useState(false);
@@ -25,16 +23,18 @@ export default function HomePage() {
     let cancelled = false;
     getJson('/api/web/sports')
       .then((data) => {
-        if (cancelled) return null;
+        if (cancelled) return;
         const list = data.sports || [];
         setSports(list);
         if (!list.length) {
           setNoSports(true);
-          return null;
+          return;
         }
+        const today = list.filter((item) => item.status === 'Today');
+        const shown = (today.length ? today : list.filter((item) => item.status !== 'Offseason')).slice(0, FEATURED_CARDS);
+        setFeatured(shown);
         setChartSlug((list.find((item) => item.status === 'Today') || list[0]).slug);
 
-        // Ask every in-season sport without waiting on the previous one's SSR.
         const apply = (item, payload) => {
           if (cancelled) return;
           setFeeds((current) => ({
@@ -54,38 +54,20 @@ export default function HomePage() {
           }
         };
         const loadOne = async (item) => {
-          if (item.status === 'Offseason') {
-            if (!cancelled) {
-              setFeeds((current) => ({
-                ...current,
-                [item.slug]: { total: 0, preview: null },
-              }));
-            }
+          if (item.key === 'GOLF') {
+            apply(item, { cards: [], total: 0 });
             return;
           }
-          const path = item.key === 'GOLF' ? '/api/web/golf' : `/api/web/sports/${item.slug}/cards?limit=1`;
+          const path = `/api/web/sports/${item.slug}/cards?limit=1&cached=1`;
           try {
-            let payload = await getJson(path, { maxAge: 0 });
+            const payload = await getJson(path, { maxAge: 0 });
             if (cancelled) return;
-            if (!payload?.building) {
-              apply(item, payload);
-              return;
-            }
-            for (let tries = 0; tries < 60 && !cancelled; tries += 1) {
-              await wait(payload.retryAfter);
-              payload = await getJson(path, { maxAge: 0 });
-              if (!payload?.building) {
-                apply(item, payload);
-                return;
-              }
-            }
-            fail(item);
+            apply(item, payload?.building ? { cards: [], total: 0 } : payload);
           } catch (error) {
             fail(item);
           }
         };
-        list.forEach((item) => { loadOne(item); });
-        return null;
+        shown.forEach((item) => { loadOne(item); });
       })
       .catch(() => {
         if (!cancelled) setSportsError(true);
@@ -116,7 +98,7 @@ export default function HomePage() {
         {sportsError && <p className="pl-empty" role="alert">Could not load the sports list. Please reload to retry.</p>}
         {!noSports && !sportsError && !sports && <p className="pl-empty">Loading games…</p>}
 
-        {mode === 'cards' && (sports || []).map((sport) => {
+        {mode === 'cards' && featured.map((sport) => {
           const feed = feeds[sport.slug];
           const preview = feed?.preview;
           return <section className="pl-home-sport" key={sport.slug} data-home-sport={sport.key}>

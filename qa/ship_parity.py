@@ -5,7 +5,7 @@
 Do not treat NBA / NFL / NHL / college / WNBA / golf / CFL as :5052 gold.
 
 Also checks live-site chrome that was part of the ship: homepage, Affiliate
-footer, and the paid Soro blog embed.
+footer, and the blog page (Sports News and Game Previews, no Trending embed).
 """
 from __future__ import annotations
 
@@ -353,14 +353,16 @@ class ShipParityAuditor:
         if len(html) < 1500:
             self.add("Blog", FAIL, f"/blog is empty ({len(html)} bytes)", url="/blog")
             return
-        has_soro = 'id="soro-blog"' in html or "id='soro-blog'" in html
-        has_script = "app.trysoro.com" in html
-        if not has_soro or not has_script:
-            self.add("Blog Soro embed", FAIL,
-                     "Paid Soro blog embed is missing (need #soro-blog and app.trysoro.com)",
+        has_news = "Sports News" in html
+        has_previews = "Game Previews" in html
+        has_pair = "pl-blog-pair" in html
+        has_soro = 'id="soro-blog"' in html or "app.trysoro.com" in html or "Trending in Sports" in html
+        if has_soro or not has_news or not has_previews or not has_pair:
+            self.add("Blog layout", FAIL,
+                     "Blog page should show Sports News and Game Previews side by side, with no Trending embed",
                      url="/blog")
         else:
-            self.add("Blog Soro embed", PASS, "Soro embed markup is present", url="/blog")
+            self.add("Blog layout", PASS, "Sports News and Game Previews are side by side", url="/blog")
         if "Internal Server Error" in html or "Traceback" in html:
             self.add("Blog", FAIL, "/blog rendered an error page", url="/blog")
         elif elapsed >= 15:

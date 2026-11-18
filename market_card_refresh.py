@@ -324,7 +324,7 @@ def refresh(payload, sport, database, allow_final=False, fetch_missing=True):
             except Exception:
                 logging.getLogger(__name__).warning("Background market refresh unavailable for %s", sport)
     xs_probs = {}
-    if sport in {"NCAAB", "NCAAW", "NBA", "WNBA"}:
+    if sport in {"NCAAB", "NCAAW", "NBA", "WNBA", "NHL"}:
         try:
             with closing(sqlite3.connect(Path(database).resolve().as_uri()+"?mode=ro", uri=True, timeout=3)) as conn:
                 conn.row_factory = sqlite3.Row
@@ -365,12 +365,15 @@ def refresh(payload, sport, database, allow_final=False, fetch_missing=True):
                 )
         if row.get("lock_xs_total") is not None and blank(text((XS_TOTAL_ATTR.search(html) or [None, ""])[1])):
             tot_s = f"{float(row['lock_xs_total']):g}"
-            html = re.sub(
-                r'(data-xs-total=")([^"]*)(")',
-                lambda m: m[1] + escape(tot_s, quote=True) + m[3],
-                html,
-                count=1,
-            )
+            if re.search(r'data-xs-total="', html):
+                html = re.sub(
+                    r'(data-xs-total=")([^"]*)(")',
+                    lambda m: m[1] + escape(tot_s, quote=True) + m[3],
+                    html,
+                    count=1,
+                )
+            else:
+                html = html.replace("data-pick-card", f'data-xs-total="{escape(tot_s, quote=True)}" data-pick-card', 1)
         html = fill_xs_cells(html)
         if row.get("xgboost_home_prob") is not None and 'data-xgb-home-prob="' not in html:
             hp = float(row["xgboost_home_prob"])
@@ -391,5 +394,5 @@ def refresh(payload, sport, database, allow_final=False, fetch_missing=True):
         reason = "No historical sportsbook line was recorded." if allow_final else "No posted sportsbook line is available yet."
         html = CELL.sub(lambda m: m[1]+'<span title="'+reason+'">N/A</span>'+m[3]
                         if blank(m[2]) else m[0], card.get("html") or "")
-        cards.append({**card, "html": html} if sport in {"NCAAB", "NCAAW", "NBA"} else card)
+        cards.append({**card, "html": html} if sport in {"NCAAB", "NCAAW", "NBA", "NHL"} else card)
     return {**payload, "cards": cards}

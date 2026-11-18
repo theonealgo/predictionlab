@@ -120,13 +120,13 @@ def test_fact_citation_and_canonical_path_tampering_rejected():
             news.validate_article(post)
 
 
-def test_daily_job_never_publishes_even_with_legacy_flag(tmp_path, monkeypatch):
+def test_daily_job_publishes_the_completed_day(tmp_path, monkeypatch):
     only_nba(monkeypatch)
     monkeypatch.setenv("PL_NEWS_AUTOPUBLISH", "1")
     path = tmp_path / "posts.json"
     assert run_daily(path, now=NOW.replace(hour=13), get=lambda url: board())["status"] == "not_due"
     assert run_daily(path, now=NOW, get=lambda url: board())["status"] == "complete"
-    assert load(path)["posts"][0]["status"] == "draft"
+    assert load(path)["posts"][0]["status"] == "published"
     assert run_daily(path, now=NOW+timedelta(minutes=1),
                      get=lambda url: pytest.fail("Duplicate job"))["status"] == "already_checked"
     assert len(load(path)["runs"]) == 1

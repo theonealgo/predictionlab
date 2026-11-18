@@ -10,11 +10,6 @@ import ResultsPanel from '../components/ResultsPanel.jsx';
 import PicksChart from '../components/PicksChart.jsx';
 import { todayET, cardIsFinal } from '../slateDates.js';
 
-// Football shows its whole week by default; the other sports show 4 days, with a button for the rest.
-const FOOTBALL = new Set(['NFL', 'NCAAF', 'CFL']);
-// Finished games: the last two days show under "Recent results", as on the classic page.
-const RECENT_DAYS = 2;
-
 function sportKey(slug) {
   return slug.replace(/-picks$/, '').toUpperCase();
 }
@@ -32,10 +27,6 @@ function dayLabel(iso, todayIso) {
   if (iso === todayIso) return 'Today';
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function finalLabel(iso, todayIso) {
-  return iso ? `Final · ${dayLabel(iso, todayIso)}` : 'Final';
 }
 
 // Teams on a card, by ESPN id: the logo files are named by id (.../teamlogos/ncaa/500/87.png -> 87).
@@ -119,9 +110,10 @@ export default function SportPage({ slug }) {
   const conference = CONFERENCES[sport] || null;
   const college = collegeGroups[sport] || null;
   const [todayIso, setTodayIso] = useState(() => todayET());
-  const daysShownFirst = FOOTBALL.has(sport) ? 7 : 4;
   const [tab, setTab] = useState(nav.tabs[0]);
-  const { payload, error, loadingMore, loadMore } = useCardPages(slug, !isGolf);
+  const [extraDays, setExtraDays] = useState(0);
+  const { payload, error, loadingMore, loadMore } = useCardPages(slug, !isGolf, extraDays);
+  const cards = payload?.cards || [];
   const moreGames = useRef(null);
   // Phones show one column at a time; this switch flips between the games and the results.
   const [mobilePane, setMobilePane] = useState('predictions');
@@ -140,12 +132,10 @@ export default function SportPage({ slug }) {
   const [teamFilter, setTeamFilter] = useState(
     () => new URLSearchParams(window.location.search).get('team') || null,
   );
-  const [showAllDays, setShowAllDays] = useState(false);
   const [picksView, setPicksView] = useState('cards');
   const teamStrip = useDragScroll();
   const leagueStrip = useDragScroll();
 
-  const cards = payload?.cards || [];
   const [gameParam] = useState(() => new URLSearchParams(window.location.search).get('game'));
   const target = useMemo(() => targetCard(cards, gameParam), [cards, gameParam]);
   useEffect(() => { setTodayIso(todayET()); }, [payload]);
@@ -167,7 +157,7 @@ export default function SportPage({ slug }) {
   // Opened from a live box: show every day so the game is on the page, then scroll to it.
   useEffect(() => {
     if (!target) return;
-    setShowAllDays(true);
+    setExtraDays(2);
     const timer = setTimeout(() => {
       document.querySelector('.pl-card-row.is-target')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
@@ -191,16 +181,6 @@ export default function SportPage({ slug }) {
       .filter(([key]) => !key.startsWith('FINAL') && key >= todayIso)
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
     [days, todayIso],
-  );
-
-  // The last two days of finished games, most recent first.
-  const recentDays = useMemo(
-    () => days
-      .filter(([key]) => key.startsWith('FINAL'))
-      .map(([key, list]) => [key.slice('FINAL:'.length), list])
-      .sort(([a], [b]) => (a < b ? 1 : a > b ? -1 : 0))
-      .slice(0, RECENT_DAYS),
-    [days],
   );
 
   // Team bubbles come from today's games (or the first upcoming day with games).
@@ -264,10 +244,7 @@ export default function SportPage({ slug }) {
   const shownUpcoming = upcomingDays
     .map(([day, list]) => [day, list.filter(matches)])
     .filter(([, list]) => list.length > 0);
-  const visibleDays = showAllDays ? shownUpcoming : shownUpcoming.slice(0, daysShownFirst);
-  const shownRecent = recentDays
-    .map(([day, list]) => [day, list.filter(matches)])
-    .filter(([, list]) => list.length > 0);
+  const visibleDays = shownUpcoming;
 
   const chooseTab = (name) => {
     setTab(name);
@@ -276,7 +253,8 @@ export default function SportPage({ slug }) {
     setPicksView('cards');
   };
 
-  const showGames = tab === 'Games' && picksView === 'cards';
+  const showGames = (tab === 'Games' || tab === 'Matches') && picksView === 'cards';
+  const slateWord = sport === 'UFC' ? 'matches' : 'games';
   const leagueSplit = shownNav.filters ? Math.ceil(shownNav.filters.length / 2) : 0;
 
   return (
@@ -312,7 +290,7 @@ export default function SportPage({ slug }) {
           ))}
         </div>
 
-        {tab === 'Games' && (
+        {(tab === 'Games' || tab === 'Matches') && (
           <div className="pl-results-views pl-picks-views" role="tablist">
             {['cards', 'chart'].map((view) => (
               <button
@@ -329,7 +307,7 @@ export default function SportPage({ slug }) {
           </div>
         )}
 
-        {tab === 'Games' && picksView === 'chart' && (
+        {(tab === 'Games' || tab === 'Matches') && picksView === 'chart' && (
           <PicksChart key={slug} slug={slug} onPredictions={() => setPicksView('cards')} />
         )}
 
@@ -393,10 +371,10 @@ export default function SportPage({ slug }) {
                 ))}
               </div>
             </div>
-            {error && <p className="pl-empty">Could not load games: {error}</p>}
-            {!error && !payload && <p className="pl-empty">Loading games…</p>}
-            {!error && payload && !payload.hasMore && shownUpcoming.length === 0 && shownRecent.length === 0 && (
-              <p className="pl-empty">No games scheduled right now.</p>
+            {error && <p className="pl-empty">Could not load {slateWord}: {error}</p>}
+            {!error && !payload && <p className="pl-empty">Loading {slateWord}…</p>}
+            {!error && payload && !payload.hasMore && shownUpcoming.length === 0 && (
+              <p className="pl-empty">No {slateWord} scheduled right now.</p>
             )}
             {visibleDays.map(([day, list]) => (
               <section key={day || 'upcoming'} className="pl-day">
@@ -410,32 +388,15 @@ export default function SportPage({ slug }) {
                 ))}
               </section>
             ))}
-            {!showAllDays && shownUpcoming.length > daysShownFirst && (
-              <button type="button" className="pl-show-more" onClick={() => setShowAllDays(true)}>
-                Show all {shownUpcoming.length} days
+            {extraDays === 0 && (
+              <button type="button" className="pl-show-more" onClick={() => setExtraDays(2)}>
+                Show the next two days
               </button>
-            )}
-            {shownRecent.length > 0 && (
-              <div className="pl-recent">
-                <h2 className="pl-recent-title">Recent results</h2>
-                {shownRecent.map(([day, list]) => (
-                  <section key={`final-${day || 'undated'}`} className="pl-day">
-                    <h2 className="pl-day-title">{finalLabel(day, todayIso)}</h2>
-                    {list.map((card, index) => (
-                      <div
-                        className={card === target ? 'pl-card-row is-target' : 'pl-card-row'}
-                        key={`final-${day}-${card.away}-${card.home}-${index}`}
-                        dangerouslySetInnerHTML={{ __html: card.html }}
-                      />
-                    ))}
-                  </section>
-                ))}
-              </div>
             )}
             {payload?.hasMore && (
               <div ref={moreGames}>
                 <button type="button" className="pl-show-more" disabled={loadingMore} onClick={loadMore}>
-                  {loadingMore ? 'Loading more games…' : 'Load more games'}
+                  {loadingMore ? `Loading more ${slateWord}…` : `Load more ${slateWord}`}
                 </button>
               </div>
             )}

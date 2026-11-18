@@ -1,4 +1,3 @@
-import BlogFeedBox from '../../components/BlogFeedBox.jsx';
 import { TOOLS } from '../../data/toolsCatalog.js';
 
 export default function ToolsHub() {
@@ -29,7 +28,6 @@ export default function ToolsHub() {
           <p>Pair these calculators with graded PredictionLab win probabilities.</p>
           <a className="pl-btn primary" href="/all-sports-predictions">View today&apos;s predictions</a>
         </div>
-        <BlogFeedBox />
       </aside>
     </div>
   );

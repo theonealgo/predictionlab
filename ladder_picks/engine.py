@@ -322,6 +322,13 @@ class LadderEngine:
             return True
         return False
 
+    def _in_pick_band(self, american) -> bool:
+        """One ladder pick: favorites priced from −100 to −150."""
+        if american is None:
+            return False
+        price = int(american)
+        return -150 <= price <= -100
+
     def _ml_heavy_ok(self, american) -> bool:
         return american is not None and int(american) <= self.cfg.heavy_ml_american
 
@@ -469,11 +476,12 @@ class LadderEngine:
             for o in markets.options(cand["sport"], cand.get("model") or {}, book):
                 if o["market"] not in ("moneyline", "spread"):
                     continue
-                if self.excluded(cand["sport"], o["market"], o.get("side_class") or ""):
-                    continue
                 price = money.parse_american(o["price"])
                 if price is None:
                     reason = "missing or invalid odds"
+                    continue
+                if not self._in_pick_band(price):
+                    reason = "price outside −150 to −100"
                     continue
                 model_p = o.get("model_prob")
                 if model_p is None and o["market"] == "spread":
@@ -485,24 +493,14 @@ class LadderEngine:
                     t = stats.get((cand["sport"], o["market"], o["model"], o["side_class"], edge))
                     if t and (s is None or (t["score"], t["n"], t["roi"]) > (s["score"], s["n"], s["roi"])):
                         s = t
-                # ML legs: −300 or heavier + model says likely to win.
-                # Spread legs: chalk price + model says likely to cover.
-                # Type history ranks legs; it does not have to beat a −400 break-even.
-                if o["market"] == "moneyline":
-                    if not self._ml_likely_ok(price, model_p):
-                        reason = ("moneyline not −300 or heavier" if not self._ml_heavy_ok(price)
-                                  else "moneyline not likely enough")
-                        continue
-                    if s is None:
-                        mp = float(model_p)
-                        s = {"rate": mp, "n": 0, "score": mp, "roi": 0.0, "lower": mp, "qualifies": False}
-                else:
-                    if not self._spread_likely_ok(price, model_p):
-                        reason = "spread not a likely cover"
-                        continue
-                    if s is None:
-                        mp = float(model_p)
-                        s = {"rate": mp, "n": 0, "score": mp, "roi": 0.0, "lower": mp, "qualifies": False}
+                # One pick in the −150 to −100 band. Rank uses the type's
+                # results across sports when we have them, then the model.
+                if model_p is None:
+                    reason = "no model result"
+                    continue
+                if s is None:
+                    mp = float(model_p)
+                    s = {"rate": mp, "n": 0, "score": mp, "roi": 0.0, "lower": mp, "qualifies": False}
                 need = 1.0 / float(money.american_to_decimal(price))
                 other = money.parse_american(o["other_price"])
                 market_p = money.no_vig_prob(price, other) if other is not None else money.implied_prob(price)
@@ -522,7 +520,10 @@ class LadderEngine:
                 })
             if not any(x["game_id"] == cand["game_id"] for x in legs):
                 reject(reason)
-        legs.sort(key=lambda c: (-c["price_edge"], -c["hist_n"], -c["type_roi"], c["start"]))
+        legs.sort(key=lambda c: (
+            -(c["hist_hit_rate"] if c["hist_n"] else 0),
+            -c["price_edge"], -c["hist_n"], -c["type_roi"], c["start"],
+        ))
         return {"legs": legs, "rejected": rejected, "prefiltered": len(pre), "remaining": remaining}
 
     def find_parlay_pick(self, now: datetime, exclude_games: set[str] | None = None) -> dict:
@@ -601,8 +602,17 @@ class LadderEngine:
                 "remaining": found["remaining"]}
 
     def find_pick(self, now: datetime, exclude_games: set[str] | None = None) -> dict:
-        """Compatibility wrapper — ladder days are 3-leg parlays."""
-        return self.find_parlay_pick(now, exclude_games)
+        """One pick, priced −150 to −100, best results then model edge."""
+        found = self._collect_leg_candidates(now, exclude_games)
+        legs = found["legs"]
+        if not legs:
+            return {"pick": None, "rejected": found["rejected"], "prefiltered": found["prefiltered"],
+                    "remaining": found["remaining"]}
+        best = legs[0]
+        best["event_label"] = f"{best.get('away_team', '')} @ {best.get('home_team', '')}".strip(" @")
+        best["pick_type"] = "Best −150 to −100"
+        return {"pick": best, "rejected": found["rejected"], "prefiltered": found["prefiltered"],
+                "remaining": found["remaining"]}
 
     def select_today(self, now: datetime) -> dict:
         et_now = now.astimezone(ET)
@@ -626,7 +636,7 @@ class LadderEngine:
                 return {"action": "already_picked"}
             next_day = 1
 
-        found = self.find_parlay_pick(now, exclude)
+        found = self.find_pick(now, exclude)
         pick = found["pick"]
         if not pick:
             final = et_now.hour >= self.cfg.no_pick_hour or (found["prefiltered"] and not found["remaining"])

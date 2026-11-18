@@ -63,6 +63,9 @@ export function modelCounts(rows, models) {
     const wins = selected.filter(row => row.result === 'Win').length;
     const losses = selected.filter(row => row.result === 'Loss').length;
     const pushes = selected.filter(row => row.result === 'Push').length;
+    if (!selected.length && (model.wins || model.losses || model.pushes)) {
+      return { ...model, captured: (model.wins || 0) + (model.losses || 0) + (model.pushes || 0) };
+    }
     return { ...model, captured: selected.length, wins, losses, pushes, decided: wins + losses,
       win_rate: wins + losses ? 100 * wins / (wins + losses) : null };
   });

@@ -4,7 +4,7 @@ import '../pages/BlogPage.css';
 
 const FEED = '/api/web/blog';
 
-/** Full blog cards — Sports News + Latest from PredictionLab. Never Soro. */
+/** Full blog cards — Sports News. Never Soro. */
 function ArticleCard({ article, titleArt = false }) {
   return (
     <article className="pl-blog-card">
@@ -105,7 +105,7 @@ function SectionWindow({ title, section, group, loading, error, onRetry }) {
 }
 
 /**
- * One separate React box: Sports News + Latest from PredictionLab.
+ * One separate React box: Sports News.
  * Each section scrolls on its own. No Soro.
  */
 export default function BlogFeedBox({ className = '', defer = false }) {
@@ -154,14 +154,6 @@ export default function BlogFeedBox({ className = '', defer = false }) {
           title="Sports News"
           section="news"
           group={data?.news}
-          loading={loading}
-          error={error}
-          onRetry={reload}
-        />
-        <SectionWindow
-          title="Latest from PredictionLab"
-          section="latest"
-          group={data?.latest}
           loading={loading}
           error={error}
           onRetry={reload}

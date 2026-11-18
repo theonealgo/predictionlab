@@ -213,11 +213,10 @@ export default function PlayerProps({ league }) {
               You&apos;re viewing 1 free prediction. <a href="/plans">Upgrade</a> to unlock every prop, filters, streaks and results.
             </div>
           )}
-          {data.lines_real === false && (
-            <div className="pp-banner warn">
-              Market lines are unavailable right now. PL lines are shown separately from market lines.
-            </div>
-          )}
+          <p className="pp-meta">
+            For a full list of {league === 'SOCCER' ? 'Soccer' : league} player props, click the{' '}
+            <a href={`/player-props?league=${encodeURIComponent(league)}`}>Players</a> link in the header.
+          </p>
           {data.eligibility_audit && (
             <p className="pp-meta">
               Pool {data.eligibility_audit.eligible_players || 0} eligible players · {data.eligibility_audit.valid_props || items.length} props
@@ -268,7 +267,7 @@ export default function PlayerProps({ league }) {
                   onChange={(e) => setMinEv(e.target.value)}
                 />
               </div>
-              <PropsTable rows={rows} league={league} sort={sort} onSort={toggleSort} />
+              <PropsTable rows={market === 'all' ? rows.slice(0, 3) : rows} league={league} sort={sort} onSort={toggleSort} />
             </>
           )}
         </>
@@ -458,7 +457,7 @@ function ResultsView({ data, league }) {
         })}
       </div>
       <p className="pp-muted">Model records use saved pregame forecasts. Older unassigned selections do not count toward a model’s record.
-        {' '}<a href={`/sports-props?league=${league}&results_date=${data.result_date || ''}`}>View model records and longer periods</a>.</p>
+        {' '}<a href={`/player-props?league=${league}&results_date=${data.result_date || ''}`}>View model records and longer periods</a>.</p>
       {byModelType.length > 0 && <div className="pp-table-wrap"><table className="pp-table">
         <thead><tr><th>Model</th><th>Prop</th><th>Wins</th><th>Losses</th><th>Pushes</th><th>Decided</th><th>Win rate</th></tr></thead>
         <tbody>{byModelType.map(row => <tr key={`${row.model_id}-${row.prop_type}-${row.league}`}>

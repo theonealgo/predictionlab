@@ -183,7 +183,11 @@ def install(app, finals_dates=None) -> None:
             if not path_match:
                 return response
             # Soccer results are a week page; its league and week links keep the whole week.
-            if path_match.group(1).lower() == "soccer":
+            # College football selects a Wednesday–Tuesday week, so those days stay on the page.
+            if path_match.group(1).lower() == "soccer" or (
+                path_match.group(1).lower() == "ncaaf"
+                and (request.args.get("view") or "").strip().lower() not in ("chart", "tabs", "markets", "tabbed")
+            ):
                 return response
             if request.args.get("date") or request.args.get("week"):
                 return response

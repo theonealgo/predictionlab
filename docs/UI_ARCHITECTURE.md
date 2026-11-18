@@ -17,6 +17,32 @@ Navigation, or PageShell. A header change must appear on every sport.
 Sport links come from **one** registry (`SPORTS` / site chrome). Header,
 hamburger, and footer must consume that same source.
 
+## Three columns (every sport picks page) — hard layout lock
+
+Owner 2026-11-17. Do not punch holes in this layout while doing props, speed,
+chrome, or “while I’m here” work.
+
+| Column | Role |
+|--------|------|
+| **Left** | Sports list / nav (picks). Props has its **own** left bar on `/player-props` only. |
+| **Middle** (`pl-center` / prediction box) | **Upcoming prediction cards for the current slate only** (this week / upcoming days). |
+| **Right** | Results board / tracking (and related right-rail content). |
+
+### Middle column — prediction cards only
+
+- The middle box is for **prediction cards** for **any** sport.
+- Finished games, graded cards, and old nights (e.g. NFL Nov 8 finals) must
+  **not** sit where this week’s upcoming prediction cards belong.
+- “Recent results” finished cards, if shown on the picks page at all, stay in
+  their own **Recent results** block — never mixed into the upcoming-day
+  prediction sections as if they were this week’s picks.
+- Do **not** “fix” a sport by dumping historical finals into the middle
+  prediction area. Do **not** change shared card routing for one sport while
+  working on another surface (props, left nav, PageSpeed, etc.).
+
+If the middle column shows the wrong slate, stop and ask the owner. Do not
+rewrite SportPage / card feeds across sports to chase a single miss.
+
 ## Sport groups
 
 ### Team sports — one Predictions template + one Results template

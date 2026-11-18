@@ -25,8 +25,9 @@ services:
       GUNICORN_THREADS: "${GUNICORN_THREADS:-2}"
       GUNICORN_MAX_REQUESTS: "${GUNICORN_MAX_REQUESTS:-5000}"
       GUNICORN_MAX_REQUESTS_JITTER: "${GUNICORN_MAX_REQUESTS_JITTER:-100}"
-      # Heavy background jobs off for local smoke (props was blowing past 512MB jobs).
+      # Props rebuild stays off in this smoke test. It pegged the only web thread.
       PL_PROP_PUBLICATION: "0"
+      PL_PROPS_LEAGUES: "NBA"
       PL_PROP_SETTLEMENT: "0"
       PL_PROPS_PRELOAD: "0"
       PL_SHARE_IMAGES: "0"

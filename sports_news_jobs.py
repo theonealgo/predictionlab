@@ -42,7 +42,7 @@ def run_daily(path=None, now=None, force=False, get=None):
     report = []
     try:
         articles = generate(day, get=get, now=now, report=report)
-        save_articles(path, articles)  # Always drafts, even if an old env flag is set.
+        save_articles(path, articles, publish_local=True)
         status = "complete" if len(articles) == MAX_DAILY or not any(
             r["status"] in ("unavailable", "pending") for r in report) else "retry"
         result = {"status": status, "sports": report, "slugs": [p["slug"] for p in articles]}

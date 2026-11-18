@@ -132,7 +132,7 @@ def settle_pending(original_db, get=None):
         candidates = conn.execute(
             """SELECT f.payload,s.payload FROM forecasts f LEFT JOIN settlements s
                  ON s.id=(SELECT MAX(s2.id) FROM settlements s2 WHERE s2.forecast_id=f.id)
-               WHERE f.pick_date>=?""", ((now-timedelta(days=3)).date().isoformat(),)).fetchall()
+               WHERE f.pick_date>=?""", ((now-timedelta(days=8)).date().isoformat(),)).fetchall()
     pending = []
     for raw, outcome in candidates:
         forecast = json.loads(raw)
@@ -147,12 +147,12 @@ def settle_pending(original_db, get=None):
             return json.load(response)
     get = get or fetch
     settled = 0
-    for league, identity in sorted(events)[:20]:
+    for league, identity in sorted(events):
         if not identity.isdigit():
             continue
         payload = get(f"https://site.api.espn.com/apis/site/v2/sports/{PATHS[league]}/summary?event={identity}")
         settled += settle_event(original_db, league, identity, payload)
-        time.sleep(1)
+        time.sleep(0.15)
     return settled
 
 

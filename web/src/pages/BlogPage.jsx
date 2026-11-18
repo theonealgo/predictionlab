@@ -3,19 +3,12 @@ import { getJson, peekJson } from '../api.js';
 import './BlogPage.css';
 
 const FEED = '/api/web/blog';
-const SORO_DOCUMENT = `<!doctype html><html lang="en"><head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<base target="_blank">
-<style>html,body{margin:0;background:#fff;font-family:system-ui,sans-serif}body{padding:8px;box-sizing:border-box}#soro-blog{width:100%;min-width:0}img{max-width:100%}</style>
-</head><body><div id="soro-blog"></div>
-<script src="https://app.trysoro.com/api/embed/7713f25e-b95b-4eb2-a414-ec63a136d16f" defer></script>
-</body></html>`;
 
-function ArticleCard({ article, titleArt = false }) {
+function ArticleCard({ article, titleArt = false, textOnly = false }) {
   return (
     <article className="pl-blog-card">
       <a href={article.url}>
-        {titleArt ? <div className="pl-blog-title-art" aria-hidden="true">
+        {textOnly ? null : titleArt ? <div className="pl-blog-title-art" aria-hidden="true">
           <span className="pl-blog-art-brand">PredictionLab</span>
           <span className="pl-blog-art-meta">{[article.sport, article.displayDate].filter(Boolean).join(' / ')}</span>
           <strong className="pl-blog-art-title">{article.title}</strong>
@@ -73,7 +66,7 @@ function ArticleWindow({ title, section, group, loading, error, onRetry }) {
         {loading && !group && <p className="pl-blog-message">Loading articles…</p>}
         {error && <p className="pl-blog-message" role="alert">Articles could not be loaded. <button type="button" onClick={onRetry}>Retry</button></p>}
         {!loading && !error && !items.length && <p className="pl-blog-message">No articles available right now.</p>}
-        {items.map(article => <ArticleCard key={article.url} article={article} titleArt={section === 'latest'} />)}
+        {items.map(article => <ArticleCard key={article.url} article={article} titleArt={section === 'latest'} textOnly={section === 'previews'} />)}
         {moreError && <p className="pl-blog-message" role="alert">{moreError}</p>}
         {nextOffset != null && <button type="button" className="pl-blog-more" disabled={busy} onClick={loadMore}>
           {busy ? 'Loading…' : 'More articles'}
@@ -102,15 +95,12 @@ export default function BlogPage() {
     <main className="pl-blog-page">
       <header className="pl-blog-intro">
         <h1>PredictionLab Blog</h1>
-        <p>Sports news, game recaps and the latest from PredictionLab.</p>
+        <p>Sports news and game recaps.</p>
       </header>
-      {/* Three stacked boxes — same order as classic /blog: Trending, Sports News, Latest. */}
-      <section className="pl-blog-window pl-blog-trending" aria-labelledby="blog-trending-title">
-        <div className="pl-blog-window-head"><h2 id="blog-trending-title">Trending in Sports</h2></div>
-        <iframe className="pl-blog-soro-frame" title="Trending in Sports — Soro" srcDoc={SORO_DOCUMENT} />
-      </section>
-      <ArticleWindow title="Sports News" section="news" group={data?.news} loading={loading} error={error} onRetry={reload} />
-      <ArticleWindow title="Latest from PredictionLab" section="latest" group={data?.latest} loading={loading} error={error} onRetry={reload} />
+      <div className="pl-blog-pair">
+        <ArticleWindow title="Sports News" section="news" group={data?.news} loading={loading} error={error} onRetry={reload} />
+        <ArticleWindow title="Game Previews" section="previews" group={data?.previews} loading={loading} error={error} onRetry={reload} />
+      </div>
     </main>
   );
 }

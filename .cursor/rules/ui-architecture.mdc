@@ -30,6 +30,12 @@ If it is shared, edit the shared component. Do **not** create another copy.
 - **Soccer**: own template (1X2/leagues), same global chrome.
 - **Golf**: own template.
 
+## Three columns (hard)
+
+- **Middle** = upcoming **prediction cards** only (current slate). Never put
+  finished / old-night results cards (e.g. NFL Nov 8) where this week’s picks
+  belong. See `docs/UI_ARCHITECTURE.md` and `middle-column-predictions.mdc`.
+
 ## Forbidden
 
 - `NFLPredictionCard` / `MLBAccuracyChart` / weekly NFL-only results boards
@@ -37,6 +43,7 @@ If it is shared, edit the shared component. Do **not** create another copy.
 - New Header / Footer / hamburger per sport
 - Drive-by restyles of locked sports
 - Inventing model numbers to fill blank cards
+- Dumping historical finals into the middle prediction column
 
 ## Checker
 

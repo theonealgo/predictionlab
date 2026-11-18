@@ -186,7 +186,7 @@ def _make_session() -> requests.Session:
 
 HTTP_DEPENDENT_AUDITORS = frozenset({
     "routes", "content", "navigation", "cards", "models", "results", "csv",
-    "gamecounts", "screenshots", "seo", "consistency", "ship", "soccer", "chrome",
+    "gamecounts", "values", "screenshots", "seo", "consistency", "ship", "soccer", "chrome",
     "espn_slate", "paywall",
 })
 
@@ -2064,6 +2064,159 @@ class ResultsAuditor:
 # GAME-COUNT AUDITOR  (DB vs results page)
 # ═══════════════════════════════════════════════════════════════════════════
 
+class ValuesAuditor:
+    """Sports only: missing values, bad W-L math, and last-night counts.
+
+    Missing market odds are a failure only on games dated today.
+    Page chrome, navigation, and template checks are not part of this pass.
+    """
+    NAME = "values"
+    SPORTS = (
+        ("nfl", "NFL"), ("nba", "NBA"), ("nhl", "NHL"), ("mlb", "MLB"),
+        ("ncaaf", "NCAAF"), ("ncaab", "NCAAB"), ("ncaaw", "NCAAW"),
+        ("wnba", "WNBA"), ("cfl", "CFL"), ("soccer", "SOCCER"),
+        ("tennis", "TENNIS"), ("ufc", "UFC"), ("golf", "GOLF"),
+    )
+
+    def __init__(self, session: requests.Session, base: str, report: AuditReport):
+        self.s = session
+        self.base = base
+        self.r = report
+
+    def _fetch(self, path: str) -> str:
+        try:
+            return _timed_get(self.s, self.r, self.base, path).text or ""
+        except Exception:
+            return ""
+
+    def _db(self):
+        here = os.path.dirname(os.path.abspath(__file__))
+        for p in ("/data/sports_predictions_original.db",
+                  os.path.join(here, "..", "sports_predictions_original.db"),
+                  "sports_predictions_original.db"):
+            if os.path.isfile(p):
+                return p
+        return None
+
+    def _finals_on(self, conn, sport: str, day: str) -> int:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM games WHERE sport=? AND home_score IS NOT NULL AND date(game_date)=date(?)",
+            (sport, day),
+        ).fetchone()
+        return int(row[0] or 0) if row else 0
+
+    def _latest_final(self, conn, sport: str, through: str):
+        row = conn.execute(
+            """
+            SELECT MAX(date(game_date)) FROM games
+            WHERE sport=? AND home_score IS NOT NULL AND date(game_date)<=date(?)
+            """,
+            (sport, through),
+        ).fetchone()
+        return str(row[0])[:10] if row and row[0] else ""
+
+    def run(self):
+        import sqlite3
+        from datetime import timedelta
+        try:
+            from zoneinfo import ZoneInfo
+            today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+        except Exception:
+            today = datetime.now().strftime("%Y-%m-%d")
+        yesterday = (datetime.strptime(today, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+        db_path = self._db()
+        conn = None
+        if db_path:
+            try:
+                conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=8)
+            except Exception:
+                conn = None
+        blank_re = re.compile(
+            r'class="(?:pc-pct|pc-val|ml-num)[^"]*"[^>]*>\s*(?:—|–|N/A|-)\s*<',
+            re.I,
+        )
+        for slug, sport in self.SPORTS:
+            html = self._fetch(f"/{slug}-results")
+            if not html or "game-card" not in html.lower() and "Last Night" not in html:
+                self.r.add(CheckResult(
+                    label=f"{sport} results", status=WARN,
+                    message="Results page has no game cards to check",
+                    url=f"/{slug}-results", auditor=self.NAME))
+                continue
+            text = re.sub(r"<script[\s\S]*?</script>", " ", html)
+            text = re.sub(r"<[^>]+>", " ", text)
+            text = re.sub(r"\s+", " ", text)
+            night = re.search(
+                r"Last Night(?:'s|&#39;s)?[^0-9]{0,80}(\d{4}-\d{2}-\d{2})\s*\((\d+)\s+games?\)",
+                text,
+            )
+            if conn and night:
+                shown_day, shown_n = night.group(1), int(night.group(2))
+                latest = self._latest_final(conn, sport, yesterday)
+                db_n = self._finals_on(conn, sport, latest) if latest else 0
+                if latest and (shown_day != latest or shown_n != db_n):
+                    self.r.add(CheckResult(
+                        label=f"{sport} last night", status=FAIL,
+                        message=(f"Page says {shown_day} ({shown_n} games). "
+                                 f"Database has {db_n} finals on {latest}."),
+                        url=f"/{slug}-results", auditor=self.NAME))
+                else:
+                    self.r.add(CheckResult(
+                        label=f"{sport} last night", status=PASS,
+                        message=f"{shown_day} ({shown_n} games) matches the database",
+                        url=f"/{slug}-results", auditor=self.NAME))
+            bad_math = []
+            for pct, w, l in re.findall(r"(\d+\.\d)%\s+(\d+)-(\d+)", text):
+                wins, losses = int(w), int(l)
+                if wins + losses <= 0:
+                    continue
+                calc = round(100.0 * wins / (wins + losses), 1)
+                if abs(calc - float(pct)) > 0.6:
+                    bad_math.append(f"{pct}% vs {wins}-{losses} ({calc}%)")
+            if bad_math:
+                self.r.add(CheckResult(
+                    label=f"{sport} record math", status=FAIL,
+                    message=f"{len(bad_math)} board record(s) do not match the W-L",
+                    detail="; ".join(bad_math[:8]),
+                    url=f"/{slug}-results", auditor=self.NAME))
+            else:
+                self.r.add(CheckResult(
+                    label=f"{sport} record math", status=PASS,
+                    message="Board percents match the W-L records",
+                    url=f"/{slug}-results", auditor=self.NAME))
+            blanks = len(blank_re.findall(html))
+            cards = html.lower().count('class="game-card')
+            self.r.add(CheckResult(
+                label=f"{sport} missing values",
+                status=FAIL if blanks else PASS,
+                message=f"{blanks} blank model value(s) on {cards} cards",
+                url=f"/{slug}-results", auditor=self.NAME))
+            today_odds = 0
+            parts = re.split(r'id="date-(\d{4}-\d{2}-\d{2})"', html)
+            it = iter(parts[1:])
+            for day in it:
+                chunk = next(it, "")
+                if day != today:
+                    continue
+                today_odds += len(re.findall(
+                    r'class="ml-num[^"]*"[^>]*>\s*(?:—|–|N/A)\s*<',
+                    chunk,
+                    re.I,
+                ))
+            if today_odds:
+                self.r.add(CheckResult(
+                    label=f"{sport} market odds", status=FAIL,
+                    message=f"{today_odds} missing market price(s) on today's games",
+                    url=f"/{slug}-results", auditor=self.NAME))
+            else:
+                self.r.add(CheckResult(
+                    label=f"{sport} market odds", status=PASS,
+                    message="No missing market price on today's games",
+                    url=f"/{slug}-results", auditor=self.NAME))
+        if conn:
+            conn.close()
+
+
 class GameCountAuditor:
     """Cross-check the games DB against what each sport's results page reports.
 
@@ -3256,8 +3409,10 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
         mode = "ship"
     elif args.quick:
         mode = "quick"
-    else:
+    elif args.full:
         mode = "full"
+    else:
+        mode = "values"
     print(f"\n{'='*60}")
     print(f"  PredictionLab QA Audit")
     print(f"  FETCHING LIVE HTTP PAGES — not local HTML folders")
@@ -3281,8 +3436,10 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
         auditors_to_run = SHIP_MODE_AUDITORS
     elif args.quick:
         auditors_to_run = QUICK_MODE_AUDITORS
-    else:
+    elif args.full:
         auditors_to_run = FULL_MODE_AUDITORS
+    else:
+        auditors_to_run = ["values"]
 
     print("  ▶ Preflight server check…")
     reachable, preflight_fail = preflight_server(session, base)
@@ -3342,6 +3499,7 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     run_auditor("cards",      lambda: CardAuditor(session, base, report).run())
     run_auditor("models",     lambda: ModelAuditor(session, base, report).run())
     run_auditor("results",    lambda: ResultsAuditor(session, base, report).run())
+    run_auditor("values", lambda: ValuesAuditor(session, base, report).run())
     run_auditor("gamecounts", lambda: GameCountAuditor(session, base, report).run())
     run_auditor("csv",        lambda: CsvAuditor(session, base, report).run())
     run_auditor("seo",        lambda: SeoAuditor(session, base, report).run())
@@ -3453,10 +3611,9 @@ def print_summary(report: AuditReport):
     print(f"    latest_report.json")
     print(f"    qa_fix_prompt.txt")
     print(f"    audit_history/{report.run_id}/")
-    if not any((c.auditor or "") == "chrome" for c in report.checks):
-        print("\n  ⚠ Chrome checker did not run — that is the ~200 page/template checks.")
-        print("    Use: python qa/site_checker.py --chrome")
-        print("         python qa/site_checker.py          # default full (~300+)")
+    if any((c.auditor or "") == "values" for c in report.checks):
+        print("\n  Values check: missing model values, record math, last-night counts.")
+        print("  Missing market odds are reported only for today's games.")
 
 
 def main():
@@ -3467,7 +3624,7 @@ def main():
     parser.add_argument("--screenshots", action="store_true",
                         help="Include Playwright screenshot audit")
     parser.add_argument("--full",        action="store_true",
-                        help="Run all auditors (default)")
+                        help="Run the old page, chrome, and template auditors")
     parser.add_argument("--quick",       action="store_true",
                         help="Quick: routes + content + nav + chrome/ship/soccer")
     parser.add_argument("--ship",        action="store_true",

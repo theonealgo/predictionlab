@@ -1,4 +1,3 @@
-import BlogFeedBox from '../../components/BlogFeedBox.jsx';
 import { TOOLS } from '../../data/toolsCatalog.js';
 
 /** Shared Tools page shell: calculator + guide left, Blog Box + CTA right. */
@@ -27,7 +26,6 @@ export default function ToolLayout({ title, subtitle, children, guide, faqJsonLd
           <a className="pl-btn primary" href="/all-sports-predictions">View today&apos;s predictions</a>
           <a className="pl-tools-cta-link" href="/performance">Model performance →</a>
         </div>
-        <BlogFeedBox />
         <nav className="pl-tools-more" aria-label="More betting tools">
           <div className="pl-tools-cta-title">More tools</div>
           <ul>

@@ -32,8 +32,13 @@ def _image_url(value):
     return "/static/pl-logo.svg"
 
 
+def _is_preview(post, url):
+    text = " ".join(str(post.get(key) or "") for key in ("title", "slug", "legacy_slug", "canonical_path")).lower()
+    return "preview" in text or "preview" in url
+
+
 def public_cards(posts):
-    news, latest, seen = [], [], set()
+    news, previews, latest, seen = [], [], [], set()
     for post in posts:
         if not isinstance(post, dict) or str(post.get("status") or "published").lower() != "published":
             continue
@@ -50,16 +55,21 @@ def public_cards(posts):
             "date": str(post.get("date_published") or post.get("date") or ""),
             "displayDate": str(post.get("display_date") or ""),
         }
-        (news if post.get("kind") == "sports_news" else latest).append(card)
-    return {"news": news, "latest": latest}
+        if post.get("kind") == "sports_news":
+            news.append(card)
+        elif _is_preview(post, url):
+            previews.append(card)
+        else:
+            latest.append(card)
+    return {"news": news, "previews": previews, "latest": latest}
 
 
 def feed(posts, section=None, offset=0, limit=PAGE_SIZE):
-    if section not in (None, "news", "latest") or offset < 0 or not 1 <= limit <= MAX_PAGE_SIZE:
+    if section not in (None, "news", "previews", "latest") or offset < 0 or not 1 <= limit <= MAX_PAGE_SIZE:
         raise ValueError("Invalid blog page")
     groups = public_cards(posts)
     result = {}
-    for key in ([section] if section else ("news", "latest")):
+    for key in ([section] if section else ("previews", "news", "latest")):
         rows = groups[key]
         items = rows[offset:offset+limit]
         result[key] = {"items": items, "total": len(rows),
@@ -87,17 +97,13 @@ def initial_html(payload):
             '<div class="pl-blog-scroll">' + body + '</div></section>'
         )
 
-    trending = (
-        '<section class="pl-blog-window pl-blog-trending" aria-labelledby="blog-trending-title">'
-        '<div class="pl-blog-window-head"><h2 id="blog-trending-title">Trending in Sports</h2></div>'
-        '<p class="pl-blog-message">Loading trending stories…</p></section>'
-    )
     return (
         '<main class="pl-blog-page">'
         '<header class="pl-blog-intro"><h1>PredictionLab Blog</h1>'
-        '<p>Sports news, game recaps and the latest from PredictionLab.</p></header>'
-        + trending
+        '<p>Sports news and game recaps.</p></header>'
+        + '<div class="pl-blog-pair">'
         + _window("news", "Sports News")
-        + _window("latest", "Latest from PredictionLab")
+        + _window("previews", "Game Previews")
+        + '</div>'
         + '</main>'
     )

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getJson } from '../api.js';
 
 const MARKETS = [
   { value: 'moneyline', label: 'Straight up' },
@@ -16,16 +17,9 @@ export default function SeasonRecord() {
     let cancelled = false;
     setItems(null);
     setError(false);
-    const url = `/api/web/season?market=${encodeURIComponent(market)}&_=${Date.now()}`;
-    fetch(url, {
-      credentials: 'same-origin',
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error(`season ${res.status}`);
-        return res.json();
-      })
+    // Stable URL (no Date.now bust) so the tab cache can reuse Straight-up after navigation.
+    const url = `/api/web/season?market=${encodeURIComponent(market)}`;
+    getJson(url, { maxAge: market === 'moneyline' ? 60_000 : 0 })
       .then((data) => {
         if (cancelled) return;
         // Refuse a stale/wrong payload so Spread / OU never paint Straight-up numbers.

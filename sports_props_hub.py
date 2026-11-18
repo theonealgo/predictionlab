@@ -43,13 +43,11 @@ def preview(league, entry, limit=3, day=None):
         current = False
     payload = (entry or {}).get("payload") or {}
     target_day = day or datetime.now(ET).date().isoformat()
-    # Overnight snapshots for today's/upcoming slate stay usable: same requested_date
-    # with a ready availability must not disappear just because ts is yesterday.
+    # The file is already the snapshot for this date. A ready slate stays visible
+    # after the day it was written; the props are still that date's props.
     exact_date = isinstance(payload, dict) and payload.get("requested_date") == target_day
     usable = current or (
         exact_date
-        and written is not None
-        and written >= datetime.now(ET).date() - timedelta(days=1)
         and payload.get("availability") in {"ready", "slate_started", "no_verified_props", "no_fixtures"}
     )
     players = {str(p.get("player_id")): p for p in payload.get("players") or [] if isinstance(p, dict)} \
@@ -191,6 +189,88 @@ def model_type_summary(rows):
             for (league, model, prop), records in sorted(grouped.items())]
 
 
+def grade_ungraded_night(db_path, league, day):
+    """Fill HIT/MISS/PUSH for saved picks on one date from the box score.
+
+    Nights that already have a result row are left alone. A stat the box score
+    does not list stays ungraded.
+    """
+    if not day or (league and league not in LEAGUES):
+        return 0
+    path = Path(db_path)
+    with closing(sqlite3.connect(path, timeout=5)) as conn:
+        conn.row_factory = sqlite3.Row
+        sql = """SELECT p.league, p.pick_date, p.player_name, p.team, p.prop_type, p.pick, p.line, p.projection
+                 FROM player_prop_picks p
+                 LEFT JOIN player_prop_results r
+                   ON r.league=p.league AND r.result_date=p.pick_date
+                  AND r.player_name=p.player_name AND r.prop_type=p.prop_type
+                 WHERE p.pick_date=? AND r.league IS NULL"""
+        params = [day]
+        if league:
+            sql += " AND p.league=?"
+            params.append(league)
+        pending = [dict(row) for row in conn.execute(sql, params)]
+    if not pending:
+        return 0
+    root = Path(__file__).resolve().parent / "standalone-player-props" / "backend"
+    import sys
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    from app.engine import get_actuals_for_date
+    by_league = {}
+    for row in pending:
+        by_league.setdefault(row["league"], []).append(row)
+    written = 0
+    with closing(sqlite3.connect(path, timeout=5)) as conn:
+        for name, picks in by_league.items():
+            if name not in LEAGUES:
+                continue
+            try:
+                actuals = get_actuals_for_date(name, day) or {}
+            except Exception:
+                continue
+            for pk in picks:
+                actual = (actuals.get(str(pk["player_name"] or "").lower()) or {}).get(pk["prop_type"])
+                if actual is None:
+                    continue
+                line = float(pk["line"] or 0)
+                if float(actual) == line:
+                    grade = "PUSH"
+                elif (actual > line and pk["pick"] == "OVER") or (actual < line and pk["pick"] == "UNDER"):
+                    grade = "HIT"
+                else:
+                    grade = "MISS"
+                conn.execute(
+                    """INSERT OR REPLACE INTO player_prop_results
+                       (league, result_date, player_name, team, prop_type, pick, line, projection, actual, result)
+                       VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    (name, day, pk["player_name"], pk["team"], pk["prop_type"], pk["pick"],
+                     line, pk["projection"], round(float(actual), 2), grade),
+                )
+                written += 1
+        conn.commit()
+    return written
+
+
+def result_dates(db_path, league=None):
+    """Dates that already have a saved pick or a grade, newest first."""
+    path = Path(db_path)
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=3)) as conn:
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        dates = set()
+        for table, column in (("player_prop_picks", "pick_date"), ("player_prop_results", "result_date")):
+            if table not in tables:
+                continue
+            sql = f"SELECT DISTINCT {column} FROM {table} WHERE {column} IS NOT NULL"
+            params = []
+            if league and league in LEAGUES:
+                sql += " AND league=?"
+                params.append(league)
+            dates.update(row[0] for row in conn.execute(sql, params) if row[0])
+    return sorted(dates, reverse=True)[:60]
+
+
 def default_results_day(db_path, league=None):
     """Last night that already has settled (or at least recorded) prop results."""
     from prop_forecast_store import latest_results_date
@@ -238,7 +318,9 @@ def read_results(db_path, league=None, day=None, window="night"):
                 row = dict(record)
                 if row["league"] not in starts or row["pick_date"] < starts[row["league"]]:
                     continue
-                row.update(model_id=None, model_name="Not recorded", probability=None, result="N/A",
+                graded = {"HIT": "Win", "MISS": "Loss", "PUSH": "Push"}.get(row.get("recorded_result"))
+                row.update(model_id=None, model_name="Not recorded", probability=None,
+                           result=graded or "N/A", selection_result=graded,
                            line_type="market" if row["line_source"] in REAL_LINES else
                            "pl" if row["line_source"] in PL_LINES else "legacy",
                            reason="A separate pregame model selection and probability were not recorded.",
@@ -286,11 +368,15 @@ def read_results(db_path, league=None, day=None, window="night"):
                        "decided": wins+losses, "win_rate": 100*wins/(wins+losses) if wins+losses else None,
                        "reason": ("Efficiency is a game-winner model, not a player-stat model." if key == "efficiency"
                                   else "Awaiting decided results." if selected else "No separately recorded model results.")})
+    graded_rows = [row for row in rows if row.get("result") in {"Win", "Loss", "Push"} and not row.get("model_id")]
+    graded = outcome_summary(graded_rows)
     return {"league": league, "result_date": day, "start_date": first_day, "window": window,
+            "graded": graded,
             "season_starts": starts if window == "season" else None, "count": len(rows), "items": rows,
             "models": models,
             "by_model_prop_type": model_type_summary(rows),
             "by_prop_type": [{"prop_type": key, "recorded": n, "win_rate": None}
                              for key, n in sorted(markets.items())],
             "readonly": True, "records_available": "player_prop_picks" in tables,
-            "notice": "Model records use the first saved pregame selection for each player, prop, game and line type. Older unassigned selections are excluded."}
+            "dates": result_dates(db_path, league),
+            "notice": "Win and loss below are the saved pick against the final stat. Named-model records are separate and only appear when that model saved a pregame pick."}

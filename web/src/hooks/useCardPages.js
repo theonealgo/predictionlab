@@ -1,6 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getJson, peekJson } from '../api.js';
 import { applyCardStyles } from '../cardStyles.js';
+import { todayET, cardIsFinal } from '../slateDates.js';
+
+function plusDays(iso, count) {
+  const [year, month, day] = iso.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + count);
+  return date.toISOString().slice(0, 10);
+}
+
+function cardDay(card) {
+  const stamped = String(card.date || '').slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(stamped)) return stamped;
+  const html = String(card.html || '');
+  const time = /class=["'][^"']*\bgame-time\b[^"']*["'][^>]*>([\s\S]*?)<\//i.exec(html);
+  const text = time ? time[1].replace(/<[^>]+>/g, ' ') : html;
+  const found = /(\d{4}-\d{2}-\d{2})/.exec(text);
+  return found ? found[1] : '';
+}
+
+// Middle column for every sport: today through the requested span. Finished and older cards stay out.
+function predictionCards(cards, span) {
+  const today = todayET();
+  const end = plusDays(today, span);
+  return (cards || []).flatMap((card) => {
+    if (cardIsFinal(card)) return [];
+    const day = cardDay(card);
+    if (!day || day < today || day > end) return [];
+    return [String(card.date || '').slice(0, 10) === day ? card : { ...card, date: day }];
+  });
+}
 
 const pause = (seconds = 1) => new Promise((resolve) => {
   const ms = Math.max(1, Math.min(30, Number(seconds) || 1)) * 1000;
@@ -9,9 +39,12 @@ const pause = (seconds = 1) => new Promise((resolve) => {
 const identity = (card) => /data-game-id="([^"]+)"/.exec(card.html || '')?.[1]
   || `${card.date}|${card.away}|${card.home}`;
 
-export default function useCardPages(slug, enabled = true) {
-  const path = `/api/web/sports/${slug}/cards?limit=5`;
-  const [payload, setPayload] = useState(() => enabled ? peekJson(path) : null);
+export default function useCardPages(slug, enabled = true, span = 0) {
+  const path = `/api/web/sports/${slug}/cards?limit=50&span=${span}`;
+  const [payload, setPayload] = useState(() => {
+    const saved = enabled ? peekJson(path) : null;
+    return saved ? { ...saved, cards: predictionCards(saved.cards, span) } : saved;
+  });
   const [error, setError] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const current = useRef(payload);
@@ -28,7 +61,7 @@ export default function useCardPages(slug, enabled = true) {
     for (let tries = 0; tries < 90 && epoch.current === generation; tries += 1) {
       try {
         const data = await getJson(offset ? `${path}&offset=${offset}` : path, { maxAge: 0 });
-        if (!data.building) return data;
+        if (!data.building) return { ...data, cards: predictionCards(data.cards, span) };
         await pause(data.retryAfter);
         continue;
       } catch (failure) {
@@ -38,15 +71,16 @@ export default function useCardPages(slug, enabled = true) {
     }
     if (epoch.current === generation) throw new Error('Games are taking longer to load. Please retry.');
     return null;
-  }, [path]);
+  }, [path, span]);
 
   useEffect(() => {
     const generation = ++epoch.current;
     busy.current = false;
     if (!enabled) return undefined;
     const kept = peekJson(path);
-    current.current = kept;
-    setPayload(kept);
+    const slate = kept ? { ...kept, cards: predictionCards(kept.cards, span) } : kept;
+    current.current = slate;
+    setPayload(slate);
     if (kept) applyCardStyles(kept.css);
     async function refresh() {
       if (busy.current || document.visibilityState === 'hidden') return;

@@ -17,8 +17,16 @@
   line-height: 1.6;
 }
 
-.pl-blog-page > .pl-blog-window {
+.pl-blog-page > .pl-blog-window,
+.pl-blog-pair {
   margin-bottom: 22px;
+}
+
+.pl-blog-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 22px;
+  align-items: start;
 }
 
 .pl-blog-window {
@@ -202,6 +210,9 @@
 }
 
 @media (max-width: 900px) {
+  .pl-blog-pair {
+    grid-template-columns: 1fr;
+  }
   .pl-blog-soro-frame {
     height: 380px;
   }

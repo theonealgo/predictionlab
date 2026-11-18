@@ -76,16 +76,41 @@ import os as _os_v2
 _V2_BASE = _os_v2.path.dirname(_os_v2.path.abspath(__file__))
 try:
     from prediction_system_v2 import AdvancedPredictor
-    V2_PREDICTORS = {}
-    # Load trained models for supported sports
-    for sport in ['NHL', 'NFL', 'NBA', 'MLB', 'NCAAF', 'NCAAB']:
-        try:
-            _model_path = _os_v2.path.join(_V2_BASE, 'models', f'{sport}_v2')
-            V2_PREDICTORS[sport] = AdvancedPredictor.load(sport, _model_path)
-            print(f"✅ Loaded {sport} v2 predictor (Glicko-2 + Ensemble + Calibration)")
-        except Exception as e:
-            print(f"⚠️ {sport} v2 model not found at {_model_path}: {e}")
-    HAS_V2_SYSTEM = len(V2_PREDICTORS) > 0
+
+    class _LazyV2Predictors(dict):
+        """Load one sport's model on first use. Boot was loading all six."""
+
+        _sports = ('NHL', 'NFL', 'NBA', 'MLB', 'NCAAF', 'NCAAB')
+
+        def _load(self, sport):
+            if sport in dict.keys(self) or sport not in self._sports:
+                return
+            path = _os_v2.path.join(_V2_BASE, 'models', f'{sport}_v2')
+            try:
+                self[sport] = AdvancedPredictor.load(sport, path)
+                print(f"✅ Loaded {sport} v2 predictor (Glicko-2 + Ensemble + Calibration)")
+            except Exception as exc:
+                print(f"⚠️ {sport} v2 model not found at {path}: {exc}")
+                self[sport] = None
+
+        def get(self, sport, default=None):
+            self._load(sport)
+            value = dict.get(self, sport, default)
+            return default if value is None else value
+
+        def __contains__(self, sport):
+            self._load(sport)
+            return dict.get(self, sport) is not None
+
+        def __getitem__(self, sport):
+            self._load(sport)
+            value = dict.get(self, sport)
+            if value is None:
+                raise KeyError(sport)
+            return value
+
+    V2_PREDICTORS = _LazyV2Predictors()
+    HAS_V2_SYSTEM = True
 except ImportError as e:
     print(f"⚠️ V2 prediction system not available: {e}")
     V2_PREDICTORS = {}
@@ -2002,8 +2027,33 @@ def _render_results_summary_share_image(payload: dict, fmt: str, *, max_width: i
         return None, None
 
 
+def _strip_results_share_image(html: str) -> str:
+    """Drop the bottom results image block from a results page."""
+    if not isinstance(html, str) or 'data-results-share=' not in html:
+        return html
+    start = html.find('<div class="social-export-wrap" data-results-share="1">')
+    if start < 0:
+        return html
+    depth = 0
+    i = start
+    while i < len(html):
+        nxt_open = html.find('<div', i)
+        nxt_close = html.find('</div>', i)
+        if nxt_close < 0:
+            return html
+        if nxt_open != -1 and nxt_open < nxt_close:
+            depth += 1
+            i = nxt_open + 4
+            continue
+        depth -= 1
+        i = nxt_close + len('</div>')
+        if depth == 0:
+            return html[:start] + html[i:]
+    return html
+
+
 def _with_results_share_image(response, sport: str):
-    """Attach bottom Results Image (LN + L7 ML/Spread/Total) like picks share chrome."""
+    """Results pages do not carry the bottom results image."""
     status = None
     headers = None
     html = response
@@ -2017,33 +2067,7 @@ def _with_results_share_image(response, sport: str):
             headers = response[2]
     if not isinstance(html, str) or len(html) < 400:
         return response
-    # Chart views keep their own layout; cards results get the ad image.
-    try:
-        view = (request.args.get('view') or '').strip().lower()
-    except Exception:
-        view = ''
-    if view in ('chart', 'tabs', 'markets', 'tabbed'):
-        return response
-    try:
-        from results_share_image import (
-            inject_results_share_block,
-            payload_from_results_html,
-            results_share_wrap_html,
-        )
-        sport_name = (SPORTS.get(sport) or {}).get('name') or sport
-        payload = payload_from_results_html(html, sport_name)
-        if not payload:
-            return response
-        token = _register_share_image(payload)
-        src = url_for('share_results_summary_image', token=token, fmt='jpg')
-        view_url = url_for('share_results_summary_view', token=token)
-        wrap = results_share_wrap_html(
-            sport_name=sport_name, share_src=src, view_url=view_url,
-        )
-        html = inject_results_share_block(html, wrap)
-    except Exception as e:
-        logger.debug('results share inject failed for %s: %s', sport, e)
-        return response
+    html = _strip_results_share_image(html)
     if status is None and headers is None:
         return html
     if headers is None:
@@ -16024,8 +16048,11 @@ from results_clean import clean_results_html as _clean_results_html
 @app.after_request
 def _results_pages_without_emoji(response):
     if request.path.endswith(('-results', '/historic-results')) and response.mimetype == 'text/html':
-        response.set_data(_clean_results_html(response.get_data(as_text=True)))
+        html = _clean_results_html(response.get_data(as_text=True))
+        response.set_data(html)
     return response
+
+
 
 
 _sport_variant.install_app(app)
@@ -17746,19 +17773,20 @@ def _ncaaf_date_controls(response):
         extra = ""
         if not out:
             return response
-        if 'id="plLoadDate"' not in out and 'id="datePicker"' in out:
+        if 'id="datePicker"' in out and 'id="pl-ncaaf-week"' not in out:
             out = re.sub(
-                r'<label for="datePicker"[^>]*>Date</label>',
-                '<label for="datePicker" class="pl-date-label">Date</label>',
+                r'<label for="datePicker"[^>]*>[^<]*</label>',
+                '<label for="datePicker" class="pl-date-label">Week</label>',
                 out,
                 count=1,
             )
-            out = re.sub(
-                r'(<select id="datePicker"[^>]*>[\s\S]*?</select>)',
-                lambda m: m.group(1) + '<button type="button" id="plLoadDate" class="pl-load-btn">Load</button>',
-                out,
-                count=1,
-            )
+            if 'id="plLoadDate"' not in out:
+                out = re.sub(
+                    r'(<select id="datePicker"[^>]*>[\s\S]*?</select>)',
+                    lambda m: m.group(1) + '<button type="button" id="plLoadDate" class="pl-load-btn">Load</button>',
+                    out,
+                    count=1,
+                )
             extra += (
                 '<style id="pl-ncaaf-date-load">'
                 ".date-nav{flex-wrap:wrap;align-items:center;justify-content:center;gap:8px}"
@@ -17766,22 +17794,109 @@ def _ncaaf_date_controls(response):
                 ".pl-load-btn{border:1px solid #0c1e3a;background:#0c1e3a;color:#fff;font-weight:700;"
                 "padding:8px 16px;border-radius:999px;cursor:pointer}"
                 ".pl-load-btn:hover{background:#1e3a8a}</style>"
-                "<script>window.addEventListener('load',function(){"
-                "var b=document.getElementById('plLoadDate'),s=document.getElementById('datePicker');"
-                "if(!b||!s)return;"
-                "function go(d,scroll){var sec=d&&document.getElementById('date-'+d);if(!sec)return;"
-                "if(typeof window.showDate==='function'){window.showDate(d);"
-                "if(typeof window.renderDateBubbles==='function')window.renderDateBubbles();}"
-                "else{document.querySelectorAll('.date-section').forEach(function(x){"
-                "x.classList.toggle('visible',x===sec);});}"
-                "s.value=d;if(scroll)sec.scrollIntoView({behavior:'smooth',block:'start'});}"
-                "var best='';var cur=document.querySelector('.date-section.visible');"
-                "if(!cur||!cur.querySelector('.game-card')){"
-                "document.querySelectorAll('.date-section').forEach(function(x){"
-                "var d=(x.id||'').replace('date-','');"
-                "if(x.querySelector('.game-card')&&d>best)best=d;});"
-                "if(best)go(best,false);}"
-                "b.addEventListener('click',function(){go(s.value,true);});});</script>"
+                r"""<script id="pl-ncaaf-week">
+(function(){
+  var DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function parse(iso){
+    var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||'');
+    return m?new Date(Date.UTC(+m[1],+m[2]-1,+m[3])):null;
+  }
+  function fmt(d){
+    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+  }
+  function addDays(iso,n){var d=parse(iso);d.setUTCDate(d.getUTCDate()+n);return fmt(d);}
+  function weekStart(iso){
+    var d=parse(iso); if(!d) return iso;
+    d.setUTCDate(d.getUTCDate()-((d.getUTCDay()+4)%7));
+    return fmt(d);
+  }
+  function pretty(iso){
+    var d=parse(iso); if(!d) return iso;
+    return DAYS[d.getUTCDay()]+', '+MONTHS[d.getUTCMonth()]+' '+d.getUTCDate();
+  }
+  function todayIso(){
+    var m=/const today = '(\d{4}-\d{2}-\d{2})'/.exec(document.documentElement.innerHTML||'');
+    if(m) return m[1];
+    try{return new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York'}).format(new Date());}
+    catch(e){return fmt(new Date());}
+  }
+  function sections(){return Array.prototype.slice.call(document.querySelectorAll('.date-section[id^="date-"]'));}
+  function weeks(){
+    var seen={};
+    sections().forEach(function(s){
+      var day=(s.id||'').slice(5);
+      if(!parse(day)) return;
+      seen[weekStart(day)]=1;
+    });
+    return Object.keys(seen).sort();
+  }
+  function showWeek(start){
+    var end=addDays(start,6);
+    var nav=document.querySelector('.date-nav');
+    if(nav) nav.__plDateNav=true;
+    sections().forEach(function(s){
+      var day=(s.id||'').slice(5);
+      s.classList.toggle('visible', day>=start && day<=end);
+    });
+    var box=document.getElementById('dateBubbles');
+    if(box){
+      box.replaceChildren();
+      sections().forEach(function(s){
+        var day=(s.id||'').slice(5);
+        if(day<start||day>end) return;
+        var b=document.createElement('div');
+        b.className='date-bubble active';
+        b.setAttribute('data-date',day);
+        b.textContent=pretty(day).replace(/^[^,]+, /,'');
+        b.onclick=function(){var el=document.getElementById('date-'+day); if(el) el.scrollIntoView({behavior:'smooth',block:'start'});};
+        box.appendChild(b);
+      });
+    }
+    var sel=document.getElementById('datePicker');
+    if(sel) sel.value=start;
+  }
+  function boot(){
+    var sel=document.getElementById('datePicker');
+    var list=weeks();
+    if(!sel||!list.length) return;
+    var today=todayIso();
+    var chosen=list[0];
+    sections().forEach(function(s){
+      var day=(s.id||'').slice(5);
+      if(day<=today && /\bFINAL\b/.test(s.textContent||'')) chosen=weekStart(day);
+    });
+    if(list.indexOf(chosen)<0) chosen=list[list.length-1];
+    sel.replaceChildren();
+    list.forEach(function(start){
+      var o=document.createElement('option');
+      o.value=start;
+      o.textContent=pretty(start)+' – '+pretty(addDays(start,6));
+      sel.appendChild(o);
+    });
+    sel.onchange=function(){showWeek(sel.value);};
+    window.showDate=function(day){showWeek(weekStart(day));};
+    window.previousWeek=function(){
+      var i=list.indexOf(sel.value); if(i>0) showWeek(list[i-1]);
+    };
+    window.nextWeek=function(){
+      var i=list.indexOf(sel.value); if(i>=0 && i<list.length-1) showWeek(list[i+1]);
+    };
+    window.renderDateBubbles=function(){showWeek(sel.value||chosen);};
+    var load=document.getElementById('plLoadDate');
+    if(load && !load.__plWeek){
+      var nb=load.cloneNode(true);
+      nb.__plWeek=1;
+      load.parentNode.replaceChild(nb,load);
+      nb.addEventListener('click',function(){showWeek(sel.value);});
+    }
+    showWeek(chosen);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot);
+  else boot();
+  window.addEventListener('load',function(){setTimeout(boot,400);});
+})();
+</script>"""
             )
         if extra:
             if re.search(r"</body>", out, flags=re.I):
@@ -20170,10 +20285,10 @@ def _apply_team_template_gaps__ncaaf(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -20402,10 +20517,10 @@ def _apply_team_template_gaps__mlb(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -20664,10 +20779,10 @@ def _apply_team_template_gaps__nhl(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 if sport == "NHL" and (
                     (
@@ -20883,10 +20998,10 @@ def _apply_team_template_gaps__nba(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21084,10 +21199,10 @@ def _apply_team_template_gaps__ncaab(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21294,10 +21409,10 @@ def _apply_team_template_gaps__ncaaw(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21504,10 +21619,10 @@ def _apply_team_template_gaps__wnba(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21706,10 +21821,10 @@ def _apply_team_template_gaps__cfl(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21912,10 +22027,10 @@ def _apply_team_template_gaps__soccer(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -22113,10 +22228,10 @@ def _apply_team_template_gaps__tennis(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -22314,10 +22429,10 @@ def _apply_team_template_gaps__ufc(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -22515,10 +22630,10 @@ def _apply_team_template_gaps__golf(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -22757,10 +22872,10 @@ def _apply_team_template_gaps(response):
                     and view not in ("chart", "tabs", "markets", "tabbed")
                     and "<!-- team-results-charts -->" in html
                     and html.count("H2H Last 10") >= 3
-                    and ("(1 game)" in html or "(2 games)" in html)
-                    and "Efficiency N/A" not in html
-                    and re.search(r"Last Night[\s\S]{0,2500}Efficiency", html)
+                    and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
+                    # A normal football week already has its dates. Rebuilding
+                    # the board here kept only the last few single days.
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -31100,8 +31215,19 @@ def _maybe_backfill_soccer_on_startup():
             logger.warning(f"[soccer-backfill] failed: {_be}")
     threading.Thread(target=_run, daemon=True, name='soccer-backfill').start()
 
+def _defer_model_startup():
+    """On the hosted web process, do not start model, score, or backfill jobs."""
+    flag = _os.environ.get("PL_WEB_ONLY")
+    if flag == "0":
+        return False
+    if flag == "1":
+        return True
+    return bool(_os.environ.get("RENDER") or _os.path.isdir("/data"))
+
+
 try:
-    _maybe_backfill_soccer_on_startup()
+    if not _defer_model_startup():
+        _maybe_backfill_soccer_on_startup()
 except Exception as _sbe:
     logger.debug(f"[soccer-backfill] hook error: {_sbe}")
 
@@ -31156,7 +31282,8 @@ def _maybe_backfill_props_on_startup():
 
 
 try:
-    _maybe_backfill_props_on_startup()
+    if not _defer_model_startup():
+        _maybe_backfill_props_on_startup()
 except Exception as _pbe:
     logger.debug(f"[props-backfill] hook error: {_pbe}")
 
@@ -31261,7 +31388,7 @@ except Exception as _owe:
 
 try:
     import price_snapshots as _price_snapshots
-    if _os.environ.get('PL_SNAPSHOT_BUILD') != '1':
+    if _os.environ.get('PL_SNAPSHOT_BUILD') != '1' and not _defer_model_startup():
         _price_snapshots.start(DATABASE)
     else:
         _price_snapshots.init(DATABASE)
@@ -31651,7 +31778,7 @@ def _start_site_autorefresh():
 
 
 try:
-    if _os.environ.get('PL_SNAPSHOT_BUILD') != '1':
+    if _os.environ.get('PL_SNAPSHOT_BUILD') != '1' and not _defer_model_startup():
         _start_site_autorefresh()
 except Exception as _rwe:
     logger.debug(f"[autorefresh] failed to start: {_rwe}")
@@ -87839,6 +87966,8 @@ def _query_prop_streaks(league: str, limit: int = 200):
                 streak += 1
             else:
                 break
+        if streak < 2:
+            continue
         items.append({
             'player_name': pname,
             'team': rr[-1]['team'],
@@ -89897,7 +90026,7 @@ def _daily_report_warm_loop():
 
 
 _daily_report_load_disk()
-if _os_v2.environ.get('DAILY_REPORT_WARM', '1') != '0':
+if _os_v2.environ.get('DAILY_REPORT_WARM', '1') != '0' and not _defer_model_startup():
     threading.Thread(target=_daily_report_warm_loop, daemon=True, name='daily-report-warm').start()
 
 
@@ -111011,6 +111140,18 @@ def _schedule_results_http_rebuild(path_qs: str) -> None:
         pass
 
 
+def _ncaaf_results_season_market_blank(html: str) -> bool:
+    """True when the night board graded a spread but the season board is empty."""
+    text = html or ""
+    if "Prediction Lab Spread" not in text:
+        return False
+    return (
+        "not graded yet" in text
+        or "No graded picks in range" in text
+        or "No graded predictions in range" in text
+    )
+
+
 def _ncaaf_results_week_ends_before_yesterday(html: str) -> bool:
     """True when NCAAF Last 7 Days stops before Eastern yesterday."""
     week = re.search(
@@ -111233,10 +111374,11 @@ def sport_results__ncaaf(sport):
             elif _hit and sport == "NCAAF" and (
                 _ncaaf_results_html_misses_latest_final(_hit)
                 or _ncaaf_results_week_ends_before_yesterday(_hit)
+                or _ncaaf_results_season_market_blank(_hit)
             ):
-                # A newer final landed. Serve the saved page now (a cold rebuild
-                # takes ~40s) and rebuild it off the request.
-                _schedule_results_http_rebuild(request.full_path or request.path)
+                # Do not keep serving an old night or a blank spread/total
+                # season board. This request rebuilds the page.
+                _hit = None
             if _hit:
                 return _hit
         except Exception:
@@ -112378,6 +112520,55 @@ def sport_results__ncaaf(sport):
                     for lg in _region_leagues
                 ]
 
+            if sport == 'NCAAF':
+                def _ncaaf_games(start, end):
+                    out = []
+                    for dk, dd in daily_results.items():
+                        if (start is not None or end is not None) and not _date_in_range(dk, start, end):
+                            continue
+                        out.extend(dd.get('games') or [])
+                    return out
+
+                def _pack(row):
+                    w = int(row.get('correct') or 0)
+                    n = int(row.get('total') or 0)
+                    p = int(row.get('pushes') or 0)
+                    entry = _roi_entry()
+                    entry['pushes'] = p
+                    if n <= 0:
+                        entry['reason'] = 'No graded picks in range.'
+                        return entry
+                    entry['wins'] = w
+                    entry['losses'] = max(0, n - w)
+                    entry['graded'] = n
+                    entry['units_risked'] = n
+                    entry['units_won'] = float(w - (n - w))
+                    entry['roi_pct'] = round((entry['units_won'] / n) * 100, 1) if n else None
+                    return entry
+
+                for roi, start, end in (
+                    (roi_daily, yesterday_dt, yesterday_dt),
+                    (roi_weekly, weekly_start_dt, weekly_end_dt),
+                    (roi_total, None, None),
+                ):
+                    sp, ou = _ncaaf_published_line_tally(_ncaaf_games(start, end))
+                    roi['spread'] = _pack(sp)
+                    roi['total'] = _pack(ou)
+                sp, ou = _ncaaf_published_line_tally(_ncaaf_games(None, None))
+                if season_perf is not None and sp.get('total'):
+                    season_perf['spread_graded'] = sp['total']
+                    season_perf['spread_covered'] = sp['correct']
+                    season_perf['spread_pct'] = sp['accuracy']
+                    season_perf['spread_model_label'] = 'Prediction Lab'
+                if season_perf is not None and ou.get('total'):
+                    season_perf['ou_graded'] = ou['total']
+                    season_perf['ou_correct'] = ou['correct']
+                    season_perf['ou_pct'] = ou['accuracy']
+                    season_perf['ou_model_label'] = 'XSharp'
+                roi_cards = build_roi_cards(
+                    roi_daily, roi_weekly, roi_total,
+                    win_pct_primary=True,
+                )
             rendered = render_template_string(
                 DAILY_RESULTS_TEMPLATE__ncaaf,
                 **_results_page_meta(sport),
@@ -128434,7 +128625,7 @@ def _ufc_fight_sync_loop():
         _time.sleep(_UFC_SYNC_EVERY_S)
 
 
-if _os_v2.environ.get('UFC_SYNC', '1') != '0':
+if _os_v2.environ.get('UFC_SYNC', '1') != '0' and not _defer_model_startup():
     threading.Thread(target=_ufc_fight_sync_loop, daemon=True, name='ufc-fight-sync').start()
 
 

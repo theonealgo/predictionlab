@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getJson, peekJson } from '../api.js';
 import { useDragScroll } from '../hooks/useDragScroll.js';
-import BlogFeedBox from '../components/BlogFeedBox.jsx';
 
 // All Sports Picks: every open pick across the sports, from the same board the classic page shows
 // (members only, same rule). Picks by day, a sport filter, today's Ladder pick, and the graded results.
@@ -305,7 +304,6 @@ export default function AllSportsPage() {
           <div className="pl-right-title pl-asp-gap">Last 7 days</div>
           {board ? <SummaryTable rows={board.summary_last7} label="Record" /> : <p className="pl-asp-muted">—</p>}
         </aside>
-        <BlogFeedBox defer />
       </div>
     </>
   );

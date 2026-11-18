@@ -14,10 +14,10 @@ import re
 
 _LAYOUT_CSS = """
 <style id="pl-served-layout">
-body .pc-name,body[data-sport] .pc-name,.pick-conf-grid .pc-name,.pc-box .pc-name{white-space:normal!important;overflow:hidden!important;text-overflow:clip!important;max-height:none!important;height:auto!important;overflow-wrap:anywhere!important;word-break:break-word!important;width:100%!important;max-width:100%!important;display:block!important;box-sizing:border-box!important}
-.pick-conf-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(7.5rem,1fr))!important}
-.pc-box{min-width:7.5rem!important;overflow:hidden!important}
-.team-name,.pc-side,body[data-sport] .team-name,body[data-sport] .pc-side{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-height:none!important;height:auto!important;overflow-wrap:anywhere!important;word-break:break-word!important}
+body .game-card .pc-name,body .pc-name,body[data-sport] .pc-name,.pick-conf-grid .pc-name,.pc-box .pc-name{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-height:none!important;height:auto!important;overflow-wrap:anywhere!important;word-break:break-word!important;width:100%!important;max-width:100%!important;display:block!important;box-sizing:border-box!important}
+.game-card .pick-conf-grid,.pick-conf-grid{display:grid!important;grid-template-columns:repeat(auto-fit,minmax(7.5rem,1fr))!important}
+.game-card .pc-box,.pc-box{min-width:7.5rem!important;overflow:visible!important;height:auto!important;grid-template-rows:auto auto auto!important}
+.game-card .team-name,.game-card .pc-side,.team-name,.pc-side,body[data-sport] .team-name,body[data-sport] .pc-side{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-height:none!important;height:auto!important;overflow-wrap:anywhere!important;word-break:break-word!important}
 .team-slot,.matchup-teams{overflow:visible!important}
 .tv-drawer:not(.open){transform:translateX(-110%)!important;visibility:hidden!important;pointer-events:none!important}
 #pl-consensus-records th,#pl-consensus-records td,#pl-books-pl-records th,#pl-books-pl-records td,#pl-totals-three-way th,#pl-totals-three-way td,#pl-xsharp-totals th,#pl-xsharp-totals td{padding:8px 16px!important}

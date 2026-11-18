@@ -39,7 +39,7 @@ def test_published_groups_use_only_public_fields_without_mutating_articles():
     "/admin/sports-news", "/blog/../admin", "/blog/%2e%2e/admin", "/blog/\\outside",
 ])
 def test_nonarticle_destinations_are_not_exposed(url):
-    assert public_cards([post(article_url=url)]) == {"news": [], "latest": []}
+    assert public_cards([post(article_url=url)]) == {"news": [], "previews": [], "latest": []}
 
 
 def test_bad_images_use_the_public_logo_and_duplicate_urls_do_not_duplicate_cards():
@@ -72,8 +72,8 @@ def test_initial_html_keeps_escaped_public_article_links():
     html = initial_html(payload)
     assert 'href="/blog/nba/article-1"' in html
     assert "&lt;img" in html and "<img" not in html
-    assert "Sports News" in html and "Latest from PredictionLab" in html
-    assert "/classic/blog" in html
+    assert "Sports News" in html and "Game Previews" in html
+    assert "Latest from PredictionLab" not in html
 
 
 def app():

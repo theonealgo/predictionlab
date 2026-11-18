@@ -5,6 +5,8 @@
 .pp-hub-filters{display:flex;flex-wrap:wrap;gap:12px;margin:16px 0}
 .pp-hub-filters label{display:flex;flex:1 1 130px;flex-direction:column;gap:5px;color:#374151;font-size:12px}
 .pp-hub-filters input,.pp-hub-filters select{width:100%;min-height:40px;border:1px solid #d1d5db;border-radius:8px;padding:8px;background:#fff;color:#111827}
+.pp-hub-load{align-self:end;min-height:40px;padding:8px 16px;border:0;border-radius:8px;background:#166534;color:#fff;font-weight:700;cursor:pointer}
+.pp-hub-load:disabled{background:#9ca3af;cursor:not-allowed}
 .pp-hub-section{margin:0 0 24px}
 .pp-hub-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
 .pp-hub-section-head h2,.pp-hub-results h3{font-size:16px;margin:16px 0 10px}

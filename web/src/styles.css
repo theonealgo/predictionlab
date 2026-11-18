@@ -216,6 +216,20 @@ button {
   position: sticky;
   top: calc(var(--pl-header-h, 72px) + 16px);
   background: #fff;
+  /* Reserve rail height so Featured / status chips do not shove .pl-body (CLS). */
+  min-height: 420px;
+}
+
+.pl-sport-nav {
+  min-height: 220px;
+}
+
+.pl-season-record {
+  min-height: 280px;
+}
+
+.pl-season-list {
+  min-height: 160px;
 }
 
 .pl-left-title,
@@ -266,6 +280,9 @@ button {
 }
 
 .pl-sport-status {
+  min-width: 7.5ch;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
   font-size: 15px;
   color: var(--muted);
 }
@@ -1927,6 +1944,10 @@ button {
   visibility: hidden;
 }
 
+.pl-sport-link.is-placeholder {
+  min-height: 52px;
+}
+
 /* Phones: the sports become one row that slides sideways, so the games sit near the top. The grouped
    list is left to the header menu. The live strip lines up with the page edge. */
 @media (max-width: 760px) {
@@ -2281,6 +2302,28 @@ a.pl-btn.primary {
   font-weight: 700;
   color: var(--blue-text);
 }
+/* Model name and picked team stay fully visible. A fixed 30px row was cutting them off. */
+body .pl-card-row .game-card .pick-conf-grid,
+body .game-card .pick-conf-grid {
+  grid-template-columns: repeat(auto-fit, minmax(7.5rem, 1fr)) !important;
+}
+body .pl-card-row .game-card .pc-box,
+body .game-card .pc-box {
+  overflow: visible !important;
+  height: auto !important;
+  grid-template-rows: auto auto auto !important;
+}
+body .pl-card-row .game-card .pc-name,
+body .pl-card-row .game-card .pc-side,
+body .game-card .pc-name,
+body .game-card .pc-side {
+  overflow: visible !important;
+  white-space: normal !important;
+  text-overflow: clip !important;
+  max-height: none !important;
+  height: auto !important;
+}
+
 @media (max-width: 980px) {
   .pl-tools-layout {
     grid-template-columns: minmax(0, 1fr);

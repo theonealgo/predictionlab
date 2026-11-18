@@ -137,6 +137,12 @@ weekly frankenstein, chart still showing cards), that is an error — fix the
 page. See [docs/UI_ARCHITECTURE.md](docs/UI_ARCHITECTURE.md) and
 `.cursor/rules/ui-architecture.mdc`.
 
+**Middle column lock (owner 2026-11-17):** on every sport picks page the middle
+box is for **upcoming prediction cards** only. Do not put finished / old-night
+results cards (e.g. NFL Nov 8 finals) where this week’s picks belong. Details:
+`docs/UI_ARCHITECTURE.md` (Three columns) and
+`.cursor/rules/middle-column-predictions.mdc`.
+
 ### 12. Entire site READ-ONLY — triple UNLOCK to edit
 
 **Owner 2026-10-23 (overrides the rest of this rule):** if the owner tells you to

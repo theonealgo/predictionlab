@@ -15,6 +15,6 @@ ufc_pipeline/database/*.db
 models/**/*.sqlite
 # Keep only the current Vite bundle in the image (index.html must match).
 static/web/assets/index-*.js
-!static/web/assets/index-CFzUKwcp.js
+!static/web/assets/index-BwKpEW_P.js
 agent-transcripts
 *.log
