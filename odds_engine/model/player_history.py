@@ -10,6 +10,19 @@ NAMES = {
     "threes": ("threepointfieldgoalsmade", "threepointfieldgoalsmadethreepointfieldgoalsattempted"),
     "passing_yards": ("passingyards",), "rushing_yards": ("rushingyards",),
     "receiving_yards": ("receivingyards",), "receptions": ("receptions",),
+    "passing_tds": ("passingtouchdowns", "passingtd", "passingtds"),
+    "completions": ("completions", "passingcompletions"),
+    "pass_attempts": ("passingattempts", "passattempts", "attempts"),
+    "interceptions": ("interceptions", "passinginterceptions", "ints"),
+    "longest_pass": ("longestpass", "longpass", "passinglong"),
+    "rush_attempts": ("rushingattempts", "rushattempts", "carries"),
+    "rushing_tds": ("rushingtouchdowns", "rushingtd", "rushingtds"),
+    "longest_rush": ("longestrush", "rushinglong"),
+    "receiving_tds": ("receivingtouchdowns", "receivingtd", "receivingtds"),
+    "longest_reception": ("longestreception", "receivinglong"),
+    "anytime_td": ("touchdowns", "totaltouchdowns", "rushingtouchdowns"),
+    "rush_rec_yards": ("rushingyards", "receivingyards"),
+    "pass_rush_yards": ("passingyards", "rushingyards"),
     "shots_on_goal": ("shotsongoal", "shotstotal"), "shots": ("totalshots", "shots"),
     "shots_on_target": ("shotsontarget",), "goals": ("goals",), "hits": ("hits",),
     "runs": ("runs",), "rbis": ("rbis", "runsbattedin"), "home_runs": ("homeruns",),
@@ -17,7 +30,12 @@ NAMES = {
 }
 LABELS = {"points": "PTS", "rebounds": "REB", "assists": "AST", "threes": "3PT",
           "shots_on_goal": "SOG", "shots": "SH", "goals": "G", "hits": "H", "runs": "R",
-          "rbis": "RBI", "home_runs": "HR", "walks": "BB", "strikeouts": "K", "receptions": "REC"}
+          "rbis": "RBI", "home_runs": "HR", "walks": "BB", "strikeouts": "K", "receptions": "REC",
+          "passing_yards": "YDS", "rushing_yards": "YDS", "receiving_yards": "YDS",
+          "passing_tds": "TD", "rushing_tds": "TD", "receiving_tds": "TD",
+          "completions": "CMP", "pass_attempts": "ATT", "interceptions": "INT",
+          "rush_attempts": "CAR", "longest_pass": "LNG", "longest_rush": "LNG",
+          "longest_reception": "LNG"}
 
 
 def read_history(body, prop_type, now, minimum=5, limit=60):

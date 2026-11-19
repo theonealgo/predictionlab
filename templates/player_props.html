@@ -239,8 +239,14 @@ const PROP_LABELS  = {
   points:'Points', rebounds:'Rebounds', assists:'Assists', threes:'3PT Made',
   steals:'Steals', shots_on_goal:'SOG', goals:'Goals', hits:'Hits',
   strikeouts:'K', runs:'Runs', rbis:'RBI', home_runs:'HR',
-  passing_yards:'Pass Yds', rushing_yards:'Rush Yds',
-  receiving_yards:'Rec Yds', receptions:'Rec',
+  passing_yards:'Pass Yds', passing_tds:'Pass TD', completions:'Comp',
+  pass_attempts:'Pass Att', interceptions:'INT', longest_pass:'Long Pass',
+  rushing_yards:'Rush Yds', rush_attempts:'Carries', rushing_tds:'Rush TD',
+  longest_rush:'Long Rush',
+  receiving_yards:'Rec Yds', receptions:'Rec', receiving_tds:'Rec TD',
+  longest_reception:'Long Rec',
+  anytime_td:'Anytime TD', first_td:'First TD', last_td:'Last TD',
+  rush_rec_yards:'Rush+Rec Yds', pass_rush_yards:'Pass+Rush Yds',
   shots:'Shots', shots_on_target:'On Tgt'
 };
 let _view = 'props';
@@ -255,7 +261,12 @@ const DATES_PER_PAGE = 7;
 const MARKET_ROWS = {
   MLB: [['All','all'],['HR','home_runs'],['H','hits'],['R','runs'],['RBI','rbis'],['H+R+RBI',null],['1B',null],['2B',null],['3B',null],['TB',null],['SB',null],['K','strikeouts'],['ER',null],['HA',null],['BB','walks'],['OUTS',null]],
   BASKETBALL: [['All','all'],['Pts','points'],['Reb','rebounds'],['Ast','assists'],['3pts','threes'],['Most Points',null],['Stl',null],['Blk',null],['First Basket',null],['Double-double',null],['Pts+Ast',null],['Pts+Reb',null],['Reb+Ast',null],['Pts+Ast+Reb',null]],
-  FOOTBALL: [['All','all'],['Pass Yds','passing_yards'],['Rush Yds','rushing_yards'],['Rec Yds','receiving_yards'],['Rec','receptions']],
+  FOOTBALL: [['All','all'],
+    ['Pass Yds','passing_yards'],['Pass TD','passing_tds'],['Comp','completions'],['Pass Att','pass_attempts'],['INT','interceptions'],['Long Pass','longest_pass'],
+    ['Rush Yds','rushing_yards'],['Carries','rush_attempts'],['Rush TD','rushing_tds'],['Long Rush','longest_rush'],
+    ['Rec Yds','receiving_yards'],['Rec','receptions'],['Rec TD','receiving_tds'],['Long Rec','longest_reception'],
+    ['Anytime TD','anytime_td'],['First TD','first_td'],['Last TD','last_td'],
+    ['Rush+Rec','rush_rec_yards'],['Pass+Rush','pass_rush_yards']],
   HOCKEY: [['All','all'],['G','goals'],['A','assists'],['P','points'],['SOG','shots_on_goal']],
   SOCCER: [['Goalscorer','goals'],['Shots','shots'],['Assists','assists'],['Goals+Assists',null],['Cards',null],['Saves',null],['Fouls',null]],
   UFC: [['All','all']],

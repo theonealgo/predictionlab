@@ -23,8 +23,16 @@ const MODELS = [
 const PROP_LABELS = {
   points: 'Points', rebounds: 'Rebounds', assists: 'Assists', threes: '3PT Made', steals: 'Steals',
   shots_on_goal: 'SOG', goals: 'Goals', hits: 'Hits', strikeouts: 'K', runs: 'Runs', rbis: 'RBI',
-  home_runs: 'HR', passing_yards: 'Pass Yds', rushing_yards: 'Rush Yds', receiving_yards: 'Rec Yds',
-  receptions: 'Rec', shots: 'Shots', shots_on_target: 'On Tgt',
+  home_runs: 'HR',
+  passing_yards: 'Pass Yds', passing_tds: 'Pass TD', completions: 'Comp',
+  pass_attempts: 'Pass Att', interceptions: 'INT', longest_pass: 'Long Pass',
+  rushing_yards: 'Rush Yds', rush_attempts: 'Carries', rushing_tds: 'Rush TD',
+  longest_rush: 'Long Rush',
+  receiving_yards: 'Rec Yds', receptions: 'Rec', receiving_tds: 'Rec TD',
+  longest_reception: 'Long Rec',
+  anytime_td: 'Anytime TD', first_td: 'First TD', last_td: 'Last TD',
+  rush_rec_yards: 'Rush+Rec Yds', pass_rush_yards: 'Pass+Rush Yds',
+  shots: 'Shots', shots_on_target: 'On Tgt',
 };
 
 function propLabel(propType) {

@@ -155,8 +155,10 @@ _PRIMARY_MARKET: Dict[str, Dict[str, str]] = {
 
 _ROLE_MARKETS: Dict[str, Dict[str, Set[str]]] = {
     "NFL": {
+        # Default/synthetic: core yards + receptions only. Expanded NFL markets
+        # (TDs, attempts, longest, anytime TD, combos) are book-only below.
         "QB": {
-            "passing_yards", "rushing_yards", "receptions", "receiving_yards",
+            "passing_yards", "rushing_yards",
         },
         "RB": {
             "rushing_yards", "receptions", "receiving_yards",
@@ -223,11 +225,25 @@ _ROLE_MARKETS: Dict[str, Dict[str, Set[str]]] = {
 }
 
 # Unusual markets that may only appear when a real sportsbook line exists.
+# Expanded NFL markets: only when a sportsbook posts the line (no synth).
+_NFL_QB_BOOK = {
+    "passing_tds", "completions", "pass_attempts", "interceptions", "longest_pass",
+    "rush_attempts", "rushing_tds", "longest_rush", "pass_rush_yards",
+    "anytime_td", "first_td", "last_td",
+    "receptions", "receiving_yards", "receiving_tds", "longest_reception", "rush_rec_yards",
+}
+_NFL_SKILL_BOOK = {
+    "rush_attempts", "rushing_tds", "longest_rush",
+    "receiving_tds", "longest_reception", "rush_rec_yards",
+    "anytime_td", "first_td", "last_td",
+}
+
 _BOOK_ONLY_MARKETS: Dict[str, Dict[str, Set[str]]] = {
     "NFL": {
-        "WR": {"rushing_yards"},
-        "TE": {"rushing_yards"},
-        "QB": {"receptions", "receiving_yards"},
+        "QB": _NFL_QB_BOOK,
+        "RB": _NFL_SKILL_BOOK,
+        "WR": {"rushing_yards", "rush_attempts", "rushing_tds", "longest_rush"} | _NFL_SKILL_BOOK,
+        "TE": {"rushing_yards", "rush_attempts", "rushing_tds", "longest_rush"} | _NFL_SKILL_BOOK,
     },
     "NCAAF": {
         "WR": {"rushing_yards"},

@@ -85,12 +85,26 @@ _SPORT_PROJ_CAPS: Dict[str, Dict[str, float]] = {
         "stolen_bases":  2.0,
     },
     "NFL": {
-        "passing_yards":   500.0,
-        "rushing_yards":   200.0,
-        "receiving_yards": 250.0,
-        "touchdowns":        5.0,
-        "receptions":       15.0,
-        "interceptions":     3.0,
+        "passing_yards":     500.0,
+        "passing_tds":         5.0,
+        "completions":        40.0,
+        "pass_attempts":      55.0,
+        "interceptions":       4.0,
+        "longest_pass":       80.0,
+        "rushing_yards":     200.0,
+        "rush_attempts":      30.0,
+        "rushing_tds":         4.0,
+        "longest_rush":       80.0,
+        "receiving_yards":   250.0,
+        "receptions":         15.0,
+        "receiving_tds":       4.0,
+        "longest_reception":  80.0,
+        "anytime_td":          1.0,
+        "first_td":            1.0,
+        "last_td":             1.0,
+        "rush_rec_yards":    250.0,
+        "pass_rush_yards":   500.0,
+        "touchdowns":          5.0,
     },
     "SOCCER": {
         "goals":            3.0,
@@ -638,9 +652,18 @@ _ACTUAL_STAT_LABELS: Dict[str, Dict[str, List[str]]] = {
 
 # Football box-score category name -> {prop_type: column label}.
 _FOOTBALL_GROUP_PROPS: Dict[str, Dict[str, str]] = {
-    "passing": {"passing_yards": "YDS"},
-    "rushing": {"rushing_yards": "YDS"},
-    "receiving": {"receiving_yards": "YDS", "receptions": "REC"},
+    "passing": {
+        "passing_yards": "YDS", "passing_tds": "TD", "interceptions": "INT",
+        "longest_pass": "LNG", "completions": "C/ATT", "pass_attempts": "C/ATT",
+    },
+    "rushing": {
+        "rushing_yards": "YDS", "rush_attempts": "CAR", "rushing_tds": "TD",
+        "longest_rush": "LNG",
+    },
+    "receiving": {
+        "receiving_yards": "YDS", "receptions": "REC", "receiving_tds": "TD",
+        "longest_reception": "LNG",
+    },
 }
 # Props whose ESPN cell is formatted "made-attempted" (e.g. "3-7") — take makes.
 _MADE_VALUE_PROPS = {"threes"}
@@ -711,9 +734,23 @@ def _fetch_event_actuals(league: str, event_id: str) -> Dict[str, Dict[str, floa
                         if raw in (None, "", "--"):
                             continue
                         try:
-                            rec[pt] = float(raw)
+                            if pt in ("completions", "pass_attempts") and isinstance(raw, str) and "/" in raw:
+                                parts = raw.split("/")
+                                rec[pt] = float(parts[0] if pt == "completions" else parts[1])
+                            else:
+                                rec[pt] = float(raw)
                         except Exception:
                             continue
+                    # Derived combo / anytime TD after all groups merge.
+                    rush = rec.get("rushing_yards")
+                    recv = rec.get("receiving_yards")
+                    pas = rec.get("passing_yards")
+                    if rush is not None and recv is not None:
+                        rec["rush_rec_yards"] = rush + recv
+                    if pas is not None and rush is not None:
+                        rec["pass_rush_yards"] = pas + rush
+                    if "rushing_tds" in rec or "receiving_tds" in rec:
+                        rec["anytime_td"] = 1.0 if ((rec.get("rushing_tds") or 0) + (rec.get("receiving_tds") or 0)) >= 1 else 0.0
                     continue
                 for pt in _ACTUAL_STAT_LABELS.get(sport, {}):
                     if pt in rec:

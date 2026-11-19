@@ -9,8 +9,15 @@ COUNT_MARKETS = {
     "points", "rebounds", "assists", "threes", "steals", "blocks", "hits", "runs",
     "rbis", "home_runs", "walks", "strikeouts", "receptions", "shots", "shots_on_goal",
     "shots_on_target", "goals", "touchdowns", "tds",
+    "passing_tds", "completions", "pass_attempts", "interceptions",
+    "rush_attempts", "rushing_tds", "receiving_tds",
+    "anytime_td", "first_td", "last_td",
 }
-YARD_MARKETS = {"passing_yards", "rushing_yards", "receiving_yards"}
+YARD_MARKETS = {
+    "passing_yards", "rushing_yards", "receiving_yards",
+    "longest_pass", "longest_rush", "longest_reception",
+    "rush_rec_yards", "pass_rush_yards",
+}
 
 
 def finite(value):

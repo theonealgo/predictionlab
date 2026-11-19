@@ -37,9 +37,28 @@ def _actuals(payload, league):
             category = str(group.get("name") or group.get("type") or group.get("displayName") or "").lower()
             mapping = labels_by_prop
             if league in ("NFL", "NCAAF", "CFL"):
-                mapping = {"passing": {"passing_yards": ("YDS",)},
-                           "rushing": {"rushing_yards": ("YDS",)},
-                           "receiving": {"receiving_yards": ("YDS",), "receptions": ("REC",)}}.get(category, {})
+                mapping = {
+                    "passing": {
+                        "passing_yards": ("YDS",),
+                        "passing_tds": ("TD",),
+                        "completions": ("C/ATT", "CMP", "COMP"),
+                        "pass_attempts": ("C/ATT", "ATT"),
+                        "interceptions": ("INT",),
+                        "longest_pass": ("LNG", "LONG"),
+                    },
+                    "rushing": {
+                        "rushing_yards": ("YDS",),
+                        "rush_attempts": ("CAR", "ATT"),
+                        "rushing_tds": ("TD",),
+                        "longest_rush": ("LNG", "LONG"),
+                    },
+                    "receiving": {
+                        "receiving_yards": ("YDS",),
+                        "receptions": ("REC",),
+                        "receiving_tds": ("TD",),
+                        "longest_reception": ("LNG", "LONG"),
+                    },
+                }.get(category, {})
             elif league == "MLB":
                 mapping = {"strikeouts": ("K", "SO")} if category == "pitching" else {
                     key: value for key, value in labels_by_prop.items()
@@ -63,12 +82,21 @@ def _actuals(payload, league):
                         if index >= len(values) or values[index] in (None, "", "--") or isinstance(values[index], bool):
                             continue
                         try:
+                            raw = values[index]
                             if prop == "threes":
                                 from odds_engine.model.gamelog import makes
-                                value = makes(values[index])
+                                value = makes(raw)
+                            elif prop in ("completions", "pass_attempts") and isinstance(raw, str) and "/" in raw:
+                                # ESPN C/ATT cells look like "18/28".
+                                parts = raw.split("/")
+                                value = float(parts[0] if prop == "completions" else parts[1])
                             else:
-                                value = float(values[index])
-                            signed = prop in ("passing_yards", "rushing_yards", "receiving_yards")
+                                value = float(raw)
+                            signed = prop in (
+                                "passing_yards", "rushing_yards", "receiving_yards",
+                                "rush_rec_yards", "pass_rush_yards",
+                                "longest_pass", "longest_rush", "longest_reception",
+                            )
                             if value is not None and math.isfinite(value) and (signed or value >= 0):
                                 target["stats"][prop] = value
                         except (TypeError, ValueError):
@@ -78,6 +106,21 @@ def _actuals(payload, league):
             values = player["stats"]
             if "points" not in values and "goals" in values and "assists" in values:
                 values["points"] = values["goals"]+values["assists"]
+    if league in ("NFL", "NCAAF", "CFL"):
+        for player in stats.values():
+            values = player["stats"]
+            rush = values.get("rushing_yards")
+            recv = values.get("receiving_yards")
+            pas = values.get("passing_yards")
+            if rush is not None and recv is not None:
+                values["rush_rec_yards"] = rush + recv
+            if pas is not None and rush is not None:
+                values["pass_rush_yards"] = pas + rush
+            # Anytime TD = any rushing or receiving TD (passing TDs don't count).
+            rtd = values.get("rushing_tds") or 0.0
+            rec_td = values.get("receiving_tds") or 0.0
+            if "rushing_tds" in values or "receiving_tds" in values:
+                values["anytime_td"] = 1.0 if (rtd + rec_td) >= 1.0 else 0.0
     return stats
 
 

@@ -53,7 +53,18 @@ _LEAGUE_PROP_TYPES = {
     "NCAAW": ["points", "rebounds", "assists", "threes"],
     "NHL": ["shots_on_goal", "points", "assists", "goals"],
     "MLB": ["hits", "strikeouts", "runs", "rbis", "home_runs", "walks"],
-    "NFL": ["passing_yards", "rushing_yards", "receiving_yards", "receptions"],
+    "NFL": [
+        # Passing
+        "passing_yards", "passing_tds", "completions", "pass_attempts",
+        "interceptions", "longest_pass",
+        # Rushing
+        "rushing_yards", "rush_attempts", "rushing_tds", "longest_rush",
+        # Receiving
+        "receiving_yards", "receptions", "receiving_tds", "longest_reception",
+        # TD + combo
+        "anytime_td", "first_td", "last_td",
+        "rush_rec_yards", "pass_rush_yards",
+    ],
     "NCAAF": ["passing_yards", "rushing_yards", "receiving_yards", "receptions"],
     "CFL": ["passing_yards", "rushing_yards", "receiving_yards", "receptions"],
     "SOCCER": ["shots", "shots_on_target", "goals", "assists"],
@@ -73,9 +84,24 @@ _PROP_LINE_RANGES = {
     "rbis": (0.5, 1.5),
     "home_runs": (0.5, 1.5),
     "passing_yards": (185.5, 315.5),
+    "passing_tds": (0.5, 3.5),
+    "completions": (14.5, 28.5),
+    "pass_attempts": (24.5, 42.5),
+    "interceptions": (0.5, 1.5),
+    "longest_pass": (18.5, 45.5),
     "rushing_yards": (35.5, 95.5),
+    "rush_attempts": (8.5, 22.5),
+    "rushing_tds": (0.5, 1.5),
+    "longest_rush": (8.5, 28.5),
     "receiving_yards": (35.5, 105.5),
     "receptions": (2.5, 8.5),
+    "receiving_tds": (0.5, 1.5),
+    "longest_reception": (12.5, 35.5),
+    "anytime_td": (0.5, 0.5),
+    "first_td": (0.5, 0.5),
+    "last_td": (0.5, 0.5),
+    "rush_rec_yards": (45.5, 145.5),
+    "pass_rush_yards": (195.5, 335.5),
     "shots": (1.5, 4.5),
     "shots_on_target": (0.5, 2.5),
 }
@@ -133,7 +159,28 @@ _ODDS_API_MARKETS = {
     "NCAAW":  {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
     "NHL":    {"points": "player_points", "assists": "player_assists", "goals": "player_goals", "shots_on_goal": "player_shots_on_goal"},
     "MLB":    {"hits": "batter_hits", "runs": "batter_runs_scored", "rbis": "batter_rbis", "home_runs": "batter_home_runs", "strikeouts": "pitcher_strikeouts", "walks": "batter_walks"},
-    "NFL":    {"passing_yards": "player_pass_yds", "rushing_yards": "player_rush_yds", "receiving_yards": "player_reception_yds", "receptions": "player_receptions"},
+    # Values may be a single Odds API market key or a list (main + alternate).
+    "NFL": {
+        "passing_yards": ["player_pass_yds", "player_pass_yds_alternate"],
+        "passing_tds": "player_pass_tds",
+        "completions": "player_pass_completions",
+        "pass_attempts": "player_pass_attempts",
+        "interceptions": "player_pass_interceptions",
+        "longest_pass": "player_pass_longest_completion",
+        "rushing_yards": ["player_rush_yds", "player_rush_yds_alternate"],
+        "rush_attempts": "player_rush_attempts",
+        "rushing_tds": "player_rush_tds",
+        "longest_rush": "player_rush_longest",
+        "receiving_yards": ["player_reception_yds", "player_reception_yds_alternate"],
+        "receptions": ["player_receptions", "player_receptions_alternate"],
+        "receiving_tds": "player_reception_tds",
+        "longest_reception": "player_reception_longest",
+        "anytime_td": "player_anytime_td",
+        "first_td": "player_1st_td",
+        "last_td": "player_last_td",
+        "rush_rec_yards": "player_rush_reception_yds",
+        "pass_rush_yards": "player_pass_rush_yds",
+    },
     "NCAAF":  {"passing_yards": "player_pass_yds", "rushing_yards": "player_rush_yds", "receiving_yards": "player_reception_yds", "receptions": "player_receptions"},
     "SOCCER": {"goals": "player_goals", "assists": "player_assists", "shots": "player_shots", "shots_on_target": "player_shots_on_target"},
 }
@@ -1324,6 +1371,20 @@ def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
     if not name:
         return None
     n = name.lower()
+    # NFL rush+rec / pass+rush yard combos use "+" / "and" in the book name —
+    # resolve them before the generic combo reject below.
+    if league == "NFL":
+        if any(kw in n for kw in (
+            "passing + rushing yards", "pass + rush yards",
+            "passing and rushing yards", "pass and rush yards",
+        )):
+            return "pass_rush_yards" if "pass_rush_yards" in set(_LEAGUE_PROP_TYPES.get(league, [])) else None
+        if any(kw in n for kw in (
+            "rushing + receiving yards", "rush + rec yards",
+            "rushing and receiving yards", "rush + reception yards",
+            "rushing + reception yards",
+        )):
+            return "rush_rec_yards" if "rush_rec_yards" in set(_LEAGUE_PROP_TYPES.get(league, [])) else None
     if re.search(r"\b(?:half|quarter|period|innings?|fantasy)\b", n) or re.search(r"\b(?:and|plus)\b", n):
         return None
     if "+" in n or "allowed" in n:  # combos / pitcher 'hits allowed' etc.
@@ -1344,8 +1405,8 @@ def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
     if not allowed:
         return None
     # American football markets (NFL / NCAAF / CFL).
-    # Only full-game Total O/U lines — reject milestones, halves, quarters,
-    # longest-play, TD scorers (those pollute lines with 0.5 / 50.5 junk).
+    # Reject half/quarter/period splits and yes/no yardage milestones.
+    # NFL also maps longest-play, TD scorers, and combo yard totals when listed.
     if league in ("NFL", "NCAAF", "CFL"):
         if any(
             x in n
@@ -1353,24 +1414,46 @@ def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
                 "milestone",
                 "1st half",
                 "1st quarter",
+                "2nd half",
+                "2nd quarter",
+                "3rd quarter",
+                "4th quarter",
                 "first half",
                 "first quarter",
-                "longest",
-                "touchdown scorer",
-                "anytime",
-                "passing +",
-                "rushing +",
-                "receiving +",
-                "plus rushing",
-                "plus receiving",
+                "second half",
+                "second quarter",
+                "third quarter",
+                "fourth quarter",
             )
         ):
             return None
         football = [
-            ("passing_yards", ("total passing yards",)),
-            ("rushing_yards", ("total rushing yards",)),
-            ("receiving_yards", ("total receiving yards",)),
-            ("receptions", ("total receptions",)),
+            # Combos before single-stat yards (substring safety).
+            ("pass_rush_yards", (
+                "passing + rushing yards", "pass + rush yards",
+                "passing and rushing yards", "pass and rush yards",
+            )),
+            ("rush_rec_yards", (
+                "rushing + receiving yards", "rush + rec yards",
+                "rushing and receiving yards", "rush + reception yards",
+            )),
+            ("passing_tds", ("total passing touchdowns", "passing touchdowns", "pass tds")),
+            ("passing_yards", ("total passing yards", "passing yards")),
+            ("completions", ("total completions", "pass completions", "completions")),
+            ("pass_attempts", ("total pass attempts", "passing attempts", "pass attempts")),
+            ("interceptions", ("total interceptions thrown", "interceptions thrown", "pass interceptions")),
+            ("longest_pass", ("longest pass completion", "longest completion", "longest pass")),
+            ("rushing_tds", ("total rushing touchdowns", "rushing touchdowns", "rush tds")),
+            ("rush_attempts", ("total rushing attempts", "rushing attempts", "rush attempts", "carries")),
+            ("rushing_yards", ("total rushing yards", "rushing yards")),
+            ("longest_rush", ("longest rush",)),
+            ("receiving_tds", ("total receiving touchdowns", "receiving touchdowns", "rec tds")),
+            ("receiving_yards", ("total receiving yards", "receiving yards")),
+            ("receptions", ("total receptions", "receptions", "catches")),
+            ("longest_reception", ("longest reception",)),
+            ("anytime_td", ("anytime touchdown scorer", "anytime touchdown", "anytime td")),
+            ("first_td", ("first touchdown scorer", "first touchdown", "1st touchdown scorer")),
+            ("last_td", ("last touchdown scorer", "last touchdown")),
         ]
         for internal, keywords in football:
             if internal not in allowed:
@@ -1542,6 +1625,7 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
                 price_int = _american_to_int(((it.get("odds") or {}).get("american") or {}).get("value"))
                 # MLB HR milestones post integer 1.0 (yes to hit 1 HR). Convert
                 # to a 0.5 O/U-style line so the UI shows 1+ with no Under.
+                # NFL anytime / first / last TD scorers are Yes markets (0.5).
                 over_only = False
                 if (
                     league == "MLB"
@@ -1551,6 +1635,12 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
                 ):
                     target_f = max(0.5, float(target_f) - 0.5)
                     over_only = True
+                if prop_type in ("anytime_td", "first_td", "last_td"):
+                    over_only = True
+                    if float(target_f).is_integer() and target_f >= 1.0:
+                        target_f = max(0.5, float(target_f) - 0.5)
+                    elif target_f <= 0:
+                        target_f = 0.5
                 key = (eid, athlete_id, prop_type)
                 slot = agg.get(key)
 
