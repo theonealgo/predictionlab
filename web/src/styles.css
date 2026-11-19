@@ -1312,6 +1312,11 @@ button {
   margin: 0 0 10px;
   font-size: 22px;
   font-weight: 800;
+  color: #0f172a;
+}
+
+.pl-home-sport-name {
+  color: #0f172a;
 }
 
 .pl-home-sport-title a {
@@ -1379,17 +1384,17 @@ button {
 
 .pl-home-preview-track {
   display: block;
-  height: 3px;
+  height: 4px;
   margin-top: 6px;
   border-radius: 3px;
-  background: #f1f5f9;
+  background: #e2e8f0;
   overflow: hidden;
 }
 
 .pl-home-preview-track > span {
   display: block;
   height: 100%;
-  background: var(--preview-color);
+  background: var(--preview-color, #15803d);
 }
 
 .pl-home-preview-percent {

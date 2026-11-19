@@ -22,7 +22,9 @@ export function readCardPreview(card) {
   const names = [card.away, card.home];
   const read = (slot, fallback) => {
     const headline = slot?.querySelector('.win-pct');
-    const match = headline?.textContent.match(/^\s*(\d+(?:\.\d+)?)\s*%/);
+    // Cards use 64.1<span class="unit">%</span> — normalize before matching.
+    const raw = (headline?.textContent || '').replace(/\s+/g, ' ').trim();
+    const match = raw.match(/^(\d+(?:\.\d+)?)\s*%?/);
     const number = match ? Number(match[1]) : null;
     return {
       name: slot?.querySelector('.team-name')?.textContent.trim() || fallback || '',
