@@ -464,6 +464,28 @@ def _served_results_usable(html: str) -> bool:
         return False
     if "/static/js/team-results.js" in html and 'id="team-results-data"' not in html:
         return False
+    # After a /data/.cache wipe, a cold rebuild can stamp Last Night (0 games)
+    # while Last 7 is still an old October window — never keep that as "good".
+    ln = re.search(
+        r"Last Night's \w+ Results\s*[—–-]\s*(\d{4}-\d{2}-\d{2})\s*\((\d+)\s+games?\)",
+        html or "",
+        flags=re.I,
+    )
+    l7 = re.search(
+        r"Last 7 Days \w+ Results\s*[—–-]\s*(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})",
+        html or "",
+        flags=re.I,
+    )
+    if ln and l7 and int(ln.group(2) or 0) == 0:
+        try:
+            from datetime import datetime as _dt
+
+            night = _dt.strptime(ln.group(1), "%Y-%m-%d")
+            end7 = _dt.strptime(l7.group(2), "%Y-%m-%d")
+            if (night - end7).days > 7:
+                return False
+        except Exception:
+            pass
     return True
 
 
@@ -510,7 +532,7 @@ def _served_from_disk() -> bool:
 
 
 def store_served_results(key: str, html: str) -> None:
-    if not key or not html or _REPAIRED_MARK not in html or len(html) < 500:
+    if not key or not html or not _served_results_usable(html):
         return
     # Re-saving the copy that was just read resets its age, so it never refreshes.
     if _served_from_disk() and not results_refresh_forced():
