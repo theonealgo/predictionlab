@@ -1364,6 +1364,9 @@ def nhl_last7_end_yesterday(html: str) -> str:
 _NHL_REBUILD_HEADER = "X-PL-Results-Rebuild"
 _NHL_REBUILD_LOCK = threading.Lock()
 _NHL_REBUILD_AT = 0.0
+# Flag for site_autorefresh — NEVER HTTP self-call the only gunicorn worker
+# (that deadlocks gthreads and takes the whole site down).
+_NHL_REBUILD_FLAG = _CARDS_CACHE_DIR / "nhl_results_needs_rebuild"
 
 
 def _nhl_is_rebuild_request() -> bool:
@@ -1375,51 +1378,37 @@ def _nhl_is_rebuild_request() -> bool:
         return False
 
 
+def nhl_results_rebuild_requested() -> bool:
+    """True when a background pass should rebuild NHL results (flag file)."""
+    try:
+        return _NHL_REBUILD_FLAG.is_file()
+    except OSError:
+        return False
+
+
+def clear_nhl_results_rebuild_flag() -> None:
+    try:
+        _NHL_REBUILD_FLAG.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def _schedule_nhl_results_rebuild() -> None:
-    """Rebuild the saved NHL cards page off the request (new finals landed)."""
+    """Ask site_autorefresh to rebuild NHL results — do not HTTP the live worker.
+
+    A localhost urllib loop into the same 1-worker gunicorn process deadlocks
+    all gthreads (rebuild waits for a free thread; visitors wait for rebuild).
+    """
     global _NHL_REBUILD_AT
     with _NHL_REBUILD_LOCK:
         now = time.time()
         if now - _NHL_REBUILD_AT < 600:
             return
         _NHL_REBUILD_AT = now
-
-    import os
-
-    base = f"http://127.0.0.1:{os.environ['PORT']}" if os.environ.get("PORT") else ""
-    if not base:
-        try:
-            from flask import has_request_context, request
-
-            if has_request_context():
-                base = f"http://127.0.0.1:{request.environ.get('SERVER_PORT') or '5000'}"
-        except Exception:
-            pass
-    base = base or "http://127.0.0.1:5000"
-
-    def _run() -> None:
-        import urllib.request
-
-        # Charts are built from the cards page, so the cards page goes first.
-        for path in (
-            "/nhl-results",
-            "/nhl-results?view=chart",
-            "/nhl-results?view=chart&market=moneyline",
-            "/nhl-results?view=chart&market=spread",
-            "/nhl-results?view=chart&market=totals",
-        ):
-            try:
-                req = urllib.request.Request(
-                    f"{base}{path}",
-                    headers={_NHL_REBUILD_HEADER: "1"},
-                )
-                urllib.request.urlopen(req, timeout=300).read()
-            except Exception:
-                pass
-
     try:
-        threading.Thread(target=_run, daemon=True, name="nhl-results-rebuild").start()
-    except Exception:
+        _NHL_REBUILD_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        _NHL_REBUILD_FLAG.write_text(str(time.time()), encoding="utf-8")
+    except OSError:
         pass
 
 

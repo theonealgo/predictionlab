@@ -114029,19 +114029,24 @@ def sport_results__nhl(sport):
         if sport == 'SOCCER' and not SOCCER_ENABLED:
             return "Soccer results are temporarily hidden while data loads.", 404
         if sport == 'NHL':
+            # Never run NHL API gap-fill on the visitor request — it blocked the
+            # only gunicorn worker. Background thread + throttle only.
             try:
-                # Gap-fill from newest scored night → yesterday (fixes Oct-stuck /data).
-                _nhl_scored = _sync_nhl_unscored_finals(max_dates=21)
-                if _nhl_scored:
+                def _nhl_sync_bg():
                     try:
-                        from isolate_checker_fixes import drop_nhl_results_caches
-                        drop_nhl_results_caches()
+                        scored = _sync_nhl_unscored_finals(max_dates=21)
+                        if scored:
+                            try:
+                                from isolate_checker_fixes import drop_nhl_results_caches, _schedule_nhl_results_rebuild
+                                drop_nhl_results_caches()
+                                _schedule_nhl_results_rebuild()
+                            except Exception:
+                                pass
                     except Exception:
                         pass
-                    for _ck in [k for k in _SPORT_RESULTS_CACHE if str(k).startswith('NHL')]:
-                        _SPORT_RESULTS_CACHE.pop(_ck, None)
+                threading.Thread(target=_nhl_sync_bg, daemon=True, name="nhl-score-sync").start()
             except Exception as _nhl_sync_e:
-                logger.debug(f"NHL score sync failed: {_nhl_sync_e}")
+                logger.debug(f"NHL score sync schedule failed: {_nhl_sync_e}")
             try:
                 _nhl_view = (request.args.get('view') or '').strip().lower()
             except Exception:

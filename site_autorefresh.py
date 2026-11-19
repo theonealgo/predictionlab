@@ -491,12 +491,52 @@ def _sync_college_ratings() -> None:
             _refresh_sport_picks(sport)
 
 
+def _rebuild_nhl_if_flagged(app) -> None:
+    """Rebuild NHL results via test_client when the flag file is set.
+
+    isolate_checker_fixes only writes the flag — it must NOT HTTP the live
+    worker (that deadlocks the single gunicorn process).
+    """
+    try:
+        import isolate_checker_fixes as icf
+    except Exception:
+        return
+    try:
+        needed = bool(icf.nhl_results_rebuild_requested())
+    except Exception:
+        needed = False
+    if not needed:
+        nhl_fast = _CACHE / "nhl_results_page.html"
+        if nhl_fast.is_file():
+            return
+        # Missing fast-path after a deploy purge — rebuild once.
+    done = 0
+    for view, market in (("", ""), ("chart", ""), ("chart", "moneyline"),
+                         ("chart", "spread"), ("chart", "totals")):
+        try:
+            if _rebuild_page(app, "NHL", view, market):
+                done += 1
+        except Exception as exc:
+            logger.warning(f"[autorefresh] NHL rebuild {view}/{market} failed: {exc}")
+        time.sleep(PAGE_PAUSE_S)
+    try:
+        icf.clear_nhl_results_rebuild_flag()
+    except Exception:
+        pass
+    if done:
+        logger.info(f"[autorefresh] NHL flagged rebuild: {done} page(s)")
+
+
 def _cycle(app, db: str, sync_fns: dict, state: dict) -> None:
     now = time.time()
     # Cache wipe: score-sync every missing sport before rebuilding empty pages.
     for sport in _missing_results_sports():
         _last_sync[sport] = now
         _run_sync(sport, sync_fns)
+    try:
+        _rebuild_nhl_if_flagged(app)
+    except Exception as exc:
+        logger.warning(f"[autorefresh] NHL flagged rebuild failed: {exc}")
     try:
         _sync_cfl(app, state)
     except Exception as exc:
