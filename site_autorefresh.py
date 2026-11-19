@@ -193,6 +193,44 @@ def _saved_pages(sport: str) -> list[tuple[str, str]]:
     return found if found else list(_DEFAULT_VARIANTS)
 
 
+def _purge_poisoned_served() -> int:
+    """Delete wipe-poisoned served results HTML so missing-seed rebuilds run."""
+    try:
+        from isolate_checker_fixes import _served_results_usable
+    except Exception:
+        return 0
+    removed = 0
+    for path in list(_CACHE.glob("served_*.html")):
+        name = path.name
+        if "__free" in name and not name.startswith("served_"):
+            continue
+        # Only cards/results keys (skip picks).
+        if "picks" in name.lower():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        if _served_results_usable(text):
+            continue
+        try:
+            path.unlink(missing_ok=True)
+            removed += 1
+            logger.warning(f"[autorefresh] removed unusable served page {name}")
+        except OSError as exc:
+            logger.debug(f"[autorefresh] could not remove {name}: {exc}")
+    last_good = Path("/data/nhl_results_last_good.html")
+    if last_good.is_file():
+        try:
+            if not _served_results_usable(last_good.read_text(encoding="utf-8", errors="ignore")):
+                last_good.unlink(missing_ok=True)
+                removed += 1
+                logger.warning("[autorefresh] removed unusable nhl_results_last_good.html")
+        except OSError:
+            pass
+    return removed
+
+
 def _missing_results_sports() -> list[str]:
     return [
         sport for sport in SLUGS
@@ -609,6 +647,9 @@ def _warm_loop(app) -> None:
 
 
 def _loop(app, db: str, sync_fns: dict) -> None:
+    purged = _purge_poisoned_served()
+    if purged:
+        logger.warning(f"[autorefresh] purged {purged} unusable served page(s) before first cycle")
     missing = _missing_results_sports()
     # Empty /data/.cache (operator wipe or new disk): do not wait 15 minutes.
     delay = 5 if missing else FIRST_DELAY_S

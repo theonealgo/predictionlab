@@ -39,7 +39,9 @@ _DAILY = set()
 _DISK = {}
 _PROCESS_LOCK = threading.Lock()
 _SETTLEMENT = set()
-_DEFAULT_START_DELAY = "300" if Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") else "120"
+# Render: wait 30m so homepage/results own the only worker (props forks caused
+# WORKER TIMEOUT). Override with PL_PROPS_START_DELAY if needed.
+_DEFAULT_START_DELAY = "1800" if Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") else "120"
 START_DELAY = max(0, int(os.getenv("PL_PROPS_START_DELAY", _DEFAULT_START_DELAY) or _DEFAULT_START_DELAY))
 _NOT_BEFORE = time.monotonic() + START_DELAY
 logger = logging.getLogger(__name__)
@@ -135,7 +137,10 @@ def _read_snapshot(path):
 def run_isolated(site, league, day):
     """Only called by the queue thread; the child never imports the website."""
     directory = _path(site, league, day).parent.parent
-    timeout = max(30, int(os.getenv("PL_PROPS_JOB_TIMEOUT", "600")))
+    # Cap job time: a 600s props child held the lock through gunicorn's old
+    # 120s worker timeout and killed live traffic.
+    _default_job_timeout = "90" if Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") else "600"
+    timeout = max(30, int(os.getenv("PL_PROPS_JOB_TIMEOUT", _default_job_timeout) or _default_job_timeout))
     memory_mb = max(128, int(os.getenv("PL_PROPS_JOB_MEMORY_MB", "512")))
     with _PROCESS_LOCK:
         directory.mkdir(parents=True, exist_ok=True)

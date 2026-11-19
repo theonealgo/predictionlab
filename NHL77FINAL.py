@@ -131102,14 +131102,24 @@ def _nhl_results_keep_last_good(response):
             return response
         path = _nhl_results_last_good_path()
         html = response.get_data(as_text=True)
+        try:
+            from isolate_checker_fixes import _served_results_usable as _nhl_html_usable
+        except Exception:
+            _nhl_html_usable = lambda _h: bool(_h) and 'game-card' in _h and len(_h) > 20000
         if _NHL_RESULTS_FAIL_TEXT in html:
             if _os.path.isfile(path):
                 with open(path, encoding='utf-8') as fh:
                     good = fh.read()
-                if good:
+                # Never restore a wipe-poisoned board (0-game Last Night + stale Last 7).
+                if good and _nhl_html_usable(good):
                     response.set_data(good)
+                elif good and not _nhl_html_usable(good):
+                    try:
+                        _os.remove(path)
+                    except OSError:
+                        pass
             return response
-        if 'game-card' in html and len(html) > 20000:
+        if 'game-card' in html and len(html) > 20000 and _nhl_html_usable(html):
             try:
                 fresh = _time.time() - _os.path.getmtime(path) < 300
             except OSError:

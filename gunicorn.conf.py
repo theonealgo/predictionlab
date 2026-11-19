@@ -56,11 +56,13 @@ _default_threads = "4" if (
     os.path.isdir("/data") or os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID")
 ) else "8"
 threads = max(1, int(os.environ.get("GUNICORN_THREADS", _default_threads) or _default_threads))
-timeout = 120
+# 120s was killing the only worker mid rebuild (WORKER TIMEOUT) and forcing a
+# full cold boot under traffic. Allow one slow rebuild without recycling.
+timeout = max(60, int(os.environ.get("GUNICORN_TIMEOUT", "180") or 180))
 # Recycle the worker before RAM creep OOMs the 2–4 GB Render box.
 # Jitter spreads restarts so a traffic spike does not coincide with recycle.
-max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", "250") or 250)
-max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", "40") or 40)
+max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", "400") or 400)
+max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", "50") or 50)
 # preload_app MUST stay False.
 # With preload_app=True gunicorn imports the whole app in the MASTER *before*
 # binding $PORT, so the port only opens after every top-level import finishes —

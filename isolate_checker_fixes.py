@@ -476,16 +476,21 @@ def _served_results_usable(html: str) -> bool:
         html or "",
         flags=re.I,
     )
-    if ln and l7 and int(ln.group(2) or 0) == 0:
-        try:
-            from datetime import datetime as _dt
+    if ln and int(ln.group(2) or 0) == 0:
+        # Zero-game Last Night next to any Last 7 that ended before that night
+        # is the wipe poison (real bye nights still have a recent L7 end).
+        if l7:
+            try:
+                from datetime import datetime as _dt
 
-            night = _dt.strptime(ln.group(1), "%Y-%m-%d")
-            end7 = _dt.strptime(l7.group(2), "%Y-%m-%d")
-            if (night - end7).days > 7:
+                night = _dt.strptime(ln.group(1), "%Y-%m-%d")
+                end7 = _dt.strptime(l7.group(2), "%Y-%m-%d")
+                if end7 < night:
+                    return False
+            except Exception:
                 return False
-        except Exception:
-            pass
+        else:
+            return False
     return True
 
 
