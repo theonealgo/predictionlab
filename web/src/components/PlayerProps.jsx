@@ -21,7 +21,12 @@ const MODELS = [
 ];
 
 const PROP_LABELS = {
-  points: 'Points', rebounds: 'Rebounds', assists: 'Assists', threes: '3PT Made', steals: 'Steals',
+  points: 'Points', rebounds: 'Rebounds', assists: 'Assists', threes: '3PT Made',
+  steals: 'Steals', blocks: 'Blocks', turnovers: 'Turnovers',
+  field_goals: 'FG Made', twos: '2PT Made', fga: 'FGA', twopa: '2PA', threepa: '3PA',
+  ftm: 'FT Made', fta: 'FTA',
+  pra: 'PRA', points_rebounds: 'Pts+Reb', points_assists: 'Pts+Ast',
+  rebounds_assists: 'Reb+Ast', stocks: 'Stocks',
   shots_on_goal: 'SOG', goals: 'Goals', hits: 'Hits', strikeouts: 'K', runs: 'Runs', rbis: 'RBI',
   home_runs: 'HR',
   passing_yards: 'Pass Yds', passing_tds: 'Pass TD', completions: 'Comp',

@@ -112,6 +112,14 @@ _SPORT_PROJ_CAPS: Dict[str, Dict[str, float]] = {
         "shots":            8.0,
         "shots_on_target":  5.0,
     },
+    "NBA": {
+        "points": 50.0, "rebounds": 20.0, "assists": 15.0, "threes": 8.0,
+        "steals": 4.0, "blocks": 4.0, "turnovers": 8.0,
+        "field_goals": 16.0, "twos": 14.0, "fga": 30.0, "twopa": 20.0,
+        "threepa": 15.0, "ftm": 14.0, "fta": 18.0,
+        "pra": 60.0, "points_rebounds": 50.0, "points_assists": 50.0,
+        "rebounds_assists": 25.0, "stocks": 6.0,
+    },
     "NCAAB": {"points": 50.0, "rebounds": 20.0, "assists": 15.0, "threes": 8.0},
     "NCAAW": {"points": 45.0, "rebounds": 18.0, "assists": 12.0, "threes": 7.0},
     "WNBA":  {"points": 40.0, "rebounds": 15.0, "assists": 12.0, "threes": 6.0},
@@ -631,6 +639,16 @@ _ACTUAL_STAT_LABELS: Dict[str, Dict[str, List[str]]] = {
         "rebounds": ["REB"],
         "assists":  ["AST"],
         "threes":   ["3PT"],
+        "steals":   ["STL"],
+        "blocks":   ["BLK"],
+        "turnovers": ["TO", "TOV"],
+        "field_goals": ["FG", "FGM"],
+        "twos": ["2PM"],
+        "fga": ["FGA"],
+        "twopa": ["2PA"],
+        "threepa": ["3PA"],
+        "ftm": ["FT", "FTM"],
+        "fta": ["FTA"],
     },
     "baseball": {    # MLB (batting + pitching tables)
         "hits":       ["H"],
@@ -666,7 +684,7 @@ _FOOTBALL_GROUP_PROPS: Dict[str, Dict[str, str]] = {
     },
 }
 # Props whose ESPN cell is formatted "made-attempted" (e.g. "3-7") — take makes.
-_MADE_VALUE_PROPS = {"threes"}
+_MADE_VALUE_PROPS = {"threes", "field_goals", "twos", "ftm"}
 
 
 def _stat_from_row(prop_type: str, idx: Dict[str, int], vals: List, sport: str) -> Optional[float]:
@@ -760,6 +778,19 @@ def _fetch_event_actuals(league: str, event_id: str) -> Dict[str, Dict[str, floa
                         rec[pt] = v
                 if sport == "hockey" and "points" not in rec and rec.get("goals") is not None and rec.get("assists") is not None:
                     rec["points"] = rec["goals"] + rec["assists"]
+                if sport == "basketball":
+                    pts, reb, ast = rec.get("points"), rec.get("rebounds"), rec.get("assists")
+                    stl, blk = rec.get("steals"), rec.get("blocks")
+                    if pts is not None and reb is not None and ast is not None:
+                        rec["pra"] = pts + reb + ast
+                    if pts is not None and reb is not None:
+                        rec["points_rebounds"] = pts + reb
+                    if pts is not None and ast is not None:
+                        rec["points_assists"] = pts + ast
+                    if reb is not None and ast is not None:
+                        rec["rebounds_assists"] = reb + ast
+                    if stl is not None and blk is not None:
+                        rec["stocks"] = stl + blk
     return out
 
 

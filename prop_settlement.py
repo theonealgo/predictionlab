@@ -26,6 +26,9 @@ def _actuals(payload, league):
     stats = {}
     labels_by_prop = {
         "points": ("PTS",), "rebounds": ("REB",), "assists": ("AST",), "threes": ("3PT",),
+        "steals": ("STL",), "blocks": ("BLK",), "turnovers": ("TO", "TOV"),
+        "field_goals": ("FGM", "FG"), "twos": ("2PM",), "fga": ("FGA",),
+        "twopa": ("2PA",), "threepa": ("3PA",), "ftm": ("FT", "FTM"), "fta": ("FTA",),
         "hits": ("H",), "runs": ("R",), "rbis": ("RBI",), "home_runs": ("HR",),
         "walks": ("BB",), "strikeouts": ("K", "SO"), "shots_on_goal": ("SOG", "S"), "goals": ("G",),
     }
@@ -83,9 +86,13 @@ def _actuals(payload, league):
                             continue
                         try:
                             raw = values[index]
-                            if prop == "threes":
+                            if prop in ("threes", "field_goals", "twos", "ftm"):
                                 from odds_engine.model.gamelog import makes
                                 value = makes(raw)
+                            elif prop in ("fga", "twopa", "threepa", "fta") and isinstance(raw, str) and ("-" in raw or "/" in raw):
+                                sep = "-" if "-" in str(raw) else "/"
+                                parts = str(raw).split(sep)
+                                value = float(parts[1]) if len(parts) > 1 else float(parts[0])
                             elif prop in ("completions", "pass_attempts") and isinstance(raw, str) and "/" in raw:
                                 # ESPN C/ATT cells look like "18/28".
                                 parts = raw.split("/")
@@ -106,6 +113,24 @@ def _actuals(payload, league):
             values = player["stats"]
             if "points" not in values and "goals" in values and "assists" in values:
                 values["points"] = values["goals"]+values["assists"]
+    if league == "NBA":
+        for player in stats.values():
+            values = player["stats"]
+            pts = values.get("points")
+            reb = values.get("rebounds")
+            ast = values.get("assists")
+            stl = values.get("steals")
+            blk = values.get("blocks")
+            if pts is not None and reb is not None and ast is not None:
+                values["pra"] = pts + reb + ast
+            if pts is not None and reb is not None:
+                values["points_rebounds"] = pts + reb
+            if pts is not None and ast is not None:
+                values["points_assists"] = pts + ast
+            if reb is not None and ast is not None:
+                values["rebounds_assists"] = reb + ast
+            if stl is not None and blk is not None:
+                values["stocks"] = stl + blk
     if league in ("NFL", "NCAAF", "CFL"):
         for player in stats.values():
             values = player["stats"]

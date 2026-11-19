@@ -185,6 +185,7 @@ _ROLE_MARKETS: Dict[str, Dict[str, Set[str]]] = {
         "TE": {"receptions", "receiving_yards"},
     },
     "NBA": {
+        # Synth/default: core four. Expanded markets are book-only below.
         "G": {"points", "rebounds", "assists", "threes"},
         "F": {"points", "rebounds", "assists", "threes"},
         "C": {"points", "rebounds", "assists", "threes"},
@@ -238,6 +239,12 @@ _NFL_SKILL_BOOK = {
     "anytime_td", "first_td", "last_td",
 }
 
+_NBA_BOOK_ONLY = {
+    "steals", "blocks", "turnovers",
+    "field_goals", "twos", "fga", "twopa", "threepa", "ftm", "fta",
+    "pra", "points_rebounds", "points_assists", "rebounds_assists", "stocks",
+}
+
 _BOOK_ONLY_MARKETS: Dict[str, Dict[str, Set[str]]] = {
     "NFL": {
         "QB": _NFL_QB_BOOK,
@@ -251,6 +258,11 @@ _BOOK_ONLY_MARKETS: Dict[str, Dict[str, Set[str]]] = {
     },
     "CFL": {
         "WR": {"rushing_yards"},
+    },
+    "NBA": {
+        "G": set(_NBA_BOOK_ONLY),
+        "F": set(_NBA_BOOK_ONLY),
+        "C": set(_NBA_BOOK_ONLY),
     },
 }
 

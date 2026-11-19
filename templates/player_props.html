@@ -237,7 +237,12 @@ const MODEL_LABELS = ['Grinder2','Takedown','Edge','XSharp','Sharp Consensus'];
 const IS_PREMIUM = {{ 'true' if is_premium else 'false' }};
 const PROP_LABELS  = {
   points:'Points', rebounds:'Rebounds', assists:'Assists', threes:'3PT Made',
-  steals:'Steals', shots_on_goal:'SOG', goals:'Goals', hits:'Hits',
+  steals:'Steals', blocks:'Blocks', turnovers:'Turnovers',
+  field_goals:'FG Made', twos:'2PT Made', fga:'FGA', twopa:'2PA', threepa:'3PA',
+  ftm:'FT Made', fta:'FTA',
+  pra:'PRA', points_rebounds:'Pts+Reb', points_assists:'Pts+Ast',
+  rebounds_assists:'Reb+Ast', stocks:'Stocks',
+  shots_on_goal:'SOG', goals:'Goals', hits:'Hits',
   strikeouts:'K', runs:'Runs', rbis:'RBI', home_runs:'HR',
   passing_yards:'Pass Yds', passing_tds:'Pass TD', completions:'Comp',
   pass_attempts:'Pass Att', interceptions:'INT', longest_pass:'Long Pass',
@@ -260,7 +265,13 @@ const DATES_PER_PAGE = 7;
 // and clicking it explains it's N/A rather than silently showing nothing.
 const MARKET_ROWS = {
   MLB: [['All','all'],['HR','home_runs'],['H','hits'],['R','runs'],['RBI','rbis'],['H+R+RBI',null],['1B',null],['2B',null],['3B',null],['TB',null],['SB',null],['K','strikeouts'],['ER',null],['HA',null],['BB','walks'],['OUTS',null]],
-  BASKETBALL: [['All','all'],['Pts','points'],['Reb','rebounds'],['Ast','assists'],['3pts','threes'],['Most Points',null],['Stl',null],['Blk',null],['First Basket',null],['Double-double',null],['Pts+Ast',null],['Pts+Reb',null],['Reb+Ast',null],['Pts+Ast+Reb',null]],
+  BASKETBALL: [['All','all'],
+    ['Pts','points'],['Reb','rebounds'],['Ast','assists'],['3pts','threes'],
+    ['Stl','steals'],['Blk','blocks'],['TO','turnovers'],
+    ['FGM','field_goals'],['2PM','twos'],['FGA','fga'],['2PA','twopa'],['3PA','threepa'],
+    ['FTM','ftm'],['FTA','fta'],
+    ['PRA','pra'],['Pts+Reb','points_rebounds'],['Pts+Ast','points_assists'],
+    ['Reb+Ast','rebounds_assists'],['Stocks','stocks']],
   FOOTBALL: [['All','all'],
     ['Pass Yds','passing_yards'],['Pass TD','passing_tds'],['Comp','completions'],['Pass Att','pass_attempts'],['INT','interceptions'],['Long Pass','longest_pass'],
     ['Rush Yds','rushing_yards'],['Carries','rush_attempts'],['Rush TD','rushing_tds'],['Long Rush','longest_rush'],

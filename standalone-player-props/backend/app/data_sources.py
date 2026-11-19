@@ -47,7 +47,14 @@ _LEAGUE_MINUTES_RANGE = {
 }
 
 _LEAGUE_PROP_TYPES = {
-    "NBA": ["points", "rebounds", "assists", "threes"],
+    "NBA": [
+        # Core
+        "points", "rebounds", "assists", "threes", "steals", "blocks", "turnovers",
+        # Shooting / volume
+        "field_goals", "twos", "fga", "twopa", "threepa", "ftm", "fta",
+        # Combos
+        "pra", "points_rebounds", "points_assists", "rebounds_assists", "stocks",
+    ],
     "WNBA": ["points", "rebounds", "assists", "threes"],
     "NCAAB": ["points", "rebounds", "assists", "threes"],
     "NCAAW": ["points", "rebounds", "assists", "threes"],
@@ -76,6 +83,21 @@ _PROP_LINE_RANGES = {
     "rebounds": (3.5, 12.5),
     "assists": (2.5, 10.5),
     "threes": (0.5, 4.5),
+    "steals": (0.5, 2.5),
+    "blocks": (0.5, 2.5),
+    "turnovers": (1.5, 4.5),
+    "field_goals": (3.5, 12.5),
+    "twos": (2.5, 9.5),
+    "fga": (8.5, 22.5),
+    "twopa": (4.5, 14.5),
+    "threepa": (2.5, 10.5),
+    "ftm": (1.5, 8.5),
+    "fta": (2.5, 10.5),
+    "pra": (18.5, 45.5),
+    "points_rebounds": (14.5, 38.5),
+    "points_assists": (12.5, 36.5),
+    "rebounds_assists": (6.5, 18.5),
+    "stocks": (0.5, 3.5),
     "shots_on_goal": (1.5, 4.5),
     "goals": (0.5, 1.5),
     "hits": (0.5, 2.5),
@@ -153,7 +175,23 @@ _ODDS_API_SPORT_KEYS = {
 }
 # League -> {internal prop_type: The Odds API market key}.
 _ODDS_API_MARKETS = {
-    "NBA":    {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
+    "NBA": {
+        "points": ["player_points", "player_points_alternate"],
+        "rebounds": ["player_rebounds", "player_rebounds_alternate"],
+        "assists": ["player_assists", "player_assists_alternate"],
+        "threes": ["player_threes", "player_threes_alternate"],
+        "steals": ["player_steals", "player_steals_alternate"],
+        "blocks": ["player_blocks", "player_blocks_alternate"],
+        "turnovers": ["player_turnovers", "player_turnovers_alternate"],
+        "field_goals": "player_field_goals",
+        "ftm": "player_frees_made",
+        "fta": "player_frees_attempts",
+        "pra": ["player_points_rebounds_assists", "player_points_rebounds_assists_alternate"],
+        "points_rebounds": ["player_points_rebounds", "player_points_rebounds_alternate"],
+        "points_assists": ["player_points_assists", "player_points_assists_alternate"],
+        "rebounds_assists": ["player_rebounds_assists", "player_rebounds_assists_alternate"],
+        "stocks": "player_blocks_steals",
+    },
     "WNBA":   {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
     "NCAAB":  {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
     "NCAAW":  {"points": "player_points", "rebounds": "player_rebounds", "assists": "player_assists", "threes": "player_threes"},
@@ -1385,6 +1423,31 @@ def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
             "rushing + reception yards",
         )):
             return "rush_rec_yards" if "rush_rec_yards" in set(_LEAGUE_PROP_TYPES.get(league, [])) else None
+    # NBA combo props also use "+" / "and" — resolve before the generic reject.
+    if league == "NBA":
+        nba_combos = [
+            ("pra", (
+                "points + rebounds + assists", "pts + reb + ast",
+                "points rebounds assists", "pra",
+            )),
+            ("points_rebounds", (
+                "points + rebounds", "pts + reb", "points and rebounds",
+            )),
+            ("points_assists", (
+                "points + assists", "pts + ast", "points and assists",
+            )),
+            ("rebounds_assists", (
+                "rebounds + assists", "reb + ast", "rebounds and assists",
+            )),
+            ("stocks", (
+                "steals + blocks", "blocks + steals", "steals and blocks",
+                "blocks and steals", "stocks",
+            )),
+        ]
+        allowed_nba = set(_LEAGUE_PROP_TYPES.get(league, []))
+        for internal, keywords in nba_combos:
+            if internal in allowed_nba and any(kw in n for kw in keywords):
+                return internal
     if re.search(r"\b(?:half|quarter|period|innings?|fantasy)\b", n) or re.search(r"\b(?:and|plus)\b", n):
         return None
     if "+" in n or "allowed" in n:  # combos / pitcher 'hits allowed' etc.
@@ -1486,6 +1549,31 @@ def _espn_to_internal_prop(league: str, name: str) -> Optional[str]:
                     continue
                 if internal == "runs" and "rbi" in n:
                     continue
+                return internal
+        return None
+    # NBA volume / defensive markets (before generic points/rebounds).
+    if league == "NBA":
+        nba = [
+            ("threepa", ("three point attempts", "3-point attempts", "3pt attempts", "3pa")),
+            ("twopa", ("two point attempts", "2-point attempts", "2pa")),
+            ("fga", ("field goal attempts", "fg attempts", "fga")),
+            ("fta", ("free throw attempts", "ft attempts", "fta", "frees attempted")),
+            ("ftm", ("free throws made", "free throw made", "ft made", "frees made")),
+            ("twos", ("two pointers made", "2-pointers made", "2pm", "two point made")),
+            ("field_goals", ("field goals made", "field goals", "fg made", "fgm")),
+            ("turnovers", ("total turnovers", "turnovers")),
+            ("steals", ("total steals", "steals")),
+            ("blocks", ("total blocks", "blocks")),
+            ("threes", ("three pointers made", "three point made", "3-pointers made",
+                        "3pt made", "threes", "three point", "3 point", "3-point", "3pt")),
+            ("rebounds", ("total rebounds", "rebounds")),
+            ("assists", ("total assists", "assists")),
+            ("points", ("total points", "points")),
+        ]
+        for internal, keywords in nba:
+            if internal not in allowed:
+                continue
+            if any(kw in n for kw in keywords):
                 return internal
         return None
     checks = [

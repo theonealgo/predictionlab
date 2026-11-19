@@ -12,6 +12,8 @@ COUNT_MARKETS = {
     "passing_tds", "completions", "pass_attempts", "interceptions",
     "rush_attempts", "rushing_tds", "receiving_tds",
     "anytime_td", "first_td", "last_td",
+    "turnovers", "field_goals", "twos", "fga", "twopa", "threepa", "ftm", "fta",
+    "pra", "points_rebounds", "points_assists", "rebounds_assists", "stocks",
 }
 YARD_MARKETS = {
     "passing_yards", "rushing_yards", "receiving_yards",
