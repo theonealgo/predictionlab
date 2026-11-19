@@ -60,6 +60,8 @@ def _header_block(html: str) -> str:
 
 def header_matches_site_chrome(html: str) -> bool:
     """True when the page header is Sports / Models / Results + account/search."""
+    from site_words import html_has_path
+
     hdr = _header_block(html)
     if not hdr:
         return False
@@ -77,24 +79,33 @@ def header_matches_site_chrome(html: str) -> bool:
         return False
     if 'href="/historic-results"' not in hdr:
         return False
-    return all(href in hdr for href in _SITE_SPORT_HREFS)
+    return all(html_has_path(hdr, href) for href in _SITE_SPORT_HREFS)
 
 
 def footer_matches_site_chrome(html: str) -> bool:
-    if "site-directory-footer" not in (html or ""):
+    from site_words import html_has_path
+
+    text = html or ""
+    if "site-directory-footer" not in text:
         return False
-    if "AI Picks by Sport" not in (html or ""):
+    # site_words softens "Picks" → "Predictions" for visitors.
+    label = "AI Picks by Sport" if "AI Picks by Sport" in text else (
+        "AI Predictions by Sport" if "AI Predictions by Sport" in text else ""
+    )
+    if not label:
         return False
-    start = (html or "").find("AI Picks by Sport")
-    nxt = (html or "").find("footer-heading", start + len("AI Picks by Sport"))
-    column = (html or "")[start: nxt if nxt > start else start + 4000]
-    if any(href not in column for href in _SITE_SPORT_HREFS):
+    start = text.find(label)
+    nxt = text.find("footer-heading", start + len(label))
+    column = text[start: nxt if nxt > start else start + 4000]
+    if any(not html_has_path(column, href) for href in _SITE_SPORT_HREFS):
         return False
-    return "/affiliate" in html and "Affiliate Program" in html
+    return "/affiliate" in text and "Affiliate Program" in text
 
 
 def chrome_gaps(html: str) -> list[str]:
     """Human-readable ways this page's chrome differs from the site header/footer."""
+    from site_words import html_has_path
+
     gaps: list[str] = []
     hdr = _header_block(html)
     if re.search(r"<nav[^>]*>\s*<a[^>]*>\s*Picks\s*</a>\s*<a[^>]*>\s*Results\s*</a>", hdr or "", flags=re.I):
@@ -102,7 +113,7 @@ def chrome_gaps(html: str) -> list[str]:
     if not header_matches_site_chrome(html):
         if "pl2-nav-trigger" not in hdr or not re.search(r">\s*Sports\s*<", hdr or ""):
             gaps.append("header is missing Sports / Models / Results")
-        missing = [h for h in _SITE_SPORT_HREFS if h not in hdr]
+        missing = [h for h in _SITE_SPORT_HREFS if not html_has_path(hdr or "", h)]
         if missing:
             gaps.append("Sports menu missing " + ", ".join(missing[:6]))
         if "pl2-account" not in hdr or "pl2-search" not in hdr:

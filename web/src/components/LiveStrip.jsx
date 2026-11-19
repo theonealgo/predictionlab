@@ -9,14 +9,27 @@ export default function LiveStrip() {
   const [items, setItems] = useState(null);
   const strip = useDragScroll();
 
-  // Scores and official game status refresh independently of saved predictions.
+  // Scores refresh independently of saved predictions. First fetch waits for idle
+  // so homepage LCP is not blocked behind /api/web/live on Slow 4G.
   useEffect(() => {
-    const load = () => getJson('/api/web/live', { maxAge: 0 })
-      .then((data) => setItems(selectLiveStripItems(data.items)))
-      .catch(() => setItems((current) => current || []));
-    load();
+    let cancelled = false;
+    let idleId = 0;
+    const load = () => getJson('/api/web/live', { maxAge: 30_000 })
+      .then((data) => { if (!cancelled) setItems(selectLiveStripItems(data.items)); })
+      .catch(() => { if (!cancelled) setItems((current) => current || []); });
+    const start = () => { if (!cancelled) load(); };
+    if (typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(start, { timeout: 2000 });
+    } else {
+      idleId = window.setTimeout(start, 400);
+    }
     const timer = setInterval(load, 30 * 1000);
-    return () => clearInterval(timer);
+    return () => {
+      cancelled = true;
+      if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId);
+      else clearTimeout(idleId);
+      clearInterval(timer);
+    };
   }, []);
 
   // While the games load, empty boxes hold the strip's height so the page does not jump.
@@ -36,8 +49,15 @@ export default function LiveStrip() {
       </section>
     );
   }
+  // Keep the strip's vertical space even with no live games — returning null
+  // after the loading placeholders was a major CLS culprit on the homepage.
   if (items.length === 0) {
-    return null;
+    return (
+      <section className="pl-live is-empty" aria-label="Live predictions">
+        <div className="pl-live-head"><div className="pl-live-title">Live predictions</div></div>
+        <p className="pl-live-empty">No live games right now.</p>
+      </section>
+    );
   }
 
   // Boxes grouped by league (soccer, tennis) or sport, in feed order, so groups with live games lead.

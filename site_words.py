@@ -109,6 +109,31 @@ def _new_path(path):
     return path
 
 
+def path_aliases(path):
+    """Old and new public addresses that count as the same link (checkers + chrome)."""
+    if not path:
+        return set()
+    forms = {path}
+    if path in RENAMED:
+        forms.add(RENAMED[path])
+    if path in SERVED_BY:
+        forms.add(SERVED_BY[path])
+    if path.endswith('-picks'):
+        forms.add(path[:-len('-picks')] + '-predictions')
+    elif path.endswith('-predictions'):
+        forms.add(path[:-len('-predictions')] + '-picks')
+    # RENAMED may also map *-picks → *-predictions via _new_path; keep both.
+    for form in list(forms):
+        forms.add(_new_path(form))
+    return forms
+
+
+def html_has_path(html, path):
+    """True when html contains path or its public rename (e.g. /nba-picks ↔ /nba-predictions)."""
+    text = html or ''
+    return any(alias in text for alias in path_aliases(path))
+
+
 def _display_words(text):
     if re.search(r'not (?:an? online gambling operator|a sportsbook)|do not (?:take bets|accept wagers)|responsible (?:gaming|gambling)|1-800-GAMBLER', text, re.I):
         return text

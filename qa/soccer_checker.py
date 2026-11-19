@@ -96,8 +96,13 @@ class SoccerChecker:
         return m.group(0) if m else html[:12000]
 
     def check_locked_chrome(self, html: str, url: str, which: str) -> None:
+        from site_words import html_has_path
+
         hdr = self._header(html)
-        missing = [p for p in LOCKED_PICKS if p not in hdr and p.replace("-picks", "/") not in hdr]
+        missing = [
+            p for p in LOCKED_PICKS
+            if not html_has_path(hdr, p) and p.replace("-picks", "/") not in hdr
+        ]
         # Hub may rewrite /soccer-picks → /soccer/
         if "/soccer-picks" in missing and ("/soccer/" in hdr or 'href="/soccer"' in hdr):
             missing = [p for p in missing if p != "/soccer-picks"]

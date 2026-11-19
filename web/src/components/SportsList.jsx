@@ -95,7 +95,7 @@ export default function SportsList({ activeSlug }) {
   return (
     <aside className="pl-left">
       <nav className="pl-sport-nav">
-        {sports.length === 0 && Array.from({ length: 8 }, (_, n) => (
+        {sports.length === 0 && Array.from({ length: 10 }, (_, n) => (
           <span className="pl-sport-link is-placeholder" key={n} aria-hidden="true">&nbsp;</span>
         ))}
         {sports.length > 0 && (
@@ -142,6 +142,12 @@ export default function SportsList({ activeSlug }) {
           <span>All Sports</span>
           <Count value={todayTotal} />
         </a>
+        {sports.length === 0 && GROUPS.map((group) => (
+          <span className="pl-nav-group-link is-placeholder" key={`sk-${group.name}`} aria-hidden="true">
+            <span>{group.name}</span>
+            <span className="pl-nav-status">&nbsp;</span>
+          </span>
+        ))}
         {GROUPS.map((group) => {
           const members = group.keys.map((key) => byKey[key]).filter(Boolean);
           if (members.length === 0) return null;

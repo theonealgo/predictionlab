@@ -584,6 +584,8 @@ class ChromeChecker:
         return False
 
     def check_homepage_chrome(self, html: str, url: str) -> None:
+        from site_words import html_has_path, path_aliases
+
         hdr = _header_block(html)
         if "pl2-nav-trigger" not in hdr or "Sports" not in hdr:
             self.add(
@@ -597,10 +599,11 @@ class ChromeChecker:
 
         missing = []
         for name, href in LOCKED_SPORTS:
-            if href not in hdr and not (
+            if html_has_path(hdr, href) or (
                 name == "Soccer" and ("/soccer/" in hdr or 'href="/soccer"' in hdr)
             ):
-                missing.append(f"{name} ({href})")
+                continue
+            missing.append(f"{name} ({href})")
         if missing:
             self.add(
                 "homepage Sports list",
@@ -620,8 +623,9 @@ class ChromeChecker:
         for name, href in LOCKED_SPORTS:
             if name not in IN_SEASON_MUST:
                 continue
+            href_alts = "|".join(re.escape(a) for a in sorted(path_aliases(href)))
             pat = re.compile(
-                rf'href="{re.escape(href)}"[^>]*class="[^"]*\bin-season\b|'
+                rf'href="(?:{href_alts})"[^>]*class="[^"]*\bin-season\b|'
                 rf'class="[^"]*\bin-season\b[^"]*"[^>]*>\s*{re.escape(name)}',
                 flags=re.I,
             )
@@ -653,7 +657,7 @@ class ChromeChecker:
         else:
             self.add("homepage Blog/Pricing", PASS, "Blog and Pricing present", url=url)
 
-        missing_f = [p for p in FOOTER_MUST if p not in html]
+        missing_f = [p for p in FOOTER_MUST if not html_has_path(html, p)]
         if "site-directory-footer" not in html:
             self.add("homepage footer", FAIL, "Missing locked site-directory-footer", url=url)
         elif missing_f:
@@ -1980,7 +1984,7 @@ class ChromeChecker:
                             url=purl,
                         )
             if (sport in _CONSENSUS_HIST_FACE_SPORTS or sport == "UFC") and _has_pick_cards(phtml):
-                from qa.chart_shape import consensus_chip_vs_boxes_issues
+                from chart_shape import consensus_chip_vs_boxes_issues
 
                 chip_miss = consensus_chip_vs_boxes_issues(phtml, sport)
                 self.add(
@@ -2023,7 +2027,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "WNBA":
-                from qa.chart_shape import wnba_consensus_hist_face_issues
+                from chart_shape import wnba_consensus_hist_face_issues
 
                 hist = wnba_consensus_hist_face_issues(phtml)
                 if hist:
@@ -2042,7 +2046,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "UFC":
-                from qa.chart_shape import ufc_consensus_hist_face_issues
+                from chart_shape import ufc_consensus_hist_face_issues
 
                 hist = ufc_consensus_hist_face_issues(phtml)
                 if hist:
@@ -2060,7 +2064,7 @@ class ChromeChecker:
                         url=purl,
                     )
             if sport == "Golf":
-                from qa.chart_shape import golf_picks_board_issues
+                from chart_shape import golf_picks_board_issues
 
                 giss = golf_picks_board_issues(phtml)
                 if giss:
@@ -2099,7 +2103,7 @@ class ChromeChecker:
                             "WNBA results cards have H2H Last 10",
                             url=rurl,
                         )
-                    from qa.chart_shape import wnba_results_graded_clarity_issues
+                    from chart_shape import wnba_results_graded_clarity_issues
 
                     clarity = wnba_results_graded_clarity_issues(rhtml)
                     self.add(

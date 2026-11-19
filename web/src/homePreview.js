@@ -1,3 +1,16 @@
+// Homepage previews show logos at 28px; ESPN URLs often request 64px PNGs.
+// Ask for ~2× display size so PageSpeed "Improve image delivery" stops flagging them.
+export function compactEspnLogo(src, size = 56) {
+  if (!src || typeof src !== 'string') return src || '';
+  if (!/espncdn\.com/i.test(src)) return src;
+  let out = src;
+  if (/[?&]w=\d+/i.test(out)) out = out.replace(/([?&])w=\d+/gi, `$1w=${size}`);
+  else out += (out.includes('?') ? '&' : '?') + `w=${size}`;
+  if (/[?&]h=\d+/i.test(out)) out = out.replace(/([?&])h=\d+/gi, `$1h=${size}`);
+  else out += `&h=${size}`;
+  return out;
+}
+
 // Read displayed values only. Never recompute a probability or borrow another model's value.
 export function readCardPreview(card) {
   if (!card?.html) return null;
@@ -12,7 +25,7 @@ export function readCardPreview(card) {
     const number = match ? Number(match[1]) : null;
     return {
       name: slot?.querySelector('.team-name')?.textContent.trim() || fallback || '',
-      logo: slot?.querySelector('.team-logo')?.getAttribute('src') || '',
+      logo: compactEspnLogo(slot?.querySelector('.team-logo')?.getAttribute('src') || ''),
       percent: number !== null && number >= 0 && number <= 100 ? match[1] : null,
       reason: headline?.getAttribute('title') || 'A displayed probability is not available for this event.',
     };

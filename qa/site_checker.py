@@ -17,6 +17,7 @@ Usage:
     python qa/site_checker.py --ship           # 5052 ship-parity + today's slates vs ESPN
     python qa/site_checker.py --chrome         # open every Sports/Results/Blog/Affiliate URL; fail if dead or template gaps
     python qa/site_checker.py --pagespeed      # Google PageSpeed Insights only (same run as --full/--ship)
+    python qa/site_checker.py --ux-perf        # speed + page memory + mobile sport-strip layout
 
 EMAIL SETUP (one-time):
   Edit qa/checker_email.py and fill in your Gmail address and App Password.
@@ -65,7 +66,7 @@ from audit_config import (
     CLUSTER_WARN_PCT, EMAIL_FROM, EMAIL_PASSWORD, EMAIL_TO,
     EXPECTED_DASHBOARD_SPORTS, FORBIDDEN_CONTENT,
     FULL_MODE_AUDITORS, HISTORY_DIR, MODEL_DISPLAY_NAMES, MODEL_KEYS,
-    SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS, PAGESPEED_MODE_AUDITORS,
+    SHIP_MODE_AUDITORS, CHROME_MODE_AUDITORS, PAGESPEED_MODE_AUDITORS, UX_PERF_MODE_AUDITORS,
     PAGESPEED_PATHS, PAGESPEED_STRATEGY, PAGESPEED_PERF_FLOOR, PAGESPEED_A11Y_FLOOR,
     PAGE_SPEED_BUDGET, PREFLIGHT_TIMEOUT, QUICK_MODE_AUDITORS, REQUEST_TIMEOUT, SCREENSHOTS_DIR,
     SMTP_HOST, SMTP_PORT, SPORT_PICKS_SLUGS, SPORT_RESULTS_SLUGS, STALE_STRINGS,
@@ -425,9 +426,18 @@ class ContentAuditor:
 
     def run(self):
         # Pages to scan for stale/forbidden content
-        pages_to_scan = ["/", "/nba-picks", "/nhl-picks", "/plans",
-                         "/privacy", "/terms", "/refund-policy", "/faq", "/daily-report",
-                         "/all-sports-results"]
+        pages_to_scan = [
+            "/",
+            "/nba-picks", "/nhl-picks", "/nfl-picks", "/mlb-picks",
+            "/ncaab-picks", "/ncaaf-picks", "/ncaaw-picks", "/wnba-picks",
+            "/soccer-picks", "/tennis-picks", "/ufc-picks", "/golf-picks", "/cfl-picks",
+            "/plans",
+            "/privacy", "/terms", "/refund-policy", "/faq",
+            "/all-sports-results",
+            "/nba-results", "/nhl-results", "/mlb-results", "/nfl-results",
+            "/ncaaf-results", "/ncaaw-results", "/wnba-results", "/soccer-results",
+            "/tennis-results", "/ufc-results", "/golf-results", "/cfl-results"
+        ]
 
         # Fetch all pages in parallel
         page_html: dict[str, str] = {}
@@ -706,7 +716,7 @@ class ContentAuditor:
                         ),
                         url=path, auditor=self.NAME))
                 elif sport == "WNBA":
-                    from qa.chart_shape import wnba_consensus_hist_face_issues
+                    from chart_shape import wnba_consensus_hist_face_issues
                     hist = wnba_consensus_hist_face_issues(html)
                     self.r.add(CheckResult(
                         label="WNBA picks Consensus Historical face",
@@ -717,7 +727,7 @@ class ContentAuditor:
                         ),
                         url=path, auditor=self.NAME))
                 if sport == "CFL":
-                    from qa.chart_shape import cfl_h2h_and_books_issues
+                    from chart_shape import cfl_h2h_and_books_issues
                     cfl_i = cfl_h2h_and_books_issues(html)
                     self.r.add(CheckResult(
                         label="CFL picks H2H + empty Books",
@@ -1057,7 +1067,7 @@ class ContentAuditor:
                         status=FAIL,
                         message="; ".join(gaps) if gaps else "WNBA results cards are missing H2H Last 10",
                         url=path, auditor=self.NAME))
-                from qa.chart_shape import (
+                from chart_shape import (
                     wnba_results_graded_clarity_issues,
                     wnba_season_games_undercount_issues,
                 )
@@ -1079,7 +1089,7 @@ class ContentAuditor:
                     ),
                     url=path, auditor=self.NAME))
             if slug == "cfl-results":
-                from qa.chart_shape import cfl_chart_consensus_issues
+                from chart_shape import cfl_chart_consensus_issues
                 chart_html = self._fetch("/cfl-results?view=chart")
                 cfl_c = cfl_chart_consensus_issues(chart_html or "")
                 self.r.add(CheckResult(
@@ -1128,7 +1138,7 @@ class ContentAuditor:
             ),
             url="/tennis-picks", auditor=self.NAME))
 
-        from qa.chart_shape import (
+        from chart_shape import (
             golf_picks_board_issues,
             ufc_consensus_hist_face_issues,
         )
@@ -1325,8 +1335,14 @@ class NavigationAuditor:
             hrefs_in_sec = [h for _, h in items]
             title = spec.get("title", sec_key)
 
+            from site_words import path_aliases
+
+            def _sec_has(link: str) -> bool:
+                wanted = path_aliases(link)
+                return any(h in wanted for h in hrefs_in_sec)
+
             for req in spec.get("required", []):
-                if req in hrefs_in_sec:
+                if _sec_has(req):
                     self.r.add(CheckResult(
                         label=f"{title}: has {req}", status=PASS,
                         message="Present in correct section", auditor=self.NAME))
@@ -1337,7 +1353,7 @@ class NavigationAuditor:
                         auditor=self.NAME))
 
             for bad in spec.get("forbidden", []):
-                if bad in hrefs_in_sec:
+                if _sec_has(bad):
                     self.r.add(CheckResult(
                         label=f"{title}: wrong-section link", status=FAIL,
                         message=f"{bad} should NOT be in {title} — "
@@ -1398,8 +1414,11 @@ class NavigationAuditor:
         footer_html = footer_m.group(1) if footer_m else ""
         footer_hrefs = re.findall(r'href=["\']([^"\']+)["\']', footer_html)
 
+        from site_words import path_aliases
+
         for req in cfg.get("footer_required", []):
-            if req in footer_hrefs:
+            wanted = path_aliases(req)
+            if any(h in wanted for h in footer_hrefs):
                 self.r.add(CheckResult(
                     label=f"Footer link: {req}", status=PASS,
                     message="Present in footer", auditor=self.NAME))
@@ -3386,6 +3405,12 @@ def _run_pagespeed_checker(base: str, report: AuditReport):
     ).run()
 
 
+def _run_ux_perf_checker(session, base: str, report: AuditReport):
+    """Speed + page memory + mobile sport-strip layout (React shell)."""
+    from ux_perf_checker import run_ux_perf_checker
+    run_ux_perf_checker(session, base, report, CheckResult)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # MAIN ORCHESTRATOR
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3401,7 +3426,12 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     report = AuditReport(run_id=run_id, timestamp=ts, base_url=base)
 
     live = "predictionlab.io" in base
-    if getattr(args, "pagespeed", False) and not (
+    if getattr(args, "ux_perf", False) and not (
+        getattr(args, "ship", False) or args.quick or getattr(args, "chrome", False)
+        or args.full or getattr(args, "pagespeed", False)
+    ):
+        mode = "ux_perf"
+    elif getattr(args, "pagespeed", False) and not (
         getattr(args, "ship", False) or args.quick or getattr(args, "chrome", False) or args.full
     ):
         mode = "pagespeed"
@@ -3426,7 +3456,12 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     session = _make_session()
 
     # Determine which auditors to run
-    if getattr(args, "pagespeed", False) and not (
+    if getattr(args, "ux_perf", False) and not (
+        getattr(args, "ship", False) or args.quick or getattr(args, "chrome", False)
+        or args.full or getattr(args, "pagespeed", False)
+    ):
+        auditors_to_run = UX_PERF_MODE_AUDITORS
+    elif getattr(args, "pagespeed", False) and not (
         getattr(args, "ship", False) or args.quick or getattr(args, "chrome", False) or args.full
     ):
         auditors_to_run = PAGESPEED_MODE_AUDITORS
@@ -3518,6 +3553,7 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     # PageSpeed Insights (Google API). Not HTTP-dependent on AUDIT_BASE_URL —
     # Google fetches a public origin (PAGESPEED_BASE_URL when auditing :5052).
     run_auditor("pagespeed",  lambda: _run_pagespeed_checker(base, report))
+    run_auditor("ux_perf", lambda: _run_ux_perf_checker(session, base, report))
 
     if args.screenshots:
         print("  ▶ Running screenshot audit…")
@@ -3633,6 +3669,8 @@ def main():
                         help="Open every Sports/Results/Blog/Affiliate URL and fail if 404/500/timeout")
     parser.add_argument("--pagespeed",   action="store_true",
                         help="Google PageSpeed Insights only (also included in --full/--ship)")
+    parser.add_argument("--ux-perf", dest="ux_perf", action="store_true",
+                        help="Speed + page memory + mobile sport-strip layout only")
     parser.add_argument("--url",         type=str, default=None,
                         help=f"Override base URL (default: {BASE_URL})")
     parser.add_argument("--preflight",   action="store_true",

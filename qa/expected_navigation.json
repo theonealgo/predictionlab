@@ -10,7 +10,11 @@
         "/ncaab-picks",
         "/ncaaf-picks",
         "/ncaaw-picks",
-        "/wnba-picks"
+        "/wnba-picks",
+        "/tennis-picks",
+        "/ufc-picks",
+        "/golf-picks",
+        "/cfl-picks"
       ],
       "forbidden": [
         "/performance",
@@ -86,7 +90,15 @@
     "/performance",
     "/ai-sports-betting-picks-today",
     "/what-are-ai-sports-betting-picks",
-    "/our-model-vs-sportsbooks"
+    "/our-model-vs-sportsbooks",
+    "/tennis-picks",
+    "/ufc-picks",
+    "/golf-picks",
+    "/cfl-picks",
+    "/tennis-results",
+    "/ufc-results",
+    "/golf-results",
+    "/cfl-results"
   ],
   "forbidden_in_nav": [
     "underdogs.bet",

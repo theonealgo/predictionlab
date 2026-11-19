@@ -165,11 +165,20 @@ export default function App() {
         pending = false;
       }
     };
-    checkViewer();
+    // After first paint — keep /api/web/me off the homepage critical path (PageSpeed).
+    let idleId = 0;
+    const start = () => { checkViewer(); };
+    if (typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(start, { timeout: 3500 });
+    } else {
+      idleId = window.setTimeout(start, 1200);
+    }
     window.addEventListener('focus', checkViewer);
     window.addEventListener('pageshow', checkViewer);
     return () => {
       controller.abort();
+      if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId);
+      else clearTimeout(idleId);
       window.removeEventListener('focus', checkViewer);
       window.removeEventListener('pageshow', checkViewer);
     };

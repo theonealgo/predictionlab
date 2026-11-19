@@ -129,14 +129,15 @@ CLUSTER_WARN_PCT   = 80        # warn if >80% of probs are in the clustering ran
 
 # ── Quick mode — only run these auditors ─────────────────────────────────
 QUICK_MODE_AUDITORS = ["routes", "content", "navigation", "chrome", "ship", "soccer", "espn_slate",
-                       "paywall"]
+                       "paywall", "ux_perf"]
 FULL_MODE_AUDITORS  = ["routes", "content", "navigation", "cards", "models",
                        "results", "gamecounts", "csv", "props", "seo", "schema",
                        "consistency", "chrome", "ship", "soccer", "espn_slate",
-                       "paywall", "pagespeed"]
-SHIP_MODE_AUDITORS  = ["chrome", "ship", "soccer", "espn_slate", "pagespeed"]
+                       "paywall", "pagespeed", "ux_perf"]
+SHIP_MODE_AUDITORS  = ["chrome", "ship", "soccer", "espn_slate", "pagespeed", "ux_perf"]
 CHROME_MODE_AUDITORS = ["chrome"]
 PAGESPEED_MODE_AUDITORS = ["pagespeed"]
+UX_PERF_MODE_AUDITORS = ["ux_perf"]
 
 # PageSpeed Insights (Google API) — used by pagespeed auditor inside site_checker.
 # Google cannot fetch localhost; set PAGESPEED_BASE_URL when AUDIT_BASE_URL is :5052.

@@ -8,6 +8,23 @@ import { readCardPreview, readGolfPreview } from '../homePreview.js';
 const CHART_SPORTS = new Set(['NHL', 'NBA', 'NCAAB', 'NCAAW', 'MLB', 'SOCCER', 'NFL', 'NCAAF', 'WNBA', 'CFL']);
 
 const FEATURED_CARDS = 6;
+// First two paints above the fold; the rest wait so mobile LCP is not a 6-way API stampede.
+const PRIORITY_FEEDS = 2;
+
+function whenIdle(run, timeout = 2000) {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    return window.requestIdleCallback(run, { timeout });
+  }
+  return window.setTimeout(run, Math.min(timeout, 600));
+}
+
+function cancelIdle(id) {
+  if (typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
+    window.cancelIdleCallback(id);
+  } else {
+    clearTimeout(id);
+  }
+}
 
 export default function HomePage() {
   const [mode, setMode] = useState('cards');
@@ -20,6 +37,7 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    let idleId = 0;
     getJson('/api/web/sports')
       .then((data) => {
         if (cancelled) return;
@@ -59,14 +77,21 @@ export default function HomePage() {
           }
           const path = `/api/web/sports/${item.slug}/cards?limit=1&cached=1`;
           try {
-            const payload = await getJson(path, { maxAge: 0 });
+            const payload = await getJson(path, { maxAge: 60_000 });
             if (cancelled) return;
             apply(item, payload?.building ? { cards: [], total: 0 } : payload);
           } catch (error) {
             fail(item);
           }
         };
-        shown.forEach((item) => { loadOne(item); });
+        const first = shown.slice(0, PRIORITY_FEEDS);
+        const rest = shown.slice(PRIORITY_FEEDS);
+        first.forEach((item) => { loadOne(item); });
+        if (rest.length) {
+          idleId = whenIdle(() => {
+            if (!cancelled) rest.forEach((item) => { loadOne(item); });
+          }, 2500);
+        }
       })
       .catch(() => {
         if (!cancelled) setSportsError(true);
@@ -74,6 +99,7 @@ export default function HomePage() {
 
     return () => {
       cancelled = true;
+      if (idleId) cancelIdle(idleId);
     };
   }, []);
   const chartSport = sports?.find((item) => item.slug === chartSlug);
@@ -95,7 +121,13 @@ export default function HomePage() {
 
         {noSports && <p className="pl-empty">No games are scheduled right now.</p>}
         {sportsError && <p className="pl-empty" role="alert">Could not load the sports list. Please reload to retry.</p>}
-        {!noSports && !sportsError && !sports && <p className="pl-empty">Loading games…</p>}
+        {!noSports && !sportsError && !sports && (
+          <>
+            <p className="pl-empty">Loading games…</p>
+            <section className="pl-home-sport is-skeleton" aria-hidden="true" />
+            <section className="pl-home-sport is-skeleton" aria-hidden="true" />
+          </>
+        )}
 
         {mode === 'cards' && featured.map((sport) => {
           const feed = feeds[sport.slug];
@@ -117,7 +149,7 @@ export default function HomePage() {
                 <div className="pl-home-preview-teams">
                   {preview.teams.map((team, index) => (
                     <div className="pl-home-preview-team" key={`${index}-${team.name}`}>
-                      {team.logo ? <img src={team.logo} alt="" width="28" height="28" loading="lazy" onError={(event) => {
+                      {team.logo ? <img src={team.logo} alt="" width="28" height="28" loading="lazy" decoding="async" onError={(event) => {
                         const image = event.currentTarget;
                         if (!image.dataset.fallback) { image.dataset.fallback = '1'; image.src = '/static/pl-logo.svg'; }
                       }} /> : <span className="pl-home-preview-logo" />}

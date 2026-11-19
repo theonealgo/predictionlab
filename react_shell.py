@@ -235,7 +235,8 @@ class ReactShell:
         return True
 
     def _visitor_chrome(self, environ):
-        """This visitor's header + footer JSON (/api/web/chrome, same cookies), safe inside a <script>."""
+        """This visitor's header + footer from /api/web/chrome (same cookies), as a dict."""
+        import json
         sub = {k: v for k, v in environ.items() if k not in ('wsgi.input', 'HTTP_ACCEPT_ENCODING')}
         sub.update({'PATH_INFO': '/api/web/chrome', 'QUERY_STRING': '', 'REQUEST_METHOD': 'GET',
                     'CONTENT_LENGTH': '0', 'HTTP_ACCEPT': 'application/json'})
@@ -252,7 +253,21 @@ class ReactShell:
             return None
         if not status or not status[0].startswith('200') or not body.startswith(b'{'):
             return None
-        return body.decode('utf-8').replace('</', '<\\/').replace('\u2028', '\\u2028').replace('\u2029', '\\u2029')
+        try:
+            data = json.loads(body)
+        except ValueError:
+            return None
+        if not isinstance(data, dict) or not data.get('header'):
+            return None
+        return data
+
+    @staticmethod
+    def _chrome_script(data):
+        import json
+        return (json.dumps(data, separators=(',', ':'))
+                .replace('</', '<\\/')
+                .replace('\u2028', '\\u2028')
+                .replace('\u2029', '\\u2029'))
 
     def __call__(self, environ, start_response):
         path = environ.get('PATH_INFO', '')
@@ -277,7 +292,18 @@ class ReactShell:
                                 f'<meta property="og:image" content="{CANONICAL}/static/apple-touch-icon.png" />\n</head>', 1)
         chrome = self._visitor_chrome(environ)
         if chrome:
-            html = html.replace('</head>', f'<script>window.__PL_CHROME__={chrome}</script>\n</head>', 1)
+            html = html.replace(
+                '</head>',
+                f'<script>window.__PL_CHROME__={self._chrome_script(chrome)}</script>\n</head>',
+                1,
+            )
+            # Real header/footer in a <template> so crawlers and the checker see Sports /
+            # Models / Results links without painting a second chrome (React still mounts).
+            header = chrome.get('header') or ''
+            footer = chrome.get('footer') or ''
+            if 'pl2-header' in header and 'site-directory-footer' in footer:
+                ssr = f'<template id="pl-chrome-ssr">{header}{footer}</template>\n    '
+                html = html.replace('<div id="root"></div>', ssr + '<div id="root"></div>', 1)
         if path.rstrip('/') == '/blog':
             html = self._blog_index(environ, html)
         if self.add_site_tags:

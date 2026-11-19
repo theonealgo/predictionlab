@@ -42,6 +42,18 @@ button {
 .pl-live {
   padding: 18px 40px 6px;
   border-bottom: 1px solid var(--line);
+  /* Hold height while scores load so .pl-body does not jump (desktop CLS). */
+  min-height: 132px;
+}
+
+.pl-live.is-empty {
+  min-height: 72px;
+}
+
+.pl-live-empty {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .pl-live-title {
@@ -216,12 +228,12 @@ button {
   position: sticky;
   top: calc(var(--pl-header-h, 72px) + 16px);
   background: #fff;
-  /* Reserve rail height so Featured / status chips do not shove .pl-body (CLS). */
-  min-height: 420px;
+  /* Reserve rail height so Featured / nav do not shove .pl-body (desktop CLS). */
+  min-height: 560px;
 }
 
 .pl-sport-nav {
-  min-height: 220px;
+  min-height: 280px;
 }
 
 .pl-season-record {
@@ -1282,6 +1294,14 @@ button {
 /* The home page: one section per sport. */
 .pl-home-sport {
   margin-bottom: 28px;
+  /* Match a filled preview card so NBA/Soccer sections stop shifting (CLS 0.11). */
+  min-height: 220px;
+}
+
+.pl-home-sport.is-skeleton {
+  border-radius: 16px;
+  background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-size: 200% 100%;
 }
 
 .pl-home-sport-title {
@@ -1302,6 +1322,7 @@ button {
 
 .pl-home-preview {
   display: block;
+  min-height: 168px;
   padding: 18px;
   border: 1px solid #e5e7eb;
   border-radius: 16px;
@@ -1943,14 +1964,18 @@ button {
   border-bottom-right-radius: 16px;
 }
 
-/* Loading placeholders hold their space so the page does not jump when data arrives. */
-.pl-live.is-loading .pl-live-box,
-.pl-sport-link.is-placeholder {
+/* Loading placeholders keep size; soft gray bars (not visibility:hidden) so the
+   left rail still “looks occupied” in Lighthouse filmstrips and CLS stays low. */
+.pl-live.is-loading .pl-live-box {
   visibility: hidden;
 }
 
-.pl-sport-link.is-placeholder {
-  min-height: 52px;
+.pl-sport-link.is-placeholder,
+.pl-nav-group-link.is-placeholder {
+  min-height: 44px;
+  background: #f3f4f6;
+  color: transparent;
+  pointer-events: none;
 }
 
 /* Phones: the sports become one row that slides sideways, so the games sit near the top. The grouped
@@ -1963,8 +1988,19 @@ button {
     min-width: 230px;
   }
   .pl-body {
-    gap: 16px;
-    padding: 12px 16px 64px;
+    gap: 8px;
+    padding: 8px 16px 64px;
+  }
+  /* Desktop CLS rails must not leave a blank tower under the sport chips. */
+  .pl-left {
+    min-height: 0;
+    max-height: none;
+    overflow: visible;
+    padding: 0;
+    margin: 0;
+  }
+  .pl-sport-nav {
+    min-height: 0;
   }
   .pl-left-title,
   .pl-left .pl-nav-divider,
@@ -1973,36 +2009,67 @@ button {
   }
   .pl-sport-nav {
     display: flex;
-    gap: 8px;
+    gap: 6px;
     overflow-x: auto;
-    padding-bottom: 4px;
+    padding: 0 0 2px;
     scrollbar-width: none;
   }
   .pl-sport-nav::-webkit-scrollbar {
     display: none;
   }
+  /* Compact pills — not tall 22px/52px circles from the desktop rail styles. */
   .pl-sport-nav .pl-sport-link {
     flex: none;
-    gap: 8px;
-    padding: 8px 14px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
     border: 1px solid var(--line);
     border-radius: 999px;
-    font-size: 15px;
+    font-size: 13px;
+    line-height: 1.2;
+    min-height: 0;
   }
   .pl-sport-nav .pl-sport-link.is-active {
     border-color: var(--blue);
   }
   .pl-sport-nav .pl-sport-status {
-    font-size: 12px;
+    min-width: 0;
+    font-size: 11px;
   }
-  .pl-sport-nav .pl-sport-link.is-placeholder {
-    width: 90px;
+  .pl-sport-nav .pl-sport-link.is-placeholder,
+  .pl-sport-link.is-placeholder {
+    width: 72px;
+    min-height: 28px;
+  }
+  .pl-mobile-switch {
+    margin-top: 0;
   }
 }
 
 /* Card win % for the side not favoured: darker grey so it reads on white (the old pages keep theirs). */
 .pl-center .team-slot:not(.favored) .win-pct {
   color: #64748b;
+}
+
+/* PageSpeed a11y: #6b7280 on footer #f5f5f5 fails contrast — match pl-chrome.css AA colors. */
+.pl-app footer.site-directory-footer {
+  color: #1f2937;
+}
+.pl-app footer.site-directory-footer .pl-footer-bottom,
+.pl-app footer.site-directory-footer .pl-footer-bottom span,
+.pl-app footer.site-directory-footer .pl-platform-disclaimer {
+  color: #1f2937;
+}
+.pl-app footer.site-directory-footer a {
+  color: #111827;
+}
+.pl-app footer.site-directory-footer h2,
+.pl-app footer.site-directory-footer h4 {
+  color: #374151;
+}
+.pl-app footer.site-directory-footer .pl-footer-logo {
+  color: #111827;
 }
 
 /* Narrow + phones: one column at a time, flipped with Predictions / Results. */
