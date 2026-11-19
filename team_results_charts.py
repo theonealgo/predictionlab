@@ -3824,6 +3824,9 @@ def _apply_h2h_faces(html: str, sport: str, *, results: bool = False) -> str:
         html = _inject_nhl_consensus_hist_chips(html)
     elif sport_u == "WNBA":
         html = _inject_wnba_consensus_hist_chips(html)
+    elif sport_u in ("NCAAB", "NCAAW"):
+        html = _inject_consensus_hist_chips(html, sport=sport_u, models=_NCAAF_CONSENSUS_MODELS)
+        html = _inject_nhl_pl_vs_books_chips(html, sport=sport_u)
     else:
         html = _inject_face_h2h_chips(html)
         html = _sync_h2h_face_chips(html)
@@ -4686,7 +4689,13 @@ def _pc_model_ml_side(
 def _card_dissent_for_models(
     card: str, models: tuple[str, ...]
 ) -> tuple[int, tuple[str, ...]] | None:
-    """Return (agree_n, dissent_models) for a card's Pick Confidence box."""
+    """Return (agree_n, dissent_models) for a card's Pick Confidence box.
+
+    Models with no side (N/A / blank) count as dissent for the season-chip
+    lookup key. NCAAB often has Efficiency N/A; without this, a 5-model
+    unanimous card keyed as (5, ()) and showed 0-0 instead of the
+    ``5/6 all but Efficiency`` season row.
+    """
     hm = re.search(r'data-home="([^"]*)"', card[:2000], flags=re.I)
     am = re.search(r'data-away="([^"]*)"', card[:2000], flags=re.I)
     home = html_lib.unescape(hm.group(1) if hm else "")
@@ -4712,18 +4721,27 @@ def _card_dissent_for_models(
         len(counts) >= 2
         and counts.most_common(2)[0][1] == counts.most_common(2)[1][1]
     ):
-        # Dissent = models on the non-first side in model order (stable key).
+        # Dissent = models not on the first side (incl. blank / N/A).
         first_side = next(
             (sides[n] for n in models if n in sides), majority_side
         )
         dissent = tuple(
-            name for name in models if sides.get(name) not in (None, first_side)
+            name
+            for name in models
+            if name not in sides or sides.get(name) != first_side
         )
         return agree_n, dissent
     if agree_n < min_maj:
+        # All published models agree but blanks keep the count under majority
+        # (e.g. 5× same side + Efficiency N/A on a 6-model panel).
+        if len(set(sides.values())) == 1:
+            dissent = tuple(name for name in models if name not in sides)
+            return agree_n, dissent
         return None
     dissent = tuple(
-        name for name in models if sides.get(name) not in (None, majority_side)
+        name
+        for name in models
+        if name not in sides or sides.get(name) != majority_side
     )
     return agree_n, dissent
 
@@ -5148,30 +5166,27 @@ def _inject_consensus_hist_chips(
                 hit = lookup.get((folded, dissent))
             if hit is None and folded >= panel and not dissent:
                 hit = lookup.get((panel, ()))
-            # NCAAB: no matching season pattern (e.g. G2/Takedown N/A) → dash,
-            # not a fake 0-0 that looks like a graded record.
-            if hit is None and sport_u == "NCAAB":
-                label = "Consensus Record: —"
+            if hit is None:
+                w, l, pct, pushes = 0, 0, None, 0
+            elif len(hit) >= 4:
+                w, l, pct, pushes = hit[0], hit[1], hit[2], int(hit[3] or 0)
             else:
-                if hit is None:
-                    w, l, pct, pushes = 0, 0, None, 0
-                elif len(hit) >= 4:
-                    w, l, pct, pushes = hit[0], hit[1], hit[2], int(hit[3] or 0)
-                else:
-                    w, l, pct = hit[0], hit[1], hit[2]
-                    pushes = 0
-                if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
-                    label = _wnba_consensus_hist_label(
-                        folded, dissent, w, l, pct, panel=panel, pushes=pushes
-                    )
-                elif sport_u in ("NFL", "MLB", "NCAAF", "CFL", "NHL"):
-                    label = _nfl_consensus_hist_label(
-                        folded, dissent, w, l, pct, panel=panel, pushes=pushes
-                    )
-                else:
-                    label = _consensus_hist_label(
-                        folded, dissent, w, l, pct, panel=panel, pushes=pushes
-                    )
+                w, l, pct = hit[0], hit[1], hit[2]
+                pushes = 0
+            if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
+                label = _wnba_consensus_hist_label(
+                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                )
+            elif sport_u in ("NFL", "MLB", "NCAAF", "CFL", "NHL"):
+                label = _nfl_consensus_hist_label(
+                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                )
+            else:
+                # NCAAB / NCAAW: show 0-0 (—) — Season · 4/6 when that pattern
+                # has no season row yet, not a bare dash.
+                label = _consensus_hist_label(
+                    folded, dissent, w, l, pct, panel=panel, pushes=pushes
+                )
         chip = (
             '<div class="line-chip consensus-hist-chip">'
             '<div class="line-chip-label">Consensus Historical Record</div>'
