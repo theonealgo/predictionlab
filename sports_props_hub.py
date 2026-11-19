@@ -255,7 +255,7 @@ def grade_ungraded_night(db_path, league, day):
 
 def result_dates(db_path, league=None):
     """Dates that already have a saved pick or a grade, newest first."""
-    path = Path(db_path)
+    path = Path(db_path).resolve()
     with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=3)) as conn:
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         dates = set()
@@ -268,6 +268,23 @@ def result_dates(db_path, league=None):
                 sql += " AND league=?"
                 params.append(league)
             dates.update(row[0] for row in conn.execute(sql, params) if row[0])
+    try:
+        from prop_forecast_store import ledger_path
+        ledger = ledger_path(db_path)
+        if ledger.exists():
+            with closing(sqlite3.connect(ledger.as_uri() + "?mode=ro", uri=True, timeout=3)) as conn:
+                conn.execute("PRAGMA query_only=ON")
+                sports = [league] if league and league in LEAGUES else list(LEAGUES)
+                for sport in sports:
+                    rows = conn.execute(
+                        """SELECT DISTINCT pick_date FROM forecasts
+                           WHERE league=? AND pick_date IS NOT NULL
+                           ORDER BY pick_date DESC LIMIT 60""",
+                        (sport,),
+                    )
+                    dates.update(row[0] for row in rows if row[0])
+    except Exception:
+        pass
     return sorted(dates, reverse=True)[:60]
 
 

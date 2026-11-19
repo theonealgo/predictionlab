@@ -96,10 +96,12 @@ def settle_event(original_db, league, event_id, payload):
         return 0
     outcomes = []
     with closing(sqlite3.connect(path, timeout=5)) as conn:
-        for identity, raw in conn.execute("SELECT id,payload FROM forecasts WHERE league=?", (league,)):
+        for identity, raw in conn.execute(
+            """SELECT id,payload FROM forecasts
+               WHERE league=? AND json_extract(payload,'$.event_id')=?""",
+            (league, str(event_id)),
+        ):
             forecast = json.loads(raw)
-            if str(forecast["event_id"]) != str(event_id):
-                continue
             player = actuals.get(str(forecast["player_id"])) or {}
             actual = (player.get("stats") or {}).get(forecast["prop_type"])
             outcome = {"actual": actual, "result": "N/A", "reason": None,
@@ -123,6 +125,56 @@ def settle_event(original_db, league, event_id, payload):
     return len(outcomes)
 
 
+def _fetch_summary(url):
+    with urlopen(url, timeout=12) as response:
+        return json.load(response)
+
+
+def settle_night(original_db, league, day, get=None):
+    """Grade saved model props for one sport night from official finals.
+
+    Used by the results page for the date the visitor picked. Does not rebuild
+    props picks.
+    """
+    if not day or not league or league not in PATHS:
+        return 0
+    path = ledger_path(original_db)
+    if not path.exists():
+        return 0
+    now = datetime.now(timezone.utc)
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=3)) as conn:
+        candidates = conn.execute(
+            """SELECT f.payload,s.payload FROM forecasts f LEFT JOIN settlements s
+                 ON s.id=(SELECT MAX(s2.id) FROM settlements s2 WHERE s2.forecast_id=f.id)
+               WHERE f.league=? AND f.pick_date=?""",
+            (league, day),
+        ).fetchall()
+    pending = []
+    for raw, outcome in candidates:
+        forecast = json.loads(raw)
+        status = json.loads(outcome).get("result") if outcome else None
+        if status in ("Win", "Loss", "Push", "Void"):
+            continue
+        if status is None or status in ("Pending", "N/A"):
+            pending.append(forecast)
+    events = {str(row["event_id"]) for row in pending
+              if row.get("event_id") and _aware(row["event_start"]) < now}
+    get = get or _fetch_summary
+    settled = 0
+    for identity in sorted(events):
+        if not str(identity).isdigit():
+            continue
+        try:
+            payload = get(
+                f"https://site.api.espn.com/apis/site/v2/sports/{PATHS[league]}/summary?event={identity}"
+            )
+            settled += settle_event(original_db, league, identity, payload)
+        except Exception:
+            logger.exception("Prop settlement unavailable for %s event %s", league, identity)
+        time.sleep(0.15)
+    return settled
+
+
 def settle_pending(original_db, get=None):
     path = ledger_path(original_db)
     if not path.exists():
@@ -142,10 +194,7 @@ def settle_pending(original_db, get=None):
             pending.append(forecast)
     events = {(row["league"], str(row["event_id"])) for row in pending
               if row["league"] in PATHS and _aware(row["event_start"]) < datetime.now(timezone.utc)}
-    def fetch(url):
-        with urlopen(url, timeout=12) as response:
-            return json.load(response)
-    get = get or fetch
+    get = get or _fetch_summary
     settled = 0
     for league, identity in sorted(events):
         if not identity.isdigit():

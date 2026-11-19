@@ -12,6 +12,13 @@ function todayET() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 }
 
+function shiftET(days) {
+  const [year, month, day] = todayET().split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 export default function PropsPage() {
   const opening = new URLSearchParams(window.location.search);
   const requested = (opening.get('league') || '').toUpperCase();
@@ -28,7 +35,7 @@ export default function PropsPage() {
   const [streaks, setStreaks] = useState(null);
   const [resultsError, setResultsError] = useState('');
   // Empty until the API names the latest night with records — calendar yesterday is often all N/A.
-  const [day, setDay] = useState(() => new URLSearchParams(window.location.search).get('results_date') || '');
+  const [day, setDay] = useState(() => new URLSearchParams(window.location.search).get('results_date') || shiftET(-1));
   const [resultWindow, setResultWindow] = useState(() => new URLSearchParams(window.location.search).get('results_window') || 'night');
   const [propsDay, setPropsDay] = useState(() => opening.get('date') || todayET());
   const [market, setMarket] = useState('all');
@@ -38,6 +45,7 @@ export default function PropsPage() {
     const requestedSide = (new URLSearchParams(window.location.search).get('side') || '').toUpperCase();
     return ['OVER', 'UNDER'].includes(requestedSide) ? requestedSide : 'all';
   });
+  const [resultSide, setResultSide] = useState('all');
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('player') || '');
   const [visibleResults, setVisibleResults] = useState(3);
   const [itemsReady, setItemsReady] = useState(false);
@@ -46,7 +54,15 @@ export default function PropsPage() {
   useEffect(() => {
     setVisibleResults(3);
     setItemsReady(false);
-  }, [day, resultWindow, league, model, market, search, lineType, side]);
+  }, [day, resultWindow, league, model, resultSide]);
+
+  // Choosing a sport or a results date loads that night. The props board is separate.
+  useEffect(() => {
+    if (!league || !day) return undefined;
+    setResultsError('');
+    setResultsQuery({ league, day, window: resultWindow, n: Date.now() });
+    return undefined;
+  }, [league, day, resultWindow]);
 
   useEffect(() => {
     let alive = true;
@@ -99,8 +115,7 @@ export default function PropsPage() {
     return () => { alive = false; clearTimeout(timer); };
   }, [me, propsQuery, retry]);
 
-  // Prop results: desktop shows the results column; mobile loads when Results tab is open.
-  // Individual recorded props are a second, deferred request.
+  // Prop results for the sport and date chosen above. One request, saved rows included.
   useEffect(() => {
     if (!resultsQuery || !me?.premium || !me?.loggedIn) return undefined;
     const desktop = typeof window !== 'undefined'
@@ -108,59 +123,18 @@ export default function PropsPage() {
     const needResults = pane === 'results' || desktop;
     if (!needResults) return undefined;
     let alive = true;
-    let pollTimer = 0;
-    let itemsTimer = 0;
-    let boot = 0;
-    const baseQuery = () => {
-      const query = new URLSearchParams({ window: resultsQuery.window });
-      if (resultsQuery.day) query.set('date', resultsQuery.day);
-      if (resultsQuery.league) query.set('league', resultsQuery.league);
-      return query;
-    };
-    const loadSummary = () => {
-      const query = baseQuery();
-      query.set('items', '0');
-      return getJson(`/api/web/props-results?${query}`, { maxAge: 60_000 }).then((data) => {
-        if (!alive) return;
-        setResults((prev) => ({
-          ...data,
-          items: Array.isArray(prev?.items) && prev.items.length ? prev.items : (data.items || []),
-          items_deferred: !(prev?.items?.length) && (data.items_deferred || !(data.items || []).length),
-        }));
-        setResultsError('');
-        if (!day && data?.result_date) setDay(data.result_date);
-      }).catch(() => { if (alive) setResultsError('Could not load recorded results. Please retry.'); });
-    };
-    const loadItems = () => {
-      const query = baseQuery();
-      query.set('items', '1');
-      return getJson(`/api/web/props-results?${query}`, { maxAge: 120_000 }).then((data) => {
-        if (!alive) return;
-        setResults(data);
-        setItemsReady(true);
-        setResultsError('');
-        if (!day && data?.result_date) setDay(data.result_date);
-      }).catch(() => { if (alive) setResultsError('Could not load recorded results. Please retry.'); });
-    };
+    const query = new URLSearchParams({ window: resultsQuery.window, items: '1' });
+    if (resultsQuery.day) query.set('date', resultsQuery.day);
+    if (resultsQuery.league) query.set('league', resultsQuery.league);
     setResults(null);
     setItemsReady(false);
-    // Let props-hub paint first; results are secondary.
-    boot = window.setTimeout(() => {
+    getJson(`/api/web/props-results?${query}`, { maxAge: 0 }).then((data) => {
       if (!alive) return;
-      loadSummary().then(() => {
-        if (!alive) return;
-        // Per-player history: only after Results tab (mobile) or a long pause on desktop.
-        const delay = pane === 'results' ? 1200 : 8000;
-        itemsTimer = window.setTimeout(() => { if (alive) loadItems(); }, delay);
-      });
-      pollTimer = window.setInterval(() => { if (alive) loadSummary(); }, 180000);
-    }, pane === 'results' ? 200 : 2000);
-    return () => {
-      alive = false;
-      clearTimeout(boot);
-      clearTimeout(itemsTimer);
-      clearInterval(pollTimer);
-    };
+      setResults(data);
+      setItemsReady(true);
+      setResultsError('');
+    }).catch(() => { if (alive) setResultsError('Could not load recorded results. Please retry.'); });
+    return () => { alive = false; };
   }, [me, resultsQuery, retry, pane]);
 
   useEffect(() => {
@@ -179,9 +153,8 @@ export default function PropsPage() {
     ...sections.flatMap((section) => (section.items || []).map((row) => row.prop_type)),
     ...(results?.items || []).map((row) => row.prop_type),
   ].filter(Boolean))].sort();
-  const resultGame = day === propsDay && resultWindow === 'night' ? selectedGame : '';
-  const filtered = useMemo(() => filterPropResults(results?.items, { model, market, search, lineType, game: resultGame, side }),
-  [results, market, model, search, lineType, resultGame, side]);
+  const filtered = useMemo(() => filterPropResults(results?.items, { model, side: resultSide }),
+  [results, model, resultSide]);
   const typeSummaries = modelPropCounts(filtered);
   const modelSummaries = modelCounts(filtered, results?.models);
   const firstModelDate = (results?.models || [])
@@ -305,10 +278,9 @@ export default function PropsPage() {
         <h2 className="pl-right-title">{league ? `${nameOf(league)} Prop Results` : 'Prop Results'}</h2>
         {gate || <>
           <div className="pp-hub-filters">
-            <label>Date<select aria-label="Prop results date" value={day} onChange={(e) => { if (e.target.value) setDay(e.target.value); }}>
-              {day && !(results?.dates || []).includes(day) && <option value={day}>{day}</option>}
-              {(results?.dates || []).map((item) => <option key={item} value={item}>{item}</option>)}
-            </select></label>
+            <label>Date<input aria-label="Prop results date" type="date" value={day} onChange={(e) => {
+              if (e.target.value) setDay(e.target.value);
+            }} /></label>
             <label>Range<select aria-label="Prop results period" value={resultWindow} onChange={e => setResultWindow(e.target.value)}>
               <option value="night">This date only</option><option value="7">7 days ending this date</option>
               <option value="30">30 days ending this date</option><option value="season">Season through this date</option>
@@ -317,7 +289,7 @@ export default function PropsPage() {
               <option value="all">Saved picks</option>{(results?.models || []).filter((item) => item.decided || item.first_recorded_date).map((item) =>
                 <option key={item.id} value={item.id}>{item.name}</option>)}
             </select></label>
-            <label>Over / Under<select aria-label="Prop results prediction side" value={side} onChange={e => setSide(e.target.value)}>
+            <label>Over / Under<select aria-label="Prop results prediction side" value={resultSide} onChange={e => setResultSide(e.target.value)}>
               <option value="all">Both</option><option value="OVER">Over</option><option value="UNDER">Under</option>
             </select></label>
             <button type="button" className="pp-hub-load" onClick={pressLoadResults}>Load results</button>

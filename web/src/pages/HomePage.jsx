@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getJson } from '../api.js';
 import ChartFrame from '../components/ChartFrame.jsx';
-import SeasonRecord from '../components/SeasonRecord.jsx';
 import { publicPath } from '../data/sportSlugs.js';
 import { readCardPreview, readGolfPreview } from '../homePreview.js';
 
@@ -159,9 +158,6 @@ export default function HomePage() {
           </section>
         )}
       </main>
-      <aside className="pl-right">
-        <SeasonRecord />
-      </aside>
     </>
   );
 }

@@ -130821,10 +130821,7 @@ def _build_landing_preview_context__ncaaf():
         for post in _get_blog_posts(include_generated=False)
     ]
     latest_blog_post = blog_posts[0] if blog_posts else None
-    preview_units = [
-        item for item in _get_sport_ml_units_banner()
-        if 'SOCCER' not in item.get('label', '').upper()
-    ]
+    preview_units = []
 
     return {
         'games_graded': games_graded,
@@ -130946,10 +130943,7 @@ def _build_landing_preview_context():
         for post in _get_blog_posts(include_generated=False)
     ]
     latest_blog_post = blog_posts[0] if blog_posts else None
-    preview_units = [
-        item for item in _get_sport_ml_units_banner()
-        if 'SOCCER' not in item.get('label', '').upper()
-    ]
+    preview_units = []
 
     return {
         'games_graded': games_graded,

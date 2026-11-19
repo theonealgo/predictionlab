@@ -28,7 +28,7 @@ services:
       # Props rebuild stays off in this smoke test. It pegged the only web thread.
       PL_PROP_PUBLICATION: "0"
       PL_PROPS_LEAGUES: "NBA"
-      PL_PROP_SETTLEMENT: "0"
+      PL_PROP_SETTLEMENT: "1"
       PL_PROPS_PRELOAD: "0"
       PL_SHARE_IMAGES: "0"
       PL_AUTOREFRESH: "0"

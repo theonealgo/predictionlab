@@ -203,21 +203,6 @@ html[data-view="kalshi"] .pl2-kalshi-result-row em{font-style:normal;font-weight
                 </div>
             </section>
 
-            <aside class="pl2-kalshi-results kalshi-only">
-                <span class="pl2-mono">Results</span>
-                <h3 style="margin:6px 0 10px;font-size:20px;">Season record</h3>
-                {% for item in units_banner_items %}
-                <div class="pl2-kalshi-result-row"><span>{{ item.label }}</span><b>{{ item.record }}</b><em>{{ item.units }}</em></div>
-                {% endfor %}
-                {% if latest_graded_game %}
-                <div style="margin-top:14px;">
-                    <span class="pl2-mono">Last correct pick</span>
-                    <div><strong>{{ latest_graded_game.pick }}</strong> · {{ latest_graded_game.sport }}</div>
-                    <div>{{ latest_graded_game.away }} {{ latest_graded_game.away_score }} – {{ latest_graded_game.home_score }} {{ latest_graded_game.home }}</div>
-                </div>
-                {% endif %}
-                <a class="pl2-sec-link" href="/all-sports-results" style="display:inline-block;margin-top:14px;">Full results →</a>
-            </aside>
             </div>
 
             <!-- 03 · MethodologyLedger -->
