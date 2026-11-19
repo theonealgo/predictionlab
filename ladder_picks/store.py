@@ -113,18 +113,48 @@ def connect(path: str | None = None) -> sqlite3.Connection:
     except sqlite3.Error:
         pass
     conn.executescript(SCHEMA)
-    have = {r["name"] for r in conn.execute("PRAGMA table_info(ladder_days)")}
-    for col, typ in _ADDED_COLUMNS:
-        if col not in have:
-            try:
-                conn.execute(f"ALTER TABLE ladder_days ADD COLUMN {col} {typ}")
-            except sqlite3.OperationalError:
-                pass  # another connection added it first
+    ensure_ladder_days_columns(conn)
     _apply_reset(conn)
+    # Reset can race with another writer; re-check columns after.
+    ensure_ladder_days_columns(conn)
     return conn
 
 
-_ADDED_COLUMNS = (("line", "REAL"), ("pick_label", "TEXT"), ("pick_type", "TEXT"), ("model_name", "TEXT"))
+_ADDED_COLUMNS = (
+    ("line", "REAL"),
+    ("pick_label", "TEXT"),
+    ("pick_type", "TEXT"),
+    ("model_name", "TEXT"),
+    ("legs_json", "TEXT"),
+)
+
+
+def ensure_ladder_days_columns(conn: sqlite3.Connection) -> None:
+    """Add any missing ladder_days columns (persistent /data DBs predate new fields)."""
+    try:
+        have = {r["name"] for r in conn.execute("PRAGMA table_info(ladder_days)")}
+    except sqlite3.Error:
+        return
+    for col, typ in _ADDED_COLUMNS:
+        if col in have:
+            continue
+        try:
+            conn.execute(f"ALTER TABLE ladder_days ADD COLUMN {col} {typ}")
+            have.add(col)
+        except sqlite3.OperationalError:
+            # Another connection added it; refresh and continue.
+            try:
+                have = {r["name"] for r in conn.execute("PRAGMA table_info(ladder_days)")}
+            except sqlite3.Error:
+                pass
+    # Verify the column the publisher needs — never leave this silent.
+    if "legs_json" not in have:
+        try:
+            have = {r["name"] for r in conn.execute("PRAGMA table_info(ladder_days)")}
+        except sqlite3.Error:
+            have = set()
+        if "legs_json" not in have:
+            conn.execute("ALTER TABLE ladder_days ADD COLUMN legs_json TEXT")
 
 # Bump to clear every ladder once (rows are copied to *_archive first). Ids keep
 # counting up so social-post rows for old ladders never collide with new ones.

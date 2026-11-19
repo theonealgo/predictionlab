@@ -60,17 +60,28 @@ for path in (
             print(f"[render_start] removed poisoned {path.name}")
     except Exception as exc:
         print(f"[render_start] skip {path.name}: {exc}")
-# Always drop NHL fast-path + last_good so October-card frankenstein pages
-# cannot outlive a deploy (align used to paint Nov tallies on Oct cards).
-for nhl_path in (root / "nhl_results_page.html", last_good):
-    if not nhl_path.is_file():
-        continue
+# Drop the fast-path so a background rebuild runs, but KEEP last_good so the
+# only gunicorn worker can serve something while that rebuild finishes.
+# Deleting both forced every /nhl-results hit into a sync rebuild and hung
+# the site (WORKER TIMEOUT / nothing loads).
+nhl_fast = root / "nhl_results_page.html"
+if nhl_fast.is_file():
     try:
-        nhl_path.unlink(missing_ok=True)
+        nhl_fast.unlink(missing_ok=True)
         removed += 1
-        print(f"[render_start] removed {nhl_path.name} (force rebuild)")
+        print("[render_start] removed nhl_results_page.html (force rebuild)")
     except Exception as exc:
-        print(f"[render_start] skip {nhl_path.name}: {exc}")
+        print(f"[render_start] skip nhl_results_page: {exc}")
+if last_good.is_file():
+    try:
+        if poisoned(last_good.read_text(encoding="utf-8", errors="ignore")):
+            last_good.unlink(missing_ok=True)
+            removed += 1
+            print("[render_start] removed poisoned nhl_results_last_good.html")
+        else:
+            print("[render_start] kept nhl_results_last_good.html as serve fallback")
+    except Exception as exc:
+        print(f"[render_start] skip last_good: {exc}")
 print(f"[render_start] poisoned-page purge done ({removed} removed)")
 PY
 

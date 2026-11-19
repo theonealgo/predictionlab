@@ -409,11 +409,15 @@ class LadderEngine:
 
     def _used_game_ids(self, ladder_id: int) -> set[str]:
         used: set[str] = set()
-        for r in self.conn.execute(
-            "SELECT game_id, legs_json FROM ladder_days WHERE ladder_id = ?", (ladder_id,)
-        ):
+        store.ensure_ladder_days_columns(self.conn)
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(ladder_days)")}
+        select = "SELECT game_id, legs_json FROM ladder_days WHERE ladder_id = ?" if "legs_json" in cols \
+            else "SELECT game_id FROM ladder_days WHERE ladder_id = ?"
+        for r in self.conn.execute(select, (ladder_id,)):
             if r["game_id"]:
                 used.add(str(r["game_id"]))
+            if "legs_json" not in cols:
+                continue
             raw = r["legs_json"] if "legs_json" in r.keys() else None
             if not raw:
                 continue
@@ -725,21 +729,37 @@ class LadderEngine:
                 f"{pick.get('away_team', '')} @ {pick.get('home_team', '')}".strip(" @")
             )
             legs_json = json.dumps(pick["legs"]) if pick.get("legs") else None
-            self.conn.execute(
-                """INSERT INTO ladder_days (ladder_id, day_number, pick_date, result, sport, game_id,
-                       event_label, home_team, away_team, pick_team, pick_side, market, line, pick_label,
-                       pick_type, model_name, model_prob, market_prob, credible_prob, hist_hit_rate, hist_n,
-                       american_odds, decimal_odds, opponent_american_odds, stake_cents, event_start,
-                       selected_at, legs_json)
-                   VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (ladder_id, next_day, today, pick["sport"], pick["game_id"],
-                 event_label, pick.get("home_team") or "", pick.get("away_team") or "",
-                 pick_team, pick.get("side"), pick["market"], pick.get("line"), pick["pick_label"],
-                 pick["pick_type"], pick.get("model"), round(model_p, 4) if model_p is not None else None,
-                 pick.get("market_prob"), pick["credible_prob"], pick["hist_hit_rate"], pick["hist_n"],
-                 pick["american_odds"], pick["decimal_odds"], pick.get("opponent_american_odds"), stake,
-                 _iso(pick["start"]), _iso(now), legs_json),
+            # Persistent /data/ladder.db may predate legs_json — migrate before insert.
+            store.ensure_ladder_days_columns(self.conn)
+            cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(ladder_days)")}
+            base_cols = (
+                "ladder_id, day_number, pick_date, result, sport, game_id, "
+                "event_label, home_team, away_team, pick_team, pick_side, market, line, pick_label, "
+                "pick_type, model_name, model_prob, market_prob, credible_prob, hist_hit_rate, hist_n, "
+                "american_odds, decimal_odds, opponent_american_odds, stake_cents, event_start, "
+                "selected_at"
             )
+            base_vals = (
+                ladder_id, next_day, today, "pending", pick["sport"], pick["game_id"],
+                event_label, pick.get("home_team") or "", pick.get("away_team") or "",
+                pick_team, pick.get("side"), pick["market"], pick.get("line"), pick["pick_label"],
+                pick["pick_type"], pick.get("model"), round(model_p, 4) if model_p is not None else None,
+                pick.get("market_prob"), pick["credible_prob"], pick["hist_hit_rate"], pick["hist_n"],
+                pick["american_odds"], pick["decimal_odds"], pick.get("opponent_american_odds"), stake,
+                _iso(pick["start"]), _iso(now),
+            )
+            if "legs_json" in cols:
+                placeholders = ",".join("?" for _ in range(len(base_vals) + 1))
+                self.conn.execute(
+                    f"INSERT INTO ladder_days ({base_cols}, legs_json) VALUES ({placeholders})",
+                    base_vals + (legs_json,),
+                )
+            else:
+                placeholders = ",".join("?" for _ in range(len(base_vals)))
+                self.conn.execute(
+                    f"INSERT INTO ladder_days ({base_cols}) VALUES ({placeholders})",
+                    base_vals,
+                )
             self.conn.execute("DELETE FROM ladder_no_pick_dates WHERE pick_date = ?", (today,))
         logger.info("ladder: published ladder %s day %s: %s %s (%s)", ladder_id, next_day,
                     pick["sport"], pick["pick_label"], money.fmt_american(pick["american_odds"]))

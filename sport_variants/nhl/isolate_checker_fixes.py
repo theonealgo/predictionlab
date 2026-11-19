@@ -1503,33 +1503,56 @@ def drop_nhl_results_caches() -> None:
         pass
 
 
+def _nhl_read_fallback() -> str:
+    """Any saved NHL HTML we can return without rebuilding on the request."""
+    for path in (
+        _NHL_RESULTS_DISK,
+        Path("/data/nhl_results_last_good.html"),
+        Path("nhl_results_last_good.html"),
+    ):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except Exception:
+            continue
+        if text and "game-card" in text:
+            return text
+    return ""
+
+
 def read_nhl_results_disk() -> str:
     """Cached NHL cards page. A cold /nhl-results hit must not rebuild from the DB.
 
-    When the newest stored final is missing from the saved page, the saved
-    page is still served and a rebuild runs in the background.
+    Stale / frankenstein pages schedule a background rebuild but are still
+    served — returning empty forces a sync rebuild on the only Render worker
+    and takes the whole site down.
     """
     if results_refresh_forced():
         return ""
     try:
         text = _NHL_RESULTS_DISK.read_text(encoding="utf-8")
     except Exception:
-        return ""
-    if not _nhl_results_html_usable(text):
-        drop_nhl_results_caches()
-        _schedule_nhl_results_rebuild()
-        return ""
-    try:
-        latest, _n = _nhl_latest_final_before_today()
-        if latest and not _nhl_page_has_finals_on(text, latest):
-            # Missing the newest final night = frankenstein / October freeze.
-            # Never keep serving it (lag check used to leave poison when
-            # yesterday's finals exist in the DB but not on the page).
-            drop_nhl_results_caches()
+        text = ""
+    if not text:
+        text = _nhl_read_fallback()
+        if text:
             _schedule_nhl_results_rebuild()
-            return ""
-    except Exception:
-        pass
+        return text
+    needs_rebuild = False
+    if not _nhl_results_html_usable(text):
+        needs_rebuild = True
+    else:
+        try:
+            latest, _n = _nhl_latest_final_before_today()
+            if latest and not _nhl_page_has_finals_on(text, latest):
+                needs_rebuild = True
+        except Exception:
+            pass
+    if needs_rebuild:
+        _schedule_nhl_results_rebuild()
+        # Serve what we have (or last_good) so visitors are not stuck behind
+        # a multi-minute rebuild on the single gunicorn worker.
+        fallback = _nhl_read_fallback()
+        return fallback or text
     # Only rewrite Last 7 tallies when the page already has that night's cards.
     aligned = nhl_last7_end_yesterday(text)
     try:
