@@ -1178,8 +1178,10 @@ def _cards_for_tier(slug, tier):
 
 def _start_full_cards(slug, tier, app):
     """One full build per sport and tier; every page of cards is cut from it."""
-    # Right after deploy, prefer answering the homepage over starting N classic SSRs.
-    if _in_boot_grace():
+    # Boot grace only blocks *extra* SSR when a disk feed already exists.
+    # A cold miss must start building or the React page stays on "Loading games…"
+    # for the whole grace window (and Results never enable).
+    if _in_boot_grace() and _cards_for_tier(slug, tier):
         return False
     with _CARDS_LOCK:
         if (slug, tier) in _CARDS_BUILDING:
@@ -1244,9 +1246,9 @@ def _card_page(slug, tier, app, offset, limit, span=None):
     # One cold build at a time (semaphore inside _start_full_cards). Homepage stays
     # serial so this does not stampede; sport pages poll building:true.
     started = _start_full_cards(slug, tier, app)
-    retry = 1
-    if not started and _in_boot_grace():
-        retry = max(2, int(_BOOT_GRACE_S - (time.time() - _boot_started_at())) + 1)
+    # Cap poll delay — a multi-minute retryAfter freezes "Loading games…" on the
+    # sport page even when the client already caps pauses at 30s.
+    retry = 2 if started or not _in_boot_grace() else 3
     return {'cards': [], 'total': None, 'css': '', 'shareImage': '', 'offset': offset,
             'nextOffset': offset, 'hasMore': True, 'building': True,
             'refreshing': True, 'retryAfter': retry}, 202

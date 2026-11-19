@@ -410,7 +410,7 @@ export default function SportPage({ slug }) {
       <aside className={mobilePane === 'results' ? 'pl-right' : 'pl-right pl-mobile-hidden'}>
         <div className="pl-right-title">Results</div>
         <ResultsPanel
-          enabled={isGolf || Boolean(payload) || mobilePane === 'results'}
+          enabled
           src={`/${slug.replace('-picks', '-results')}`}
           picksPath={`/${slug.replace('-projections', '-picks')}`}
           onPredictions={() => { chooseTab(nav.tabs[0]); setMobilePane('predictions'); }}

@@ -111259,7 +111259,7 @@ _RESULTS_HTTP_REBUILD_LOCK = threading.Lock()
 
 
 def _schedule_results_http_rebuild(path_qs: str) -> None:
-    """Rebuild one results page through a local request (runs every HTML step)."""
+    """Rebuild one results page in-process (never HTTP the live gunicorn worker)."""
     key = (path_qs or "").rstrip("?")
     with _RESULTS_HTTP_REBUILD_LOCK:
         now = _time.time()
@@ -111268,15 +111268,16 @@ def _schedule_results_http_rebuild(path_qs: str) -> None:
         _RESULTS_HTTP_REBUILD_AT[key] = now
 
     def _run():
-        import os as _rb_os
-        import urllib.request
-        port = _rb_os.environ.get("PORT") or "5000"
         try:
-            req = urllib.request.Request(
-                f"http://127.0.0.1:{port}{key}",
-                headers={"X-PL-Results-Rebuild": "1"},
-            )
-            urllib.request.urlopen(req, timeout=300).read()
+            _app = globals().get("app")
+            if _app is None:
+                return
+            with _app.app_context():
+                _app.test_client().get(
+                    key,
+                    base_url="http://results-refresh.local",
+                    headers={"X-PL-Results-Rebuild": "1"},
+                )
         except Exception:
             pass
 
@@ -114029,24 +114030,18 @@ def sport_results__nhl(sport):
         if sport == 'SOCCER' and not SOCCER_ENABLED:
             return "Soccer results are temporarily hidden while data loads.", 404
         if sport == 'NHL':
-            # Never run NHL API gap-fill on the visitor request — it blocked the
-            # only gunicorn worker. Background thread + throttle only.
+            # Never gap-fill or wipe caches on the visitor request. Dropping
+            # nhl_results_page / last_good forced a sync rebuild on the only
+            # gunicorn worker and hung /healthz + every sport (0-byte timeouts).
             try:
-                def _nhl_sync_bg():
-                    try:
-                        scored = _sync_nhl_unscored_finals(max_dates=21)
-                        if scored:
-                            try:
-                                from isolate_checker_fixes import drop_nhl_results_caches, _schedule_nhl_results_rebuild
-                                drop_nhl_results_caches()
-                                _schedule_nhl_results_rebuild()
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                threading.Thread(target=_nhl_sync_bg, daemon=True, name="nhl-score-sync").start()
+                _start_background_score_sync('NHL', sync_fn=lambda: _sync_nhl_unscored_finals(max_dates=21))
             except Exception as _nhl_sync_e:
                 logger.debug(f"NHL score sync schedule failed: {_nhl_sync_e}")
+            try:
+                from isolate_checker_fixes import _schedule_nhl_results_rebuild
+                _schedule_nhl_results_rebuild()
+            except Exception:
+                pass
             try:
                 _nhl_view = (request.args.get('view') or '').strip().lower()
             except Exception:
@@ -114068,6 +114063,14 @@ def sport_results__nhl(sport):
                     _nhl_fast = ''
                 if _nhl_fast:
                     return _nhl_fast
+                # No disk HTML: never rebuild NHL results on this request.
+                try:
+                    return _results_fallback_page(
+                        'NHL',
+                        "NHL results are refreshing. Open again in a minute.",
+                    )
+                except Exception:
+                    return ("NHL results are refreshing. Open again in a minute.", 503)
         try:
             from isolate_checker_fixes import lookup_served_results, results_serve_key
             _hit = lookup_served_results(results_serve_key(

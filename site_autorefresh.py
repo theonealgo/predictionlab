@@ -498,31 +498,52 @@ def _rebuild_nhl_if_flagged(app) -> None:
     worker (that deadlocks the single gunicorn process).
     """
     try:
+        import sport_variant
         import isolate_checker_fixes as icf
     except Exception:
         return
+    nhl_fast = _CACHE / "nhl_results_page.html"
+    needed = False
     try:
-        needed = bool(icf.nhl_results_rebuild_requested())
+        with sport_variant.sport_scope("nhl"):
+            needed = bool(icf.nhl_results_rebuild_requested())
     except Exception:
-        needed = False
+        needed = (_CACHE / "nhl_results_needs_rebuild").is_file()
     if not needed:
-        nhl_fast = _CACHE / "nhl_results_page.html"
         if nhl_fast.is_file():
             return
-        # Missing fast-path after a deploy purge — rebuild once.
+        # Missing fast-path: prefer copying last_good over a rebuild storm.
+        for fallback in (
+            Path("/data/nhl_results_last_good.html"),
+            _ROOT / "nhl_results_last_good.html",
+        ):
+            try:
+                if fallback.is_file() and "game-card" in fallback.read_text(
+                    encoding="utf-8", errors="ignore"
+                ):
+                    import shutil
+                    shutil.copy2(fallback, nhl_fast)
+                    logger.info("[autorefresh] seeded nhl_results_page.html from last_good")
+                    return
+            except OSError:
+                continue
+    # One cards page first — chart variants wait for the next cycle so the
+    # single worker is not stuck rebuilding five NHL boards in a row.
     done = 0
-    for view, market in (("", ""), ("chart", ""), ("chart", "moneyline"),
-                         ("chart", "spread"), ("chart", "totals")):
-        try:
-            if _rebuild_page(app, "NHL", view, market):
-                done += 1
-        except Exception as exc:
-            logger.warning(f"[autorefresh] NHL rebuild {view}/{market} failed: {exc}")
-        time.sleep(PAGE_PAUSE_S)
     try:
-        icf.clear_nhl_results_rebuild_flag()
+        if _rebuild_page(app, "NHL", "", ""):
+            done += 1
+    except Exception as exc:
+        logger.warning(f"[autorefresh] NHL rebuild cards failed: {exc}")
+    time.sleep(PAGE_PAUSE_S)
+    try:
+        with sport_variant.sport_scope("nhl"):
+            icf.clear_nhl_results_rebuild_flag()
     except Exception:
-        pass
+        try:
+            (_CACHE / "nhl_results_needs_rebuild").unlink(missing_ok=True)
+        except OSError:
+            pass
     if done:
         logger.info(f"[autorefresh] NHL flagged rebuild: {done} page(s)")
 

@@ -60,16 +60,18 @@ for path in (
             print(f"[render_start] removed poisoned {path.name}")
     except Exception as exc:
         print(f"[render_start] skip {path.name}: {exc}")
-# Drop the fast-path so a background rebuild runs, but KEEP last_good so the
-# only gunicorn worker can serve something while that rebuild finishes.
-# Deleting both forced every /nhl-results hit into a sync rebuild and hung
-# the site (WORKER TIMEOUT / nothing loads).
+# KEEP nhl_results_page.html when it is usable. Deleting it every deploy forced
+# cold NHL rebuilds on the only worker. If the fast-path is missing/poisoned but
+# last_good is fine, seed the fast-path from last_good so visitors never wait.
 nhl_fast = root / "nhl_results_page.html"
 if nhl_fast.is_file():
     try:
-        nhl_fast.unlink(missing_ok=True)
-        removed += 1
-        print("[render_start] removed nhl_results_page.html (force rebuild)")
+        if poisoned(nhl_fast.read_text(encoding="utf-8", errors="ignore")):
+            nhl_fast.unlink(missing_ok=True)
+            removed += 1
+            print("[render_start] removed poisoned nhl_results_page.html")
+        else:
+            print("[render_start] kept nhl_results_page.html")
     except Exception as exc:
         print(f"[render_start] skip nhl_results_page: {exc}")
 if last_good.is_file():
@@ -80,6 +82,10 @@ if last_good.is_file():
             print("[render_start] removed poisoned nhl_results_last_good.html")
         else:
             print("[render_start] kept nhl_results_last_good.html as serve fallback")
+            if not nhl_fast.is_file():
+                import shutil
+                shutil.copy2(last_good, nhl_fast)
+                print("[render_start] seeded nhl_results_page.html from last_good")
     except Exception as exc:
         print(f"[render_start] skip last_good: {exc}")
 print(f"[render_start] poisoned-page purge done ({removed} removed)")
@@ -94,8 +100,8 @@ export OPENBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
 # One background page rebuild at a time on Render (each can be hundreds of MB).
 export PL_BUILD_SLOTS="${PL_BUILD_SLOTS:-1}"
-# Defer score sync / tennis ESPN for a few minutes so / and cards answer first.
-export PL_BOOT_GRACE_S="${PL_BOOT_GRACE_S:-180}"
+# Short boot grace — long grace + blocked card SSR left React on "Loading games…".
+export PL_BOOT_GRACE_S="${PL_BOOT_GRACE_S:-45}"
 export PL_SCORE_SYNC_SLOTS="${PL_SCORE_SYNC_SLOTS:-1}"
 export PL_TENNIS_SYNC_S="${PL_TENNIS_SYNC_S:-1800}"
 export GUNICORN_THREADS="${GUNICORN_THREADS:-4}"

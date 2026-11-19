@@ -1474,22 +1474,28 @@ def _nhl_results_html_usable(text: str) -> bool:
     return True
 
 
-def drop_nhl_results_caches() -> None:
-    """Delete NHL fast-path HTML so the next hit rebuilds from scored games."""
-    for path in (
-        _NHL_RESULTS_DISK,
-        Path("/data/nhl_results_last_good.html"),
-        Path("nhl_results_last_good.html"),
-    ):
-        try:
-            path.unlink(missing_ok=True)
-        except OSError:
-            pass
+def drop_nhl_results_caches(*, keep_last_good: bool = True) -> None:
+    """Drop the NHL fast-path so autorefresh can rebuild it.
+
+    Never delete last_good from a request-triggered path — without a serveable
+    fallback the next /nhl-results hit sync-rebuilds on the only gunicorn
+    worker and hangs the whole site (homepage, cards, /healthz).
+    """
     try:
-        for path in _CARDS_CACHE_DIR.glob("served_NHL*.html"):
-            path.unlink(missing_ok=True)
+        _NHL_RESULTS_DISK.unlink(missing_ok=True)
     except OSError:
         pass
+    if not keep_last_good:
+        for path in (
+            Path("/data/nhl_results_last_good.html"),
+            Path("nhl_results_last_good.html"),
+        ):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+    # Keep served_NHL*.html — lookup_served_results can still answer visitors
+    # while site_autorefresh rebuilds the fast-path file.
 
 
 def _nhl_read_fallback() -> str:
