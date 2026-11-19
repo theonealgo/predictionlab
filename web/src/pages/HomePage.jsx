@@ -9,16 +9,6 @@ const CHART_SPORTS = new Set(['NHL', 'NBA', 'NCAAB', 'NCAAW', 'MLB', 'SOCCER', '
 
 const FEATURED_CARDS = 6;
 
-async function fetchFeed(path) {
-  // Poll while the server builds a missing disk feed (202 building:true).
-  for (let tries = 0; tries < 40; tries += 1) {
-    const payload = await getJson(path, { maxAge: tries ? 0 : 60_000 });
-    if (!payload?.building) return payload;
-    await new Promise((resolve) => setTimeout(resolve, Math.min(30, Number(payload.retryAfter) || 2) * 1000));
-  }
-  return { cards: [], total: 0, building: false };
-}
-
 export default function HomePage() {
   const [mode, setMode] = useState('cards');
   const [sports, setSports] = useState(null);
@@ -39,18 +29,27 @@ export default function HomePage() {
           setNoSports(true);
           return;
         }
+        // Only sports with games today on the homepage — never empty "no upcoming" shells.
         const today = list.filter((item) => item.status === 'Today');
-        const shown = (today.length ? today : list.filter((item) => item.status !== 'Offseason')).slice(0, FEATURED_CARDS);
+        const shown = (today.length ? today : list.filter((item) => item.status === 'In season')).slice(0, FEATURED_CARDS);
+        if (!shown.length) {
+          setNoSports(true);
+          return;
+        }
         setFeatured(shown);
         setChartSlug((list.find((item) => item.status === 'Today') || list[0]).slug);
 
         const apply = (item, payload) => {
           if (cancelled) return;
+          const preview = item.key === 'GOLF'
+            ? readGolfPreview(payload)
+            : readCardPreview(payload?.cards?.[0]);
           setFeeds((current) => ({
             ...current,
             [item.slug]: {
-              total: payload.total,
-              preview: item.key === 'GOLF' ? readGolfPreview(payload) : readCardPreview(payload.cards?.[0]),
+              total: payload?.total || 0,
+              preview: preview || null,
+              empty: !preview,
             },
           }));
         };
@@ -58,7 +57,7 @@ export default function HomePage() {
           if (!cancelled) {
             setFeeds((current) => ({
               ...current,
-              [item.slug]: { error: 'Could not load this sport. Open its page to retry.' },
+              [item.slug]: { empty: true, total: 0, preview: null },
             }));
           }
         };
@@ -69,18 +68,14 @@ export default function HomePage() {
           }
           const path = `/api/web/sports/${item.slug}/cards?limit=1&cached=1`;
           try {
-            const payload = await fetchFeed(path);
+            const payload = await getJson(path, { maxAge: 60_000 });
             if (cancelled) return;
             apply(item, payload || { cards: [], total: 0 });
           } catch (error) {
             fail(item);
           }
         };
-        // Stagger slightly so workers=1 is not hit with 6 SSR builds at once,
-        // but do not wait on idle (mobile Safari often never fires it).
-        shown.forEach((item, index) => {
-          window.setTimeout(() => { if (!cancelled) loadOne(item); }, index * 200);
-        });
+        shown.forEach((item) => { loadOne(item); });
       })
       .catch(() => {
         if (!cancelled) setSportsError(true);
@@ -90,7 +85,15 @@ export default function HomePage() {
       cancelled = true;
     };
   }, []);
+
   const chartSport = sports?.find((item) => item.slug === chartSlug);
+  // Hide sports with no upcoming card — never show empty "no upcoming" shells.
+  const visible = featured.filter((sport) => {
+    const feed = feeds[sport.slug];
+    if (!feed) return true; // still loading — keep the slot
+    return Boolean(feed.preview);
+  });
+  const stillLoading = featured.some((sport) => !feeds[sport.slug]);
 
   return (
     <>
@@ -109,51 +112,82 @@ export default function HomePage() {
 
         {noSports && <p className="pl-empty">No games are scheduled right now.</p>}
         {sportsError && <p className="pl-empty" role="alert">Could not load the sports list. Please reload to retry.</p>}
-        {!noSports && !sportsError && !sports && (
-          <>
-            {Array.from({ length: 3 }, (_, n) => (
-              <section className="pl-home-sport is-skeleton" key={n} aria-hidden="true">
-                <div className="pl-home-sport-title">&nbsp;</div>
-                <div className="pl-home-preview" />
-              </section>
-            ))}
-          </>
+        {!noSports && !sportsError && !sports && <p className="pl-empty">Loading games…</p>}
+        {mode === 'cards' && sports && !stillLoading && !visible.length && (
+          <p className="pl-empty">No upcoming cards to show right now.</p>
         )}
 
-        {mode === 'cards' && featured.map((item) => {
-          const feed = feeds[item.slug];
+        {mode === 'cards' && visible.map((sport) => {
+          const feed = feeds[sport.slug];
           const preview = feed?.preview;
-          const href = publicPath(item.slug);
+          const href = publicPath(sport.slug);
           return (
-            <section className="pl-home-sport" key={item.slug} data-home-sport={item.key}>
-              <div className="pl-home-sport-title">
-                <span>{item.label}</span>
-                <a href={href}>See all{feed?.total ? ` ${feed.total} games` : ''}</a>
-              </div>
-              {feed?.error && <p className="pl-empty" role="alert">{feed.error}</p>}
-              {!feed && <div className="pl-home-preview is-skeleton" aria-hidden="true" />}
-              {feed && !feed.error && !preview && <p className="pl-empty">No upcoming {item.label} games in the window.</p>}
+            <section className="pl-home-sport" key={sport.slug} data-home-sport={sport.key}>
+              <h2 className="pl-home-sport-title">
+                <span>{sport.name}</span>
+                <a href={href}>
+                  {feed?.total
+                    ? `See all ${feed.total} ${sport.name} games`
+                    : `Open ${sport.name}`}
+                </a>
+              </h2>
+              {!feed && <p className="pl-empty">Loading games…</p>}
               {preview && (
-                <a className="pl-home-preview" href={href}>
-                  {preview.title && <h3>{preview.title}</h3>}
+                <a
+                  className="pl-home-preview"
+                  href={`${href}?${new URLSearchParams(preview.query || { game: preview.game })}`}
+                >
+                  <h3>{preview.title || preview.teams.slice(0, 2).map((team) => team.name).join(' vs ')}</h3>
                   <div className="pl-home-preview-meta">
-                    {[preview.date, preview.time, item.label].filter(Boolean).join(' · ')}
+                    {[preview.date, preview.time, sport.name].filter(Boolean).join(' · ')}
                   </div>
                   <div className="pl-home-preview-teams">
                     {preview.teams.map((team, index) => (
                       <div className="pl-home-preview-team" key={`${index}-${team.name}`}>
-                        {team.logo ? <img src={team.logo} alt="" width="28" height="28" loading="lazy" decoding="async" onError={(event) => {
-                          event.currentTarget.style.visibility = 'hidden';
-                        }} /> : null}
-                        <span>{team.name}</span>
-                        {team.percent != null
-                          ? <strong title={team.reason}>{team.percent}%</strong>
-                          : preview.confidence && preview.confidence.team === team.name
-                            ? <strong title="Published pick confidence">{preview.confidence.percent}%</strong>
-                            : <span className="pl-home-preview-na" title={team.reason}>N/A</span>}
+                        {team.logo ? (
+                          <img
+                            src={team.logo}
+                            alt=""
+                            width="28"
+                            height="28"
+                            loading="lazy"
+                            decoding="async"
+                            onError={(event) => {
+                              const image = event.currentTarget;
+                              if (!image.dataset.fallback) {
+                                image.dataset.fallback = '1';
+                                image.src = '/static/pl-logo.svg';
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span className="pl-home-preview-logo" />
+                        )}
+                        <div className="pl-home-preview-name">
+                          <span>{team.name}</span>
+                          {team.percent !== null && (
+                            <span className="pl-home-preview-track" aria-hidden="true">
+                              <span style={{ width: `${team.percent}%` }} />
+                            </span>
+                          )}
+                        </div>
+                        {(team.percent !== null || !preview.confidence) && (
+                          <span
+                            className="pl-home-preview-percent"
+                            title={team.percent === null ? team.reason : undefined}
+                          >
+                            {team.percent === null ? 'N/A' : `${team.percent}%`}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
+                  {preview.confidence && (
+                    <div className="pl-home-preview-confidence">
+                      <span>Forecast confidence · {preview.confidence.team}</span>
+                      <strong className="pl-home-preview-percent">{preview.confidence.percent}%</strong>
+                    </div>
+                  )}
                 </a>
               )}
             </section>
@@ -161,21 +195,25 @@ export default function HomePage() {
         })}
 
         {mode === 'chart' && sports && (
-          <>
-            <label className="pl-home-chart-pick">
-              Sport
-              <select value={chartSlug} onChange={(event) => setChartSlug(event.target.value)}>
+          <section className="pl-home-sport">
+            <h2 className="pl-home-sport-title">
+              <select aria-label="Chart sport" value={chartSlug} onChange={(event) => setChartSlug(event.target.value)}>
                 {sports.filter((item) => CHART_SPORTS.has(item.key)).map((item) => (
-                  <option value={item.slug} key={item.slug}>{item.label}</option>
+                  <option value={item.slug} key={item.slug}>{item.name}</option>
                 ))}
               </select>
-            </label>
+              {chartSport && <a href={publicPath(chartSport.slug)}>Open sport</a>}
+            </h2>
             {chartSport && CHART_SPORTS.has(chartSport.key) ? (
-              <ChartFrame key={chartSport.slug} slug={chartSport.slug} />
+              <ChartFrame
+                key={chartSport.slug}
+                title={`${chartSport.name} chart`}
+                src={`/${chartSport.slug.replace('-picks', '-results')}?view=chart`}
+              />
             ) : (
               <p className="pl-empty">Chart view is not available for this sport.</p>
             )}
-          </>
+          </section>
         )}
       </main>
     </>

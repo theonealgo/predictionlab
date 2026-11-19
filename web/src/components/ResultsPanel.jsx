@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { routeLinks, trimFrame, whenFrameParsed } from '../frameTools.js';
-import useVisibleOnce from '../hooks/useVisibleOnce.js';
 
 // The sport's results page in the right column. Cards and Chart are its two views (the Chart view is the
 // same page with ?view=chart), so this panel's buttons replace the page's own. The site's header and footer
@@ -42,7 +41,10 @@ export default function ResultsPanel({ src, picksPath, onPredictions, enabled = 
   const frame = useRef(null);
   const [view, setView] = useState('cards');
   const [requested, setRequested] = useState(false);
-  const active = useVisibleOnce(frame, enabled || requested);
+  // Load as soon as the column is enabled — do not wait for IntersectionObserver
+  // (mobile starts with the pane hidden, so visibility never flipped and results
+  // stayed on "Loading results…" forever).
+  const active = Boolean(enabled || requested);
   const url = view === 'chart' ? `${src}?view=chart` : src;
 
   const prepare = () => {

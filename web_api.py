@@ -1278,22 +1278,19 @@ def api_cards(slug):
         except (ValueError, TypeError):
             return jsonify(error='Choose a valid game page.'), 400
         if request.args.get('cached') == '1':
-            # Homepage fast path: never SSR on the request thread. If the disk/memory
-            # feed is missing, kick a background build and tell the client to poll —
-            # returning empty with building=false left every sport but NHL blank after
-            # deploy (only warmed feeds painted).
+            # Homepage fast path: disk/memory only. Never SSR and never queue a
+            # background build from the homepage — those builds monopolize the
+            # only worker and make results / sport pages hang for minutes.
+            # Sports without a warm feed stay off the homepage (client hides them).
             saved = _cards_for_tier(slug, tier)
             if not saved:
-                started = _start_full_cards(slug, tier, app)
                 payload = {
-                    'cards': [], 'total': None, 'css': '', 'shareImage': '',
-                    'offset': 0, 'nextOffset': 0, 'hasMore': True,
-                    'building': True, 'refreshing': True,
-                    'retryAfter': 2 if started or not _in_boot_grace() else 3,
+                    'cards': [], 'total': 0, 'css': '', 'shareImage': '',
+                    'offset': 0, 'nextOffset': None, 'hasMore': False,
+                    'building': False, 'refreshing': False,
                 }
                 response = jsonify(payload)
-                response.status_code = 202
-                response.headers['Cache-Control'] = 'private, no-store'
+                response.headers['Cache-Control'] = 'private, max-age=15'
                 response.vary.add('Cookie')
                 return response
             full = saved[1] or {}

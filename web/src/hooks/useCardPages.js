@@ -58,11 +58,15 @@ export default function useCardPages(slug, enabled = true, span = 0) {
 
   const readPage = useCallback(async (offset, generation) => {
     let failures = 0;
-    for (let tries = 0; tries < 90 && epoch.current === generation; tries += 1) {
+    // Cap wait at ~30s so a wedged worker never leaves the page spinning for minutes.
+    const deadline = Date.now() + 30_000;
+    for (let tries = 0; tries < 20 && epoch.current === generation; tries += 1) {
+      if (Date.now() > deadline) break;
       try {
         const data = await getJson(offset ? `${path}&offset=${offset}` : path, { maxAge: 0 });
         if (!data.building) return { ...data, cards: predictionCards(data.cards, span) };
-        await pause(data.retryAfter);
+        const wait = Math.min(2, Number(data.retryAfter) || 2);
+        await pause(wait);
         continue;
       } catch (failure) {
         if (++failures >= 4) throw failure;
