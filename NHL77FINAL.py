@@ -28091,7 +28091,8 @@ def _nhl_match_game_id(cursor, date_str, home_team, away_team, api_game_id):
 def _sync_nhl_unscored_finals(max_dates=14):
     """Write NHL API finals onto stored rows that still have no score.
 
-    Only the dates that are already in the database and still unscored.
+    Also walks every calendar day from the newest scored night through
+    yesterday so a stuck Oct final date cannot leave November blank.
     Matches by date and team name, because ESPN game ids are not NHL API ids.
     """
     global _NHL_UNSCORED_SYNC_TS
@@ -28101,19 +28102,53 @@ def _sync_nhl_unscored_finals(max_dates=14):
     _NHL_UNSCORED_SYNC_TS = now_ts
     conn = get_db_connection()
     cursor = conn.cursor()
-    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    dates = cursor.execute(
+    try:
+        from zoneinfo import ZoneInfo
+        yesterday_dt = datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
+    except Exception:
+        yesterday_dt = (datetime.now() - timedelta(days=1)).date()
+    yesterday = yesterday_dt.strftime('%Y-%m-%d')
+    dates = [
+        (r[0],)
+        for r in cursor.execute(
+            """
+            SELECT DISTINCT date(game_date)
+            FROM games
+            WHERE sport = 'NHL'
+              AND (home_score IS NULL OR away_score IS NULL)
+              AND date(game_date) <= ?
+              AND date(game_date) >= date(?, '-21 days')
+            ORDER BY date(game_date)
+            """,
+            (yesterday, yesterday),
+        ).fetchall()
+        if r and r[0]
+    ]
+    latest_row = cursor.execute(
         """
-        SELECT DISTINCT date(game_date)
+        SELECT MAX(date(game_date))
         FROM games
-        WHERE sport = 'NHL'
-          AND (home_score IS NULL OR away_score IS NULL)
-          AND date(game_date) <= ?
-          AND date(game_date) >= date(?, '-21 days')
-        ORDER BY date(game_date)
-        """,
-        (yesterday, yesterday),
-    ).fetchall()
+        WHERE sport = 'NHL' AND home_score IS NOT NULL AND away_score IS NOT NULL
+        """
+    ).fetchone()
+    latest_completed = (latest_row[0] if latest_row else None) or None
+    gap_dates = []
+    if latest_completed:
+        try:
+            cursor_day = datetime.strptime(str(latest_completed)[:10], '%Y-%m-%d').date() + timedelta(days=1)
+            while cursor_day <= yesterday_dt and len(gap_dates) < 21:
+                gap_dates.append((cursor_day.strftime('%Y-%m-%d'),))
+                cursor_day += timedelta(days=1)
+        except Exception:
+            gap_dates = []
+    # Prefer the gap after the last scored night, then any unscored rows.
+    seen = set()
+    ordered = []
+    for item in gap_dates + dates:
+        if item[0] in seen:
+            continue
+        seen.add(item[0])
+        ordered.append(item)
     nhl_team_map = {
         'ANA': 'Anaheim Ducks', 'BOS': 'Boston Bruins', 'BUF': 'Buffalo Sabres',
         'CGY': 'Calgary Flames', 'CAR': 'Carolina Hurricanes', 'CHI': 'Chicago Blackhawks',
@@ -28128,7 +28163,7 @@ def _sync_nhl_unscored_finals(max_dates=14):
         'WPG': 'Winnipeg Jets', 'UTA': 'Utah Mammoth',
     }
     updated = 0
-    for (date_str,) in list(dates)[: max(1, int(max_dates))]:
+    for (date_str,) in ordered[: max(1, int(max_dates))]:
         try:
             response = requests.get(
                 f"https://api-web.nhle.com/v1/score/{date_str}", timeout=8,
@@ -28156,19 +28191,38 @@ def _sync_nhl_unscored_finals(max_dates=14):
             game_id = _nhl_match_game_id(
                 cursor, date_str, home_team, away_team, f"NHL_{game.get('id')}",
             )
-            if not game_id:
-                continue
-            cursor.execute(
-                """
-                UPDATE games
-                SET home_score = ?, away_score = ?, status = 'final'
-                WHERE sport = 'NHL' AND game_id = ?
-                  AND (home_score IS NULL OR away_score IS NULL OR status != 'final')
-                """,
-                (home_score, away_score, game_id),
-            )
-            if cursor.rowcount:
-                updated += 1
+            if game_id:
+                cursor.execute(
+                    """
+                    UPDATE games
+                    SET home_score = ?, away_score = ?, status = 'final'
+                    WHERE sport = 'NHL' AND game_id = ?
+                      AND (home_score IS NULL OR away_score IS NULL OR status != 'final'
+                           OR home_score != ? OR away_score != ?)
+                    """,
+                    (home_score, away_score, game_id, home_score, away_score),
+                )
+                if cursor.rowcount:
+                    updated += 1
+            else:
+                try:
+                    cursor.execute(
+                        """
+                        INSERT INTO games (
+                            sport, league, game_id, season, game_date,
+                            home_team_id, away_team_id, home_score, away_score, status
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'final')
+                        """,
+                        (
+                            'NHL', 'NHL', f"NHL_{game.get('id')}",
+                            int(str(date_str)[:4]), date_str,
+                            home_team, away_team, home_score, away_score,
+                        ),
+                    )
+                    if cursor.rowcount:
+                        updated += 1
+                except Exception:
+                    pass
     conn.commit()
     conn.close()
     if updated:
@@ -32229,26 +32283,35 @@ def _compute_results_tally_bundle__nhl(
         weekly_tally_games == 0
         and daily_results
         and not league_scoped
-        and sport_key not in ('SOCCER', 'NHL')
+        and sport_key != 'SOCCER'
     ):
         dated = _dated_games_in_daily_results(
             daily_results, season_start_dt=season_start_dt, before_dt=yesterday_dt,
         )
         if dated:
             latest_dt, _ = dated[0]
-            fallback_start = (
-                max(latest_dt - timedelta(days=6), season_start_dt)
-                if season_start_dt else latest_dt - timedelta(days=6)
-            )
-            weekly_start_dt = fallback_start
-            weekly_end_dt = latest_dt
-            weekly_tally = compute_model_tally_for_range(
-                daily_results, weekly_start_dt, weekly_end_dt, sport=sport_key,
-            )
-            weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
-            weekly_tally_date_range = (
-                f"{fallback_start.strftime('%Y-%m-%d')} to {latest_dt.strftime('%Y-%m-%d')}"
-            )
+            # NHL: only fall back when the newest graded night is still recent.
+            # An October latest night must not become "Last 7" in mid-November.
+            _ok_fallback = True
+            if sport_key == 'NHL' and latest_dt is not None:
+                try:
+                    _ok_fallback = 0 <= (yesterday_dt.date() - latest_dt.date()).days <= 7
+                except Exception:
+                    _ok_fallback = False
+            if _ok_fallback:
+                fallback_start = (
+                    max(latest_dt - timedelta(days=6), season_start_dt)
+                    if season_start_dt else latest_dt - timedelta(days=6)
+                )
+                weekly_start_dt = fallback_start
+                weekly_end_dt = latest_dt
+                weekly_tally = compute_model_tally_for_range(
+                    daily_results, weekly_start_dt, weekly_end_dt, sport=sport_key,
+                )
+                weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
+                weekly_tally_date_range = (
+                    f"{fallback_start.strftime('%Y-%m-%d')} to {latest_dt.strftime('%Y-%m-%d')}"
+                )
     daily_tally_games = daily_tally.get('games', 0) if daily_tally else 0
     return {
         'daily_tally': daily_tally,
@@ -113916,9 +113979,14 @@ def sport_results__nhl(sport):
             return "Soccer results are temporarily hidden while data loads.", 404
         if sport == 'NHL':
             try:
-                if _sync_nhl_unscored_finals():
-                    from isolate_checker_fixes import drop_nhl_results_caches
-                    drop_nhl_results_caches()
+                # Gap-fill from newest scored night → yesterday (fixes Oct-stuck /data).
+                _nhl_scored = _sync_nhl_unscored_finals(max_dates=21)
+                if _nhl_scored:
+                    try:
+                        from isolate_checker_fixes import drop_nhl_results_caches
+                        drop_nhl_results_caches()
+                    except Exception:
+                        pass
                     for _ck in [k for k in _SPORT_RESULTS_CACHE if str(k).startswith('NHL')]:
                         _SPORT_RESULTS_CACHE.pop(_ck, None)
             except Exception as _nhl_sync_e:

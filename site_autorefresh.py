@@ -228,6 +228,34 @@ def _purge_poisoned_served() -> int:
                 logger.warning("[autorefresh] removed unusable nhl_results_last_good.html")
         except OSError:
             pass
+    nhl_fast = _CACHE / "nhl_results_page.html"
+    if nhl_fast.is_file():
+        try:
+            text = nhl_fast.read_text(encoding="utf-8", errors="ignore")
+            # Same poison as served pages, or any Last 7 ending >7 days before yesterday.
+            bad = not _served_results_usable(text)
+            if not bad:
+                import re as _re
+                from datetime import datetime as _dt, timedelta as _td
+                m = _re.search(
+                    r"Last 7 Days \w+ Results\s*[—–-]\s*\d{4}-\d{2}-\d{2}\s+to\s+(\d{4}-\d{2}-\d{2})",
+                    text,
+                    flags=_re.I,
+                )
+                if m:
+                    try:
+                        from zoneinfo import ZoneInfo
+                        y = _dt.now(ZoneInfo("America/New_York")).date() - _td(days=1)
+                    except Exception:
+                        y = _dt.now().date() - _td(days=1)
+                    end7 = _dt.strptime(m.group(1), "%Y-%m-%d").date()
+                    bad = (y - end7).days > 7
+            if bad:
+                nhl_fast.unlink(missing_ok=True)
+                removed += 1
+                logger.warning("[autorefresh] removed unusable nhl_results_page.html")
+        except OSError:
+            pass
     return removed
 
 

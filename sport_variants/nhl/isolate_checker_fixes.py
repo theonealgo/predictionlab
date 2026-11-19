@@ -1331,16 +1331,23 @@ def nhl_last7_end_yesterday(html: str) -> str:
     """Last 7 heading ends on the latest stored final (not a future preseason slate)."""
     if not html or "Last 7 Days" not in html:
         return html
+    from datetime import datetime, timedelta
+    try:
+        from zoneinfo import ZoneInfo
+        yesterday = datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
+    except Exception:
+        yesterday = datetime.now().date() - timedelta(days=1)
     end_day, _ = _nhl_latest_final_before_today()
     if not end_day:
-        from datetime import datetime, timedelta
+        end_day = yesterday.isoformat()
+    else:
         try:
-            from zoneinfo import ZoneInfo
-            end_day = (
-                datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
-            ).isoformat()
+            end_d = datetime.strptime(end_day, "%Y-%m-%d").date()
+            # Do not pull the heading end date back into a stale October window.
+            if (yesterday - end_d).days > 7:
+                return html
         except Exception:
-            end_day = (datetime.now().date() - timedelta(days=1)).isoformat()
+            return html
 
     def _repl(match: re.Match[str]) -> str:
         return match.group(1) + end_day
@@ -1425,6 +1432,69 @@ def _nhl_page_has_finals_on(text: str, day: str) -> bool:
     return "final-score" in text[start : nxt if nxt > 0 else len(text)]
 
 
+def _nhl_results_html_usable(text: str) -> bool:
+    """Reject wipe-poison / stale Last 7 boards so they are never re-served."""
+    if not text or _NHL_RESULTS_MARK not in text:
+        return False
+    if "game-card" not in text or "Last 7 Days" not in text:
+        return False
+    if "Consensus Based Betting Records" not in text:
+        return False
+    if _NHL_ML_HIDDEN in text:
+        return False
+    ln = re.search(
+        r"Last Night's \w+ Results\s*[—–-]\s*(\d{4}-\d{2}-\d{2})\s*\((\d+)\s+games?\)",
+        text,
+        flags=re.I,
+    )
+    l7 = re.search(
+        r"Last 7 Days \w+ Results\s*[—–-]\s*(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})",
+        text,
+        flags=re.I,
+    )
+    if ln and int(ln.group(2) or 0) == 0 and l7:
+        try:
+            from datetime import datetime as _dt
+
+            if _dt.strptime(l7.group(2), "%Y-%m-%d") < _dt.strptime(ln.group(1), "%Y-%m-%d"):
+                return False
+        except Exception:
+            return False
+    # Last 7 ending more than a week before yesterday is the Oct-stuck poison.
+    if l7:
+        try:
+            from datetime import datetime, timedelta
+            try:
+                from zoneinfo import ZoneInfo
+                yesterday = datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
+            except Exception:
+                yesterday = datetime.now().date() - timedelta(days=1)
+            end7 = datetime.strptime(l7.group(2), "%Y-%m-%d").date()
+            if (yesterday - end7).days > 7:
+                return False
+        except Exception:
+            pass
+    return True
+
+
+def drop_nhl_results_caches() -> None:
+    """Delete NHL fast-path HTML so the next hit rebuilds from scored games."""
+    for path in (
+        _NHL_RESULTS_DISK,
+        Path("/data/nhl_results_last_good.html"),
+        Path("nhl_results_last_good.html"),
+    ):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+    try:
+        for path in _CARDS_CACHE_DIR.glob("served_NHL*.html"):
+            path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def read_nhl_results_disk() -> str:
     """Cached NHL cards page. A cold /nhl-results hit must not rebuild from the DB.
 
@@ -1437,18 +1507,30 @@ def read_nhl_results_disk() -> str:
         text = _NHL_RESULTS_DISK.read_text(encoding="utf-8")
     except Exception:
         return ""
-    if _NHL_RESULTS_MARK not in text:
-        return ""
-    if "game-card" not in text or "Last 7 Days" not in text:
-        return ""
-    if "Consensus Based Betting Records" not in text:
-        return ""
-    if _NHL_ML_HIDDEN in text:
+    if not _nhl_results_html_usable(text):
+        try:
+            _NHL_RESULTS_DISK.unlink(missing_ok=True)
+        except OSError:
+            pass
+        _schedule_nhl_results_rebuild()
         return ""
     try:
         latest, _n = _nhl_latest_final_before_today()
         if latest and not _nhl_page_has_finals_on(text, latest):
             _schedule_nhl_results_rebuild()
+            # Stale disk (e.g. stuck on October) must not beat a live rebuild.
+            try:
+                from datetime import datetime, timedelta
+                try:
+                    from zoneinfo import ZoneInfo
+                    yesterday = datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
+                except Exception:
+                    yesterday = datetime.now().date() - timedelta(days=1)
+                lag = (yesterday - datetime.strptime(latest, "%Y-%m-%d").date()).days
+                if lag > 3:
+                    return ""
+            except Exception:
+                return ""
     except Exception:
         pass
     return nhl_align_last7_count(nhl_last7_end_yesterday(text))
@@ -1504,6 +1586,20 @@ def nhl_align_last7_count(html: str) -> str:
         return html
     start, end, count = _nhl_last7_stored_finals()
     if count <= 0:
+        return html
+    # Never rewrite Last 7 back to an October (or older) window when scores
+    # stopped updating — that is what left live on 2026-10-25..10-31.
+    try:
+        from datetime import datetime, timedelta
+        try:
+            from zoneinfo import ZoneInfo
+            yesterday = datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
+        except Exception:
+            yesterday = datetime.now().date() - timedelta(days=1)
+        end_d = datetime.strptime(end, "%Y-%m-%d").date()
+        if (yesterday - end_d).days > 7:
+            return html
+    except Exception:
         return html
 
     def _heading(match: re.Match[str]) -> str:
@@ -2304,6 +2400,8 @@ def write_nhl_results_disk(html: str) -> None:
         return
     if _NHL_RESULTS_MARK not in html:
         html += _NHL_RESULTS_MARK
+    if not _nhl_results_html_usable(html):
+        return
     try:
         _CARDS_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         tmp = _NHL_RESULTS_DISK.with_suffix(".html.tmp")

@@ -46,7 +46,13 @@ def poisoned(text: str) -> bool:
         return True
 
 removed = 0
-for path in list(root.glob("served_NHL*.html")) + list(root.glob("served_NBA*.html")):
+for path in (
+    list(root.glob("served_NHL*.html"))
+    + list(root.glob("served_NBA*.html"))
+    + [root / "nhl_results_page.html"]
+):
+    if not path.is_file():
+        continue
     try:
         if poisoned(path.read_text(encoding="utf-8", errors="ignore")):
             path.unlink(missing_ok=True)
@@ -54,6 +60,16 @@ for path in list(root.glob("served_NHL*.html")) + list(root.glob("served_NBA*.ht
             print(f"[render_start] removed poisoned {path.name}")
     except Exception as exc:
         print(f"[render_start] skip {path.name}: {exc}")
+# Always drop the NHL fast-path file when it exists — it was re-serving empty
+# boards after served_NHL_*.html was purged.
+nhl_fast = root / "nhl_results_page.html"
+if nhl_fast.is_file():
+    try:
+        nhl_fast.unlink(missing_ok=True)
+        removed += 1
+        print("[render_start] removed nhl_results_page.html (force rebuild)")
+    except Exception as exc:
+        print(f"[render_start] skip nhl_results_page: {exc}")
 if last_good.is_file():
     try:
         if poisoned(last_good.read_text(encoding="utf-8", errors="ignore")):
