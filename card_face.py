@@ -122,8 +122,16 @@ def normalize_card_faces(html: str, sport: str, path: str) -> str:
     low = (path or "").rstrip("/").lower()
     if sport_u not in FACE_SPORTS or not html or "lines-strip" not in html:
         return html
-    if low.endswith("-results"):
-        if _missing_face(html):
+    if low.endswith(("-results", "-picks", "-predictions")):
+        if _missing_face(html) or (
+            sport_u in ("NCAAB", "NCAAW")
+            and (
+                "Consensus Record: 0-0" in html
+                or "Consensus Record: —" in html
+                or "Consensus Historical Record" not in html
+            )
+        ):
             html = _add_results_chips(html, sport_u)
-        html = _match_table_records(html)
+        if low.endswith("-results"):
+            html = _match_table_records(html)
     return _strip_extra_chips(html)

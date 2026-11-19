@@ -206,15 +206,12 @@ def api_props_results():
     denied = _props_hub_access()
     if denied is not None:
         return denied
-    from sports_props_hub import grade_ungraded_night, read_results
+    from sports_props_hub import read_results
     from NHL77FINAL import DATABASE
     league = (request.args.get('league') or '').upper() or None
     day = request.args.get('date') or None
-    if not current_app.config.get('TESTING') and day:
-        try:
-            grade_ungraded_night(DATABASE, league, day)
-        except Exception:
-            current_app.logger.exception('Prop grade for %s %s failed', league, day)
+    # Read saved results only. Settling on this request broke every sport when
+    # DATABASE was a relative path (result_dates) and when ESPN SSL stalled.
     try:
         data = read_results(DATABASE, league, day, window=request.args.get('window') or 'night')
     except ValueError:
@@ -877,7 +874,9 @@ def api_me():
 
 @api.route('/api/web/season')
 def api_season():
-    from NHL77FINAL import _get_sport_market_units_banner
+    # The homepage no longer asks for this. The old query scanned every graded
+    # game on the request and held the only web worker, so the sports list
+    # stayed on Loading. Return at once. Do not run that scan here.
     market = (request.args.get('market') or 'moneyline').strip().lower()
     if market in ('su', 'straight', 'straight_up', 'straight-up'):
         market = 'moneyline'
@@ -885,11 +884,9 @@ def api_season():
         market = 'total'
     elif market not in ('moneyline', 'spread', 'total'):
         market = 'moneyline'
-    items = [
-        dict(item, label=_strip_emoji(item.get('label')))
-        for item in _get_sport_market_units_banner(market)
-    ]
-    return jsonify({'items': items, 'market': market})
+    response = jsonify({'items': [], 'market': market})
+    response.headers['Cache-Control'] = 'private, max-age=60'
+    return response
 
 
 _MEMBER_CHIP = re.compile(
@@ -955,6 +952,28 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
                 html = _page_html(path, app, host, cookie)
     if not html or 'upstream data/model dependency failed' in html.lower():
         raise RuntimeError(f'Original sport renderer returned no page for {slug}')
+    # NCAAB/NCAAW: stamp Consensus Historical Record on classic HTML before
+    # extracting React card feeds (Efficiency N/A must count in the pattern key).
+    if sport in ('NCAAB', 'NCAAW') and 'data-pick-card' in html:
+        try:
+            from team_results_charts import (
+                _inject_consensus_hist_chips,
+                _NCAAF_CONSENSUS_MODELS,
+            )
+            html = _inject_consensus_hist_chips(
+                html, sport=sport, models=_NCAAF_CONSENSUS_MODELS
+            ) or html
+        except Exception:
+            pass
+    # Free SSR strips the face chips; guest/free feeds lock the member cards.
+    if (
+        sport in ('NCAAB', 'NCAAW')
+        and tier in ('guest', 'free')
+        and 'Consensus Historical Record' not in html
+    ):
+        member = _saved_cards(slug, 'member')
+        if member and _usable_cards(member[1]):
+            return _locked_from_member(member[1])
     cards = _cards(html)
     if tier != 'member':
         for card in cards:
