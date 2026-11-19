@@ -53,6 +53,14 @@ _PAGE_VARIANTS = (
     ("", ""), ("", "moneyline"), ("", "spread"), ("", "totals"),
     ("chart", ""), ("chart", "moneyline"), ("chart", "spread"), ("chart", "totals"),
 )
+# After /data/.cache wipe, no served_*.html files exist — still rebuild these.
+_DEFAULT_VARIANTS = (
+    ("", ""),
+    ("chart", ""),
+    ("chart", "moneyline"),
+    ("chart", "spread"),
+    ("chart", "totals"),
+)
 _PICKS_SPORTS = ("MLB", "NHL", "NBA", "NFL", "NCAAF", "NCAAB", "NCAAW", "WNBA", "CFL", "TENNIS", "UFC", "GOLF")
 
 _started = False
@@ -180,7 +188,16 @@ def _rebuild_page(app, sport: str, view: str, market: str) -> bool:
 
 
 def _saved_pages(sport: str) -> list[tuple[str, str]]:
-    return [(v, m) for v, m in _PAGE_VARIANTS if _served_file(sport, v, m).is_file()]
+    found = [(v, m) for v, m in _PAGE_VARIANTS if _served_file(sport, v, m).is_file()]
+    # Cache clear / fresh disk: nothing on disk must not mean "skip forever".
+    return found if found else list(_DEFAULT_VARIANTS)
+
+
+def _missing_results_sports() -> list[str]:
+    return [
+        sport for sport in SLUGS
+        if sport not in _SELF_REBUILDING and not _served_file(sport, "", "").is_file()
+    ]
 
 
 def _page_missing_night(sport: str, view: str, market: str, night: str) -> bool:
@@ -289,21 +306,27 @@ def _refresh_results(app, db: str, state: dict) -> None:
 
 
 def _results_before_picks(app) -> None:
-    """A saved picks page with no saved results page (a fresh deploy) counted its
-    season chips without the graded results cards: build results, then picks."""
+    """Build missing results cards (and chart shells) after a cache wipe or fresh
+    deploy, then refresh picks so season chips match graded cards."""
     for sport in SLUGS:
-        if sport in _SELF_REBUILDING or sport in _warmed:
-            continue
-        if not (_CACHE / f"served_picks_{sport}.html").is_file():
+        if sport in _SELF_REBUILDING:
             continue
         if _served_file(sport, "", "").is_file():
             _warmed.add(sport)
             continue
-        _warmed.add(sport)
-        built = _rebuild_page(app, sport, "", "")
-        _refresh_sport_picks(sport)
-        logger.info(f"[autorefresh] {sport} results page built before picks: {built}")
-        time.sleep(PAGE_PAUSE_S)
+        if sport in _warmed:
+            continue
+        built = 0
+        for view, market in _DEFAULT_VARIANTS:
+            if _rebuild_page(app, sport, view, market):
+                built += 1
+            time.sleep(PAGE_PAUSE_S)
+        if _served_file(sport, "", "").is_file():
+            _warmed.add(sport)
+            _refresh_sport_picks(sport)
+        logger.info(
+            f"[autorefresh] {sport} missing results seed: built {built}/{len(_DEFAULT_VARIANTS)}"
+        )
 
 
 def _refresh_sport_picks(sport: str) -> None:
@@ -404,6 +427,10 @@ def _sync_college_ratings() -> None:
 
 def _cycle(app, db: str, sync_fns: dict, state: dict) -> None:
     now = time.time()
+    # Cache wipe: score-sync every missing sport before rebuilding empty pages.
+    for sport in _missing_results_sports():
+        _last_sync[sport] = now
+        _run_sync(sport, sync_fns)
     try:
         _sync_cfl(app, state)
     except Exception as exc:
@@ -582,7 +609,15 @@ def _warm_loop(app) -> None:
 
 
 def _loop(app, db: str, sync_fns: dict) -> None:
-    time.sleep(FIRST_DELAY_S)
+    missing = _missing_results_sports()
+    # Empty /data/.cache (operator wipe or new disk): do not wait 15 minutes.
+    delay = 5 if missing else FIRST_DELAY_S
+    if missing:
+        logger.warning(
+            f"[autorefresh] results cache empty for {', '.join(missing)}; "
+            f"first cycle in {delay}s"
+        )
+    time.sleep(delay)
     state = _load_state()
     while True:
         try:

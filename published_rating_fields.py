@@ -68,18 +68,28 @@ def fill(card, values, saved):
     return {**card, "html": html}
 
 
+def _prediction_columns(conn):
+    return {row[1] for row in conn.execute("PRAGMA table_info(predictions)")}
+
+
 def refresh(payload, sport, database, model_fn=None):
     if sport not in ("NCAAB", "NCAAW") or not payload.get("cards"):
         return payload
     cards = []
     with sqlite3.connect(Path(database).resolve().as_uri()+"?mode=ro", uri=True, timeout=.1) as conn:
         conn.row_factory = sqlite3.Row
+        columns = _prediction_columns(conn)
+        # Render /data DBs can lag the app schema. Never SELECT missing score cols.
+        has_scores = "actual_home_score" in columns and "actual_away_score" in columns
+        select_cols = ["game_date", "lock_card_json", "glicko_home_prob", "trueskill_home_prob"]
+        if has_scores:
+            select_cols.extend(["actual_home_score", "actual_away_score"])
+        select_sql = (
+            "SELECT "+",".join(select_cols)+" FROM predictions WHERE sport=? AND game_id=?"
+        )
         for card in payload["cards"]:
             match = re.search(r'data-game-id="([^"]+)"', card["html"])
-            row = conn.execute(
-                "SELECT game_date,lock_card_json,glicko_home_prob,trueskill_home_prob,"
-                "actual_home_score,actual_away_score FROM predictions WHERE sport=? AND game_id=?",
-                (sport, match[1])).fetchone() if match else None
+            row = conn.execute(select_sql, (sport, match[1])).fetchone() if match else None
             if not row:
                 cards.append(fill(card, {}, False))
                 continue
@@ -88,8 +98,11 @@ def refresh(payload, sport, database, model_fn=None):
             for _, column, key, _ in FIELDS:
                 if snapshot.get(key) is not None:
                     values[column] = snapshot[key]
-            pregame = (row["actual_home_score"] is None and row["actual_away_score"] is None
-                       and before_start(card, row["game_date"][:10]))
+            # Without score columns we cannot prove the game is still pregame — display only.
+            unscored = (
+                row["actual_home_score"] is None and row["actual_away_score"] is None
+            ) if has_scores else False
+            pregame = unscored and before_start(card, row["game_date"][:10])
             if pregame and model_fn and any(values[column] is None for _, column, _, _ in FIELDS):
                 result = model_fn(sport, card["home"], card["away"], row["game_date"]) or {}
                 for _, column, key, _ in FIELDS:
@@ -107,12 +120,21 @@ def refresh(payload, sport, database, model_fn=None):
                                 value = float(values[column])
                                 snapshot[key] = value/100 if abs(value) > 1 else value
                         snapshot["_rating_fields_filled_at"] = datetime.now(ZoneInfo("UTC")).isoformat()
-                        writer.execute(
-                            "UPDATE predictions SET glicko_home_prob=COALESCE(glicko_home_prob,?),"
-                            "trueskill_home_prob=COALESCE(trueskill_home_prob,?),lock_card_json=? "
-                            "WHERE sport=? AND game_id=? AND actual_home_score IS NULL AND actual_away_score IS NULL",
-                            (float(values["glicko_home_prob"])/100 if values["glicko_home_prob"] is not None and abs(float(values["glicko_home_prob"])) > 1 else values["glicko_home_prob"],
-                             float(values["trueskill_home_prob"])/100 if values["trueskill_home_prob"] is not None and abs(float(values["trueskill_home_prob"])) > 1 else values["trueskill_home_prob"],
-                             json.dumps(snapshot), sport, match[1]))
+                        if has_scores:
+                            writer.execute(
+                                "UPDATE predictions SET glicko_home_prob=COALESCE(glicko_home_prob,?),"
+                                "trueskill_home_prob=COALESCE(trueskill_home_prob,?),lock_card_json=? "
+                                "WHERE sport=? AND game_id=? AND actual_home_score IS NULL AND actual_away_score IS NULL",
+                                (float(values["glicko_home_prob"])/100 if values["glicko_home_prob"] is not None and abs(float(values["glicko_home_prob"])) > 1 else values["glicko_home_prob"],
+                                 float(values["trueskill_home_prob"])/100 if values["trueskill_home_prob"] is not None and abs(float(values["trueskill_home_prob"])) > 1 else values["trueskill_home_prob"],
+                                 json.dumps(snapshot), sport, match[1]))
+                        else:
+                            writer.execute(
+                                "UPDATE predictions SET glicko_home_prob=COALESCE(glicko_home_prob,?),"
+                                "trueskill_home_prob=COALESCE(trueskill_home_prob,?),lock_card_json=? "
+                                "WHERE sport=? AND game_id=?",
+                                (float(values["glicko_home_prob"])/100 if values["glicko_home_prob"] is not None and abs(float(values["glicko_home_prob"])) > 1 else values["glicko_home_prob"],
+                                 float(values["trueskill_home_prob"])/100 if values["trueskill_home_prob"] is not None and abs(float(values["trueskill_home_prob"])) > 1 else values["trueskill_home_prob"],
+                                 json.dumps(snapshot), sport, match[1]))
             cards.append(fill(card, values, bool(row)))
     return {**payload, "cards": cards}

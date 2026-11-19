@@ -20,6 +20,13 @@ from prop_player_pool import VERSION as PLAYER_POOL_VERSION
 
 ET = ZoneInfo("America/New_York")
 TTL = max(600, int(os.getenv("PL_PROPS_TTL", "3600")))
+# After a failed publish, do not re-queue the same league/day for hours — each
+# attempt forks a props worker and can OOM the single 2 GB Render worker.
+FAIL_COOLDOWN = max(TTL, int(os.getenv("PL_PROPS_FAIL_COOLDOWN", str(6 * 3600))))
+# On Render (/data), only warm today+tomorrow on the first daily pass so boot
+# does not enqueue ~40 isolated props jobs at once.
+_DEFAULT_BOOT_DAYS = "2" if Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") else "8"
+BOOT_DAYS = max(1, min(8, int(os.getenv("PL_PROPS_BOOT_DAYS", _DEFAULT_BOOT_DAYS) or _DEFAULT_BOOT_DAYS)))
 UNSUPPORTED = {
     "TENNIS": "Verified player-stat prop markets and settlement coverage are not connected for tennis.",
     "GOLF": "Verified round-specific player prop markets and settlement coverage are not connected for golf.",
@@ -32,7 +39,8 @@ _DAILY = set()
 _DISK = {}
 _PROCESS_LOCK = threading.Lock()
 _SETTLEMENT = set()
-START_DELAY = max(0, int(os.getenv("PL_PROPS_START_DELAY", "120")))
+_DEFAULT_START_DELAY = "300" if Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") else "120"
+START_DELAY = max(0, int(os.getenv("PL_PROPS_START_DELAY", _DEFAULT_START_DELAY) or _DEFAULT_START_DELAY))
 _NOT_BEFORE = time.monotonic() + START_DELAY
 logger = logging.getLogger(__name__)
 
@@ -54,8 +62,9 @@ def start_daily(site):
             day = now.date().isoformat()
             try:
                 if day != last_day or time.monotonic()-last_refresh >= TTL:
-                    # Today plus the next week: NFL Sunday props must exist before Sunday.
-                    for offset in range(0, 8):
+                    # Boot: few days only on Render. Later passes can widen via env.
+                    horizon = BOOT_DAYS if last_day is None else 8
+                    for offset in range(0, horizon):
                         target = (now.date() + timedelta(days=offset)).isoformat()
                         ensure(site, target)
                     last_day = day
@@ -222,7 +231,7 @@ def _enqueue(site, league, day, priority=10):
         state = _STATE.get(key) or {}
         if state.get("status") in ("queued", "building"):
             return
-        if state.get("status") == "unavailable" and time.time()-state.get("ts", 0) < TTL:
+        if state.get("status") in ("unavailable", "failed") and time.time()-state.get("ts", 0) < FAIL_COOLDOWN:
             return
         _STATE[key] = {"status": "queued", "ts": time.time()}
         if priority == 10 and league in ("NCAAB", "NCAAW"):
@@ -260,9 +269,11 @@ def _publish_selected(site, league, day):
     previous = entries(site, day).get(league)
     with _LOCK:
         _STATE[key] = {"status": "building", "ts": time.time()}
+    failed = False
     try:
         entry = run_isolated(site, league, day)
     except Exception:
+        failed = True
         logger.exception("Prop publication unavailable for %s %s", league, day)
         if previous and preview(league, previous, limit=0, day=day)["total"] is not None:
             entry = {**previous, "payload": {**previous["payload"],
@@ -274,7 +285,8 @@ def _publish_selected(site, league, day):
     with _LOCK:
         _CACHE[key] = entry
         _STATE[key] = {
-            "status": "unavailable" if entry["payload"].get("refresh_notice") else entry["payload"].get("availability"),
+            "status": "failed" if failed else (
+                "unavailable" if entry["payload"].get("refresh_notice") else entry["payload"].get("availability")),
             "ts": time.time(),
         }
 
@@ -382,10 +394,12 @@ def _loop():
         previous = entries(site, day).get(league)
         with _LOCK:
             _STATE[key] = {"status": "building", "ts": time.time()}
+        failed = False
         try:
             time.sleep(max(0, _NOT_BEFORE-time.monotonic()))
             entry = run_isolated(site, league, day)
         except Exception:
+            failed = True
             logger.exception("Prop publication unavailable for %s %s", league, day)
             if previous and preview(league, previous, limit=0, day=day)["total"] is not None:
                 entry = {**previous, "payload": {**previous["payload"],
@@ -396,6 +410,10 @@ def _loop():
                          "The current fixture or player-stat service could not be verified. Please retry later."}}
         with _LOCK:
             _CACHE[key] = entry
-            _STATE[key] = {"status": "unavailable" if entry["payload"].get("refresh_notice") else entry["payload"].get("availability"),
-                           "ts": time.time()}
+            status = "failed" if failed else (
+                "unavailable" if entry["payload"].get("refresh_notice") else entry["payload"].get("availability"))
+            _STATE[key] = {"status": status, "ts": time.time()}
+        if failed:
+            # Give the main gunicorn worker room before the next props fork.
+            time.sleep(max(5, int(os.getenv("PL_PROPS_FAIL_PAUSE_S", "30") or "30")))
         _QUEUE.task_done()

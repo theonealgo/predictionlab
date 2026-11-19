@@ -52,3 +52,19 @@ class RatingRecoveryTests(unittest.TestCase):
         model.assert_not_called()
         self.assertIn("60%", result["cards"][0]["html"])
         self.assertIn("70%", result["cards"][0]["html"])
+
+    def test_refresh_tolerates_predictions_table_without_score_columns(self):
+        """Render /data can lag schema — missing actual_* must not raise."""
+        slim = str(Path(self.temp.name)/"slim.db")
+        with sqlite3.connect(slim) as conn:
+            conn.execute("CREATE TABLE predictions (sport,game_id,game_date,lock_card_json,"
+                         "glicko_home_prob,trueskill_home_prob)")
+            conn.execute(
+                "INSERT INTO predictions VALUES ('NCAAB','game','2000-01-01',?,.60,.70)",
+                (json.dumps({}),),
+            )
+        model = Mock()
+        result = refresh(self.payload, "NCAAB", slim, model)
+        model.assert_not_called()
+        self.assertIn("60%", result["cards"][0]["html"])
+        self.assertIn("70%", result["cards"][0]["html"])
