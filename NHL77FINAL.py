@@ -3733,6 +3733,8 @@ def _round_to_half(value):
 # PL spread fades only when honest n>=10 and % < 55.
 SPREAD_FADE_SPORTS = frozenset({'NCAAB'})
 XSHARP_SPREAD_FADE_SPORTS = frozenset({'WNBA'})
+# NCAAW XSharp totals lean the wrong way (~30%); fade XSharp O/U only (PL stays).
+XSHARP_OU_FADE_SPORTS = frozenset({'NCAAW'})
 # Soccer ML fade: invert G2/TD/Edge/XSharp/SC independently when that model's
 # own season accuracy is under 55%. Efficiency (PL-spread favorite) is never faded.
 SOCCER_ML_FADE_SPORTS = frozenset({'SOCCER'})
@@ -4111,6 +4113,37 @@ def _apply_xsharp_spread_fade(d: dict) -> None:
     d['_xsharp_spread_faded'] = True
 
 
+def _apply_xsharp_ou_fade(d: dict, market_total=None) -> None:
+    """Invert XSharp total only around the book line (NCAAW — PL our_total stays)."""
+    if not isinstance(d, dict) or d.get('_xsharp_ou_faded'):
+        return
+    mt = market_total
+    if mt is None:
+        mt = _safe_float(d.get('book_total')) or _safe_float(d.get('market_total'))
+    if mt is None:
+        return
+    faded = False
+    for key in ('xgb_total', 'xsharp_total', 'disp_xs_total'):
+        if d.get(key) is not None:
+            flipped = _fade_total_around_line(d[key], mt)
+            if flipped is not None:
+                d[key] = flipped
+                faded = True
+    if not faded:
+        return
+    if d.get('xgb_spread') is not None and d.get('xgb_total') is not None:
+        h, a = _scores_from_spread_total(d['xgb_spread'], d['xgb_total'])
+        if h is not None:
+            d['xgb_home_score'] = h
+            d['xgb_away_score'] = a
+    if d.get('xsharp_spread') is not None and d.get('xsharp_total') is not None:
+        h, a = _scores_from_spread_total(d['xsharp_spread'], d['xsharp_total'])
+        if h is not None:
+            d['xsharp_home_score'] = h
+            d['xsharp_away_score'] = a
+    d['_xsharp_ou_faded'] = True
+
+
 def _apply_selective_ml_fade(d: dict, prob_keys) -> None:
     """Invert listed ML probability fields (0–1 or 0–100)."""
     if not isinstance(d, dict):
@@ -4301,6 +4334,8 @@ def _apply_model_fades_for_sport(sport, d: dict, *, market_total=None) -> None:
         _apply_selective_ml_fade(d, WNBA_ML_FADE_PROB_KEYS)
     if sport in OU_FADE_SPORTS:
         _apply_ou_fade(d, market_total=market_total)
+    elif sport in XSHARP_OU_FADE_SPORTS:
+        _apply_xsharp_ou_fade(d, market_total=market_total)
 
 
 def _apply_fades_to_daily_results(sport, daily_results) -> None:
@@ -65406,6 +65441,14 @@ def _compute_spread_total_for_daily__ncaaw(sport, daily_results, *, skip_efficie
                             )
                             g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
                             our_total_h2h = g.get('our_total')
+                        elif sport in XSHARP_OU_FADE_SPORTS:
+                            _apply_xsharp_ou_fade(g, market_total=_grade_mt)
+                            _grade_xt = _safe_float(g.get('xgb_total')) or _grade_xt
+                            adj_xt = (
+                                _grade_xt + inj_adj + rest_adj + park_adj
+                                if _grade_xt is not None else None
+                            )
+                            g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
                         edge = adj_xt - _grade_mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'
                         if abs(at - _grade_mt) >= 1e-9:
@@ -65561,6 +65604,14 @@ def _compute_spread_total_for_daily__ncaaw(sport, daily_results, *, skip_efficie
                         )
                         g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
                         our_total_h2h = g.get('our_total')
+                    elif sport in XSHARP_OU_FADE_SPORTS and _grade_mt is not None:
+                        _apply_xsharp_ou_fade(g, market_total=_grade_mt)
+                        _grade_xt = _safe_float(g.get('xgb_total')) or _grade_xt
+                        adj_xt = (
+                            _grade_xt + inj_adj + rest_adj + park_adj
+                            if _grade_xt is not None else None
+                        )
+                        g['xgb_total_adj'] = round(adj_xt, 2) if adj_xt is not None else None
                     if adj_xt is not None and _grade_mt is not None:
                         edge = adj_xt - _grade_mt
                         tp_disp = 'OVER' if edge >= 0 else 'UNDER'

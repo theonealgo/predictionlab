@@ -88,8 +88,9 @@ class Config:
     # the plain underdog cover rate, and those lines are priced well above -110. A
     # soccer -0.5 favourite also loses on a draw, a three-way result priced as
     # two-way. The rest lose over the long run on pre-game lines.
+    # Totals stay eligible so a weak season model (e.g. NCAAW XSharp O/U)
+    # can be faded into the −150…−100 ladder band.
     excluded_types: tuple = (("NHL", "spread", "dog"), ("SOCCER", "spread", None),
-                             ("NCAAF", "total", None), ("NBA", "total", "OVER"),
                              ("NHL", "total", "UNDER"), ("WNBA", None, None),
                              ("MLB", "moneyline", None), ("MLB", "spread", None))
     max_priced: int = 150
@@ -474,7 +475,10 @@ class LadderEngine:
                 continue
             reason = "no pick type with a qualifying record"
             for o in markets.options(cand["sport"], cand.get("model") or {}, book):
-                if o["market"] not in ("moneyline", "spread"):
+                if o["market"] not in ("moneyline", "spread", "total"):
+                    continue
+                if self.excluded(cand["sport"], o["market"], o.get("side_class") or ""):
+                    reason = "excluded pick type"
                     continue
                 price = money.parse_american(o["price"])
                 if price is None:
@@ -493,8 +497,28 @@ class LadderEngine:
                     t = stats.get((cand["sport"], o["market"], o["model"], o["side_class"], edge))
                     if t and (s is None or (t["score"], t["n"], t["roi"]) > (s["score"], s["n"], s["roi"])):
                         s = t
-                # One pick in the −150 to −100 band. Rank uses the type's
-                # results across sports when we have them, then the model.
+                # Fade totals: if the model's own side has a poor season record,
+                # rank the opposite using (1 − that rate) as the season hit rate.
+                if o.get("faded") and o["market"] == "total":
+                    lean_side = "UNDER" if o["side"] == "OVER" else "OVER"
+                    lean = None
+                    for edge in markets.gap_edges(cand["sport"], "total"):
+                        if o["gap"] < edge - 1e-9:
+                            continue
+                        t = stats.get((cand["sport"], "total", o["model"], lean_side, edge))
+                        if t and (lean is None or t["n"] > lean["n"]):
+                            lean = t
+                    if lean and lean["n"] >= 20 and lean["rate"] <= 0.45:
+                        fade_rate = 1.0 - lean["rate"]
+                        s = {
+                            "rate": fade_rate, "n": lean["n"], "score": fade_rate,
+                            "roi": -lean["roi"], "lower": fade_rate, "qualifies": True,
+                        }
+                    elif s is None:
+                        # No history for the fade side — still allow model_prob fade.
+                        pass
+                # One pick in the −150 to −100 band. Rank uses season-type
+                # results when we have them, then the model edge.
                 if model_p is None:
                     reason = "no model result"
                     continue
@@ -504,9 +528,10 @@ class LadderEngine:
                 need = 1.0 / float(money.american_to_decimal(price))
                 other = money.parse_american(o["other_price"])
                 market_p = money.no_vig_prob(price, other) if other is not None else money.implied_prob(price)
-                # Rank by model edge over the price, then by type history when present.
                 model_edge = float(model_p) - need
                 type_bonus = 0.05 if s.get("qualifies") else 0.0
+                # Prefer real season records over raw model probability.
+                season_rank = s["rate"] if s["n"] >= 20 else float(model_p)
                 legs.append({
                     **cand, **o, "start": start, "model_prob": model_p,
                     "american_odds": price, "opponent_american_odds": other,
@@ -515,12 +540,14 @@ class LadderEngine:
                     "hist_hit_rate": round(s["rate"], 4), "hist_n": s["n"],
                     "credible_prob": round(s["score"], 4), "type_roi": s["roi"],
                     "price_edge": model_edge + type_bonus,
+                    "season_rank": round(season_rank, 4),
                     "pick_label": markets.label(o, cand["home_team"], cand["away_team"]),
                     "pick_type": markets.type_label(cand["sport"], o),
                 })
             if not any(x["game_id"] == cand["game_id"] for x in legs):
                 reject(reason)
         legs.sort(key=lambda c: (
+            -c.get("season_rank", 0),
             -(c["hist_hit_rate"] if c["hist_n"] else 0),
             -c["price_edge"], -c["hist_n"], -c["type_roi"], c["start"],
         ))

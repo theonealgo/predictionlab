@@ -1474,6 +1474,14 @@ def _nhl_results_html_usable(text: str) -> bool:
                 return False
         except Exception:
             pass
+    # Nov headings painted on October cards: newest stored final must appear
+    # as a card section, or the consensus / ROI / chart boards stay empty.
+    try:
+        latest, _n = _nhl_latest_final_before_today()
+        if latest and not _nhl_page_has_finals_on(text, latest):
+            return False
+    except Exception:
+        pass
     return True
 
 
@@ -1508,32 +1516,29 @@ def read_nhl_results_disk() -> str:
     except Exception:
         return ""
     if not _nhl_results_html_usable(text):
-        try:
-            _NHL_RESULTS_DISK.unlink(missing_ok=True)
-        except OSError:
-            pass
+        drop_nhl_results_caches()
         _schedule_nhl_results_rebuild()
         return ""
     try:
         latest, _n = _nhl_latest_final_before_today()
         if latest and not _nhl_page_has_finals_on(text, latest):
+            # Missing the newest final night = frankenstein / October freeze.
+            # Never keep serving it (lag check used to leave poison when
+            # yesterday's finals exist in the DB but not on the page).
+            drop_nhl_results_caches()
             _schedule_nhl_results_rebuild()
-            # Stale disk (e.g. stuck on October) must not beat a live rebuild.
-            try:
-                from datetime import datetime, timedelta
-                try:
-                    from zoneinfo import ZoneInfo
-                    yesterday = datetime.now(ZoneInfo("America/New_York")).date() - timedelta(days=1)
-                except Exception:
-                    yesterday = datetime.now().date() - timedelta(days=1)
-                lag = (yesterday - datetime.strptime(latest, "%Y-%m-%d").date()).days
-                if lag > 3:
-                    return ""
-            except Exception:
-                return ""
+            return ""
     except Exception:
         pass
-    return nhl_align_last7_count(nhl_last7_end_yesterday(text))
+    # Only rewrite Last 7 tallies when the page already has that night's cards.
+    aligned = nhl_last7_end_yesterday(text)
+    try:
+        _start, end7, _c = _nhl_last7_stored_finals()
+        if end7 and _nhl_page_has_finals_on(aligned, end7):
+            return nhl_align_last7_count(aligned)
+    except Exception:
+        pass
+    return aligned
 
 
 def _nhl_last7_stored_finals() -> tuple[str, str, int]:

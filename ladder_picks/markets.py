@@ -94,15 +94,29 @@ def options(sport: str, model: dict, book: dict) -> list[dict]:
             if m is None or abs(m - total) < 1e-9:
                 continue
             over = m > total
+            edge = abs(m - total)
+            lean_p = cover_prob(sport, edge)
+            # Model side.
             out.append({
                 "market": "total", "model": name, "side": "OVER" if over else "UNDER",
-                "side_class": "OVER" if over else "UNDER", "gap": abs(m - total), "line": total,
+                "side_class": "OVER" if over else "UNDER", "gap": edge, "line": total,
                 "price": book.get("over_price" if over else "under_price"),
                 "other_price": book.get("under_price" if over else "over_price"),
-                "model_prob": None,
+                "model_prob": lean_p, "faded": False,
+            })
+            # Fade side: when the model lean is wrong (~30% seasons), the
+            # opposite O/U can be the ladder pick.
+            fade_over = not over
+            out.append({
+                "market": "total", "model": name, "side": "OVER" if fade_over else "UNDER",
+                "side_class": "OVER" if fade_over else "UNDER", "gap": edge, "line": total,
+                "price": book.get("over_price" if fade_over else "under_price"),
+                "other_price": book.get("under_price" if fade_over else "over_price"),
+                "model_prob": max(0.01, min(0.99, 1.0 - lean_p)), "faded": True,
             })
     for o in out:
         o["bucket"] = bucket(sport, o["market"], o["gap"])
+        o.setdefault("faded", False)
     return out
 
 
@@ -146,6 +160,8 @@ def type_label(sport: str, o: dict) -> str:
     if side:
         parts.append(side)
     parts.append(o["model"])
+    if o.get("faded"):
+        parts.append("fade")
     return " · ".join(parts)
 
 

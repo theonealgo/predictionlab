@@ -182,15 +182,18 @@ export default function SportsList({ activeSlug }) {
                 active: holdsActive && new URLSearchParams(window.location.search).get('league') === item.name,
               }))
               : group.leagues
-                ? SOCCER_LEAGUES.map((item) => ({
-                  label: item.label,
-                  href: `${publicPath(members[0].slug)}?league=${encodeURIComponent(item.slug)}`,
-                  status: leagueCounts[item.slug]
-                    ? `Today · ${leagueCounts[item.slug]}`
-                    : (tomorrowCounts[item.slug] ? `Tomorrow · ${tomorrowCounts[item.slug]}` : ''),
-                  today: Boolean(leagueCounts[item.slug]),
-                  active: holdsActive && new URLSearchParams(window.location.search).get('league') === item.slug,
-                }))
+                ? SOCCER_LEAGUES.filter((item) => item && item !== 'All').map((item) => {
+                  const name = typeof item === 'string' ? item : (item.label || item.slug || '');
+                  return {
+                    label: name,
+                    href: `${publicPath(members[0].slug)}?league=${encodeURIComponent(name)}`,
+                    status: leagueCounts[name]
+                      ? `Today · ${leagueCounts[name]}`
+                      : (tomorrowCounts[name] ? `Tomorrow · ${tomorrowCounts[name]}` : ''),
+                    today: Boolean(leagueCounts[name]),
+                    active: holdsActive && new URLSearchParams(window.location.search).get('league') === name,
+                  };
+                })
                 : members.map((sport) => ({
                   label: sport.name,
                   href: publicPath(sport.slug),

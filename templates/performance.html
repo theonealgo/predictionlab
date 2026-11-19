@@ -4,8 +4,9 @@
 
 {% block extra_styles %}
 <style>
-.perf-wrap{max-width:1180px;margin:0 auto;}
-.perf-card{background:#fff;border:1px solid #E0E4E8;border-radius:14px;padding:20px 18px;box-shadow:0 4px 18px rgba(15,23,42,0.06);}
+.perf-wrap{max-width:none;width:100%;margin:0;padding:0 12px 24px;box-sizing:border-box;}
+.perf-card{background:#fff;border:1px solid #E0E4E8;border-radius:10px;padding:22px 20px;box-shadow:none;width:100%;box-sizing:border-box;}
+.layout-main:has(.perf-wrap){max-width:none;width:100%;}
 .perf-head{margin-bottom:14px;}
 .perf-head h1{font-size:1.7rem;color:#0f172a;margin:0 0 8px;}
 .perf-head p{color:#475569;font-size:0.94rem;margin:0;}
