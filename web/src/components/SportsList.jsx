@@ -48,32 +48,17 @@ export default function SportsList({ activeSlug }) {
 
   useEffect(() => {
     let alive = true;
-    let idleId = 0;
-    const load = () => {
-      getJson('/api/web/soccer-leagues')
-        .then((data) => {
-          if (!alive) return;
-          setLeagueCounts(data.today || {});
-          setTomorrowCounts(data.tomorrow || {});
-        })
-        .catch(() => { if (alive) setLeagueCounts({}); });
-      getJson('/api/web/tennis-events')
-        .then((data) => { if (alive) setTennisEvents(data.events || []); })
-        .catch(() => { if (alive) setTennisEvents([]); });
-    };
-    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-      idleId = window.requestIdleCallback(() => { if (alive) load(); }, { timeout: 3500 });
-    } else {
-      idleId = window.setTimeout(() => { if (alive) load(); }, 900);
-    }
-    return () => {
-      alive = false;
-      if (typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
-        window.cancelIdleCallback(idleId);
-      } else {
-        clearTimeout(idleId);
-      }
-    };
+    getJson('/api/web/soccer-leagues')
+      .then((data) => {
+        if (!alive) return;
+        setLeagueCounts(data.today || {});
+        setTomorrowCounts(data.tomorrow || {});
+      })
+      .catch(() => { if (alive) setLeagueCounts({}); });
+    getJson('/api/web/tennis-events')
+      .then((data) => { if (alive) setTennisEvents(data.events || []); })
+      .catch(() => { if (alive) setTennisEvents([]); });
+    return () => { alive = false; };
   }, []);
 
   const soccerToday = Object.values(leagueCounts).reduce((sum, n) => sum + n, 0);

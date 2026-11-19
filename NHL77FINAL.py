@@ -87532,6 +87532,8 @@ def _web_results_html(sport):
 
 from web_api import api as _web_api_blueprint  # noqa: E402
 app.register_blueprint(_web_api_blueprint)
+from espn_logo_cdn import cdn as _espn_logo_cdn  # noqa: E402
+app.register_blueprint(_espn_logo_cdn)
 
 
 @app.route('/player-props')

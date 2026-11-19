@@ -1,5 +1,6 @@
 // Homepage previews show logos at 28px; ESPN URLs often request 64px PNGs.
-// Ask for ~2× display size so PageSpeed "Improve image delivery" stops flagging them.
+// Ask for ~2× display size, then serve via our /cdn/team-logo (long Cache-Control).
+// ESPN's own CDN TTL is hours — PageSpeed flags that; we cannot change ESPN headers.
 export function compactEspnLogo(src, size = 56) {
   if (!src || typeof src !== 'string') return src || '';
   if (!/espncdn\.com/i.test(src)) return src;
@@ -8,7 +9,7 @@ export function compactEspnLogo(src, size = 56) {
   else out += (out.includes('?') ? '&' : '?') + `w=${size}`;
   if (/[?&]h=\d+/i.test(out)) out = out.replace(/([?&])h=\d+/gi, `$1h=${size}`);
   else out += `&h=${size}`;
-  return out;
+  return `/cdn/team-logo?u=${encodeURIComponent(out)}`;
 }
 
 // Read displayed values only. Never recompute a probability or borrow another model's value.

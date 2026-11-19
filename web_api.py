@@ -1278,21 +1278,31 @@ def api_cards(slug):
         except (ValueError, TypeError):
             return jsonify(error='Choose a valid game page.'), 400
         if request.args.get('cached') == '1':
+            # Homepage fast path: never SSR on the request thread. If the disk/memory
+            # feed is missing, kick a background build and tell the client to poll —
+            # returning empty with building=false left every sport but NHL blank after
+            # deploy (only warmed feeds painted).
             saved = _cards_for_tier(slug, tier)
             if not saved:
+                started = _start_full_cards(slug, tier, app)
                 payload = {
-                    'cards': [], 'total': 0, 'css': '', 'shareImage': '',
-                    'offset': 0, 'nextOffset': None, 'hasMore': False,
-                    'building': False, 'refreshing': False,
+                    'cards': [], 'total': None, 'css': '', 'shareImage': '',
+                    'offset': 0, 'nextOffset': 0, 'hasMore': True,
+                    'building': True, 'refreshing': True,
+                    'retryAfter': 2 if started or not _in_boot_grace() else 3,
                 }
-            else:
-                full = saved[1] or {}
-                cards = list(full.get('cards') or [])[:limit]
-                payload = dict(
-                    full, cards=cards, total=len(full.get('cards') or []),
-                    offset=0, nextOffset=None, hasMore=False,
-                    building=False, refreshing=False,
-                )
+                response = jsonify(payload)
+                response.status_code = 202
+                response.headers['Cache-Control'] = 'private, no-store'
+                response.vary.add('Cookie')
+                return response
+            full = saved[1] or {}
+            cards = list(full.get('cards') or [])[:limit]
+            payload = dict(
+                full, cards=cards, total=len(full.get('cards') or []),
+                offset=0, nextOffset=None, hasMore=False,
+                building=False, refreshing=False,
+            )
             response = jsonify(payload)
             response.headers['Cache-Control'] = 'private, max-age=30'
             response.vary.add('Cookie')
@@ -1310,16 +1320,25 @@ def api_cards(slug):
         response.headers['Cache-Control'] = 'private, no-store'
         response.vary.add('Cookie')
         return response
+    # No-limit path: never SSR on the visitor thread (workers=1 — a sync NCAAB
+    # build wedged every API including /live). Same stale-while-revalidate as _card_page.
     saved = _cards_for_tier(slug, tier)
     age = time.time() - saved[0] if saved else None
     if saved and age < _CARDS_KEEP:
         payload = saved[1]
     else:
-        with _CARD_BUILD_SLOTS:
-            payload = _build_cards(slug, tier, app, request.host, request.headers.get('Cookie'))
-        _save_cards(slug, tier, payload)
-        if tier == 'guest':
-            _save_cards(slug, 'free', payload, allow_empty=True)
+        _start_full_cards(slug, tier, app)
+        if saved:
+            payload = saved[1]
+        else:
+            response = jsonify({
+                'cards': [], 'total': None, 'css': '', 'shareImage': '',
+                'building': True, 'refreshing': True, 'retryAfter': 2,
+            })
+            response.status_code = 202
+            response.headers['Cache-Control'] = 'private, no-store'
+            response.vary.add('Cookie')
+            return response
     from slate_freshness import current_payload
     payload = _ensure_live_share_image(current_payload(payload), slug)
     if payload['suppressed_stale_predictions']:

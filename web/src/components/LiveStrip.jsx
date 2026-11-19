@@ -9,25 +9,15 @@ export default function LiveStrip() {
   const [items, setItems] = useState(null);
   const strip = useDragScroll();
 
-  // Scores refresh independently of saved predictions. First fetch waits for idle
-  // so homepage LCP is not blocked behind /api/web/live on Slow 4G.
   useEffect(() => {
     let cancelled = false;
-    let idleId = 0;
     const load = () => getJson('/api/web/live', { maxAge: 30_000 })
       .then((data) => { if (!cancelled) setItems(selectLiveStripItems(data.items)); })
       .catch(() => { if (!cancelled) setItems((current) => current || []); });
-    const start = () => { if (!cancelled) load(); };
-    if (typeof window.requestIdleCallback === 'function') {
-      idleId = window.requestIdleCallback(start, { timeout: 2000 });
-    } else {
-      idleId = window.setTimeout(start, 400);
-    }
+    load();
     const timer = setInterval(load, 30 * 1000);
     return () => {
       cancelled = true;
-      if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(idleId);
-      else clearTimeout(idleId);
       clearInterval(timer);
     };
   }, []);

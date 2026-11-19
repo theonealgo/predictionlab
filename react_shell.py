@@ -200,6 +200,12 @@ class PredictionsToPicks:
 class ReactShell:
     """WSGI wrapper: hands real visitors the React page for the main addresses."""
 
+    # Anonymous chrome is identical for every guest — reuse it so HTML TTFB is not
+    # a full /api/web/chrome rebuild on every homepage hit (field CrUX TTFB).
+    _ANON_CHROME_TTL = 45.0
+    _anon_chrome = None
+    _anon_chrome_at = 0.0
+
     def __init__(self, wsgi_app, add_site_tags=None):
         self.wsgi_app = wsgi_app
         self.add_site_tags = add_site_tags
@@ -234,9 +240,19 @@ class ReactShell:
             return False
         return True
 
+    @staticmethod
+    def _is_anonymous(environ):
+        cookie = environ.get('HTTP_COOKIE') or ''
+        # Flask session + remember-me cookies — any of these means personalized chrome.
+        return not re.search(r'(?:^|;\s*)(?:session|remember_token)=', cookie, re.I)
+
     def _visitor_chrome(self, environ):
         """This visitor's header + footer from /api/web/chrome (same cookies), as a dict."""
         import json
+        import time
+        anon = self._is_anonymous(environ)
+        if anon and self._anon_chrome and (time.time() - self._anon_chrome_at) < self._ANON_CHROME_TTL:
+            return self._anon_chrome
         sub = {k: v for k, v in environ.items() if k not in ('wsgi.input', 'HTTP_ACCEPT_ENCODING')}
         sub.update({'PATH_INFO': '/api/web/chrome', 'QUERY_STRING': '', 'REQUEST_METHOD': 'GET',
                     'CONTENT_LENGTH': '0', 'HTTP_ACCEPT': 'application/json'})
@@ -259,6 +275,9 @@ class ReactShell:
             return None
         if not isinstance(data, dict) or not data.get('header'):
             return None
+        if anon:
+            ReactShell._anon_chrome = data
+            ReactShell._anon_chrome_at = time.time()
         return data
 
     @staticmethod
