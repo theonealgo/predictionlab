@@ -77,7 +77,7 @@ export default function HomePage() {
           try {
             const payload = await getJson(
               `/api/web/sports/${item.slug}/cards?limit=1&cached=1`,
-              { maxAge: 60_000 },
+              { maxAge: 0 },
             );
             if (cancelled) return;
             apply(item, payload || { cards: [], total: 0 });
@@ -97,9 +97,8 @@ export default function HomePage() {
   }, []);
 
   const chartSport = sports?.find((item) => item.slug === chartSlug);
-  // Only sports with a real preview card — never empty "no upcoming" shells.
-  const visible = featured.filter((sport) => Boolean(feeds[sport.slug]?.preview));
   const stillLoading = featured.some((sport) => !feeds[sport.slug]);
+  const anyPreview = featured.some((sport) => feeds[sport.slug]?.preview);
 
   return (
     <>
@@ -118,29 +117,27 @@ export default function HomePage() {
 
         {noSports && <p className="pl-empty">No games are scheduled right now.</p>}
         {sportsError && <p className="pl-empty" role="alert">Could not load the sports list. Please reload to retry.</p>}
-        {mode === 'cards' && sports && !stillLoading && !visible.length && (
+        {!noSports && !sportsError && !sports && <p className="pl-empty">Loading games…</p>}
+        {mode === 'cards' && sports && !stillLoading && !anyPreview && (
           <p className="pl-empty">No upcoming cards to show right now.</p>
         )}
-        <div
-          className="pl-home-cards"
-          style={mode === 'cards' && featured.length
-            ? { minHeight: `${featured.length * 248}px` }
-            : undefined}
-        >
-        {/* Hold space for every featured sport until all feeds resolve — painting
-            cards one-by-one was the desktop CLS (NBA section ~0.07). */}
-        {mode === 'cards' && stillLoading && featured.map((sport) => (
-          <section
-            className="pl-home-sport is-skeleton"
-            key={`skel-${sport.slug}`}
-            data-home-sport={sport.key}
-            aria-hidden="true"
-          />
-        ))}
 
-        {mode === 'cards' && !stillLoading && visible.map((sport) => {
+        {mode === 'cards' && featured.map((sport) => {
           const feed = feeds[sport.slug];
+          if (!feed) {
+            return (
+              <section
+                className="pl-home-sport is-skeleton"
+                key={sport.slug}
+                data-home-sport={sport.key}
+                aria-busy="true"
+              >
+                <p className="pl-empty">Loading {sportLabel(sport)}…</p>
+              </section>
+            );
+          }
           const preview = feed.preview;
+          if (!preview) return null;
           const name = sportLabel(sport);
           const href = publicPath(sport.slug);
           const games = todayGameCount(sport) || feed.total || 0;
@@ -211,7 +208,6 @@ export default function HomePage() {
             </section>
           );
         })}
-        </div>
 
         {mode === 'chart' && sports && (
           <section className="pl-home-sport">
