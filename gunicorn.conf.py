@@ -14,7 +14,10 @@ if sys.platform == "darwin":
 
 # Local only: the project folder (it holds .pushgit) serves just the 5122 site via
 # ./run_local.sh. Test servers run from a copy (qa/test_copy.py) and never take 5122.
-if os.path.isdir(os.path.join(os.path.realpath(os.getcwd()), ".pushgit")):
+# Do not apply this on Render. A checkout that contains .pushgit would exit
+# before binding $PORT and every request would 502.
+_on_render = bool(os.environ.get("RENDER") or os.environ.get("RENDER_SERVICE_ID") or os.path.isdir("/data"))
+if not _on_render and os.path.isdir(os.path.join(os.path.realpath(os.getcwd()), ".pushgit")):
     raise SystemExit("gunicorn refused: start test servers from a copy (qa/test_copy.py), not the project folder")
 if os.environ.get("PORT") == "5122":
     raise SystemExit("gunicorn refused: port 5122 is the local site (./run_local.sh)")
@@ -48,6 +51,10 @@ except Exception:
     pass
 
 bind = f"0.0.0.0:{os.environ.get('PORT', '10000')}"
+# Heartbeat files on a slow disk make the master kill a live worker. Render
+# then has no process answering and returns 502. /dev/shm stays in memory.
+if os.path.isdir("/dev/shm"):
+    worker_tmp_dir = "/dev/shm"
 workers = 1
 worker_class = "gthread"
 # 8 gthreads on a 1-CPU / 2 GB box inflate RSS and fight the GIL during XGB/ESPN

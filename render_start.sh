@@ -19,7 +19,9 @@ echo "[render_start] served-page cache /data/.cache (${_saved} saved page(s))"
 
 # Drop wipe-poisoned NHL/NBA results HTML (0-game Last Night + stale Last 7)
 # and the NHL last-good file that was re-saving that poison. Autorefresh reseeds.
-python3 - <<'PY' || true
+# Run after the process is listening. A scan here used to finish before gunicorn
+# bound $PORT, so Render had nothing to route to and returned 502.
+python3 - >/tmp/render_purge.log 2>&1 <<'PY' &
 from pathlib import Path
 import re
 root = Path("/data/.cache")
@@ -90,6 +92,7 @@ if last_good.is_file():
         print(f"[render_start] skip last_good: {exc}")
 print(f"[render_start] poisoned-page purge done ({removed} removed)")
 PY
+disown || true
 
 # ── Memory: 1 CPU / 2 GB instance (see gunicorn.conf.py) ────────────────────
 export MALLOC_ARENA_MAX=2
