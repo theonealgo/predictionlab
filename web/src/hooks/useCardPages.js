@@ -46,6 +46,9 @@ export default function useCardPages(slug, enabled = true, span = 0) {
     return saved ? { ...saved, cards: predictionCards(saved.cards, span) } : saved;
   });
   const [error, setError] = useState(null);
+  // True after the first live cards fetch finishes (ok or fail). Cached peek alone
+  // is not enough — results must wait so they do not fight the cards worker.
+  const [ready, setReady] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const current = useRef(payload);
   const busy = useRef(false);
@@ -80,6 +83,7 @@ export default function useCardPages(slug, enabled = true, span = 0) {
   useEffect(() => {
     const generation = ++epoch.current;
     busy.current = false;
+    setReady(false);
     if (!enabled) return undefined;
     const kept = peekJson(path);
     const slate = kept ? { ...kept, cards: predictionCards(kept.cards, span) } : kept;
@@ -93,6 +97,7 @@ export default function useCardPages(slug, enabled = true, span = 0) {
       const targetCount = Math.max(5, previous?.cards?.length || 0);
       const cards = [];
       let offset = 0;
+      let gotPage = false;
       try {
         do {
           const data = await readPage(offset, generation);
@@ -103,13 +108,22 @@ export default function useCardPages(slug, enabled = true, span = 0) {
           const remaining = continuing ? (previous?.cards || []).filter((card) => !seen.has(identity(card))) : [];
           commit({ ...data, cards: [...cards, ...remaining] });
           setError(null);
+          gotPage = true;
+          // Unlock results after the first page lands; extra pages keep loading.
+          if (epoch.current === generation) setReady(true);
           if (!continuing) break;
           offset = data.nextOffset;
         } while (epoch.current === generation);
       } catch (failure) {
-        if (epoch.current === generation) setError(failure.message);
+        if (epoch.current === generation) {
+          setError(failure.message);
+          setReady(true);
+        }
       } finally {
-        if (epoch.current === generation) busy.current = false;
+        if (epoch.current === generation) {
+          busy.current = false;
+          if (!gotPage) setReady(true);
+        }
       }
     }
     refresh();
@@ -122,7 +136,7 @@ export default function useCardPages(slug, enabled = true, span = 0) {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [path, enabled, readPage, commit]);
+  }, [path, enabled, readPage, commit, span]);
 
   const loadMore = useCallback(async () => {
     const previous = current.current;
@@ -145,5 +159,5 @@ export default function useCardPages(slug, enabled = true, span = 0) {
       }
     }
   }, [enabled, readPage, commit]);
-  return { payload, error, loadingMore, loadMore };
+  return { payload, error, loadingMore, loadMore, ready };
 }

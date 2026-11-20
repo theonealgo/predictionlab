@@ -112,11 +112,13 @@ export default function SportPage({ slug }) {
   const [todayIso, setTodayIso] = useState(() => todayET());
   const [tab, setTab] = useState(nav.tabs[0]);
   const [extraDays, setExtraDays] = useState(0);
-  const { payload, error, loadingMore, loadMore } = useCardPages(slug, !isGolf, extraDays);
+  const { payload, error, loadingMore, loadMore, ready: cardsReady } = useCardPages(slug, !isGolf, extraDays);
   const cards = payload?.cards || [];
   const moreGames = useRef(null);
   // Phones show one column at a time; this switch flips between the games and the results.
   const [mobilePane, setMobilePane] = useState('predictions');
+  // Results wait for the live cards fetch (not a cached peek) so cards own the worker first.
+  const resultsEnabled = isGolf || cardsReady || mobilePane === 'results';
   const [filter, setFilter] = useState(() => {
     const league = new URLSearchParams(window.location.search).get('league');
     if (league && sport === 'TENNIS') return league;
@@ -410,9 +412,9 @@ export default function SportPage({ slug }) {
       <aside className={mobilePane === 'results' ? 'pl-right' : 'pl-right pl-mobile-hidden'}>
         <div className="pl-right-title">Results</div>
         <ResultsPanel
-          // Start results after cards have an answer (or the user opens Results on
-          // mobile) so both requests do not fight the only gunicorn worker.
-          enabled={Boolean(payload || error) || mobilePane === 'results'}
+          // Predictions first. Results wait until the live cards fetch finishes
+          // (or the visitor opens Results on mobile). Then ~2s delay + 15s cap.
+          enabled={resultsEnabled}
           src={`/${slug.replace('-picks', '-results')}`}
           picksPath={`/${slug.replace('-projections', '-picks')}`}
           onPredictions={() => { chooseTab(nav.tabs[0]); setMobilePane('predictions'); }}

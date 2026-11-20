@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { routeLinks, trimFrame, whenFrameParsed } from '../frameTools.js';
 
-// The sport's results page in the right column. Cards and Chart are its two views (the Chart view is the
-// same page with ?view=chart), so this panel's buttons replace the page's own. The site's header and footer
-// are hidden inside the column. Links inside the page are routed by frameTools.routeLinks.
-// Both are set up as soon as the page starts arriving, not after every image and script has loaded.
+// Predictions (middle column) own the worker first. Results start only after
+// `enabled` (live cards fetch finished), then may take up to 15s — never a minute.
+
+const RESULTS_START_AFTER_MS = 2000;
+const RESULTS_GIVE_UP_MS = 15_000;
+
 function holdLastNightCards(frame) {
   const doc = frame && frame.contentDocument;
   if (!doc || doc.body.dataset.lastNightHeld) return;
@@ -43,43 +45,67 @@ export default function ResultsPanel({ src, picksPath, onPredictions, enabled = 
   const [requested, setRequested] = useState(false);
   const [ready, setReady] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  // Wait until the middle column has had a chance to claim the worker, then
-  // load results — concurrent card SSR + results was hanging the only worker.
+  const [timedOut, setTimedOut] = useState(false);
   const want = Boolean(enabled || requested);
   const url = view === 'chart' ? `${src}?view=chart` : src;
 
   useEffect(() => {
+    setLoaded(false);
+    setTimedOut(false);
+    setReady(false);
+  }, [url]);
+
+  useEffect(() => {
     if (!want) {
       setReady(false);
+      setTimedOut(false);
       return undefined;
     }
     let cancelled = false;
-    const start = () => { if (!cancelled) setReady(true); };
-    const idle = window.requestIdleCallback
-      ? window.requestIdleCallback(start, { timeout: 1200 })
-      : null;
-    const timer = window.setTimeout(start, idle == null ? 400 : 1500);
+    // Cards finished; brief pause so the worker can breathe, then start results.
+    const timer = window.setTimeout(() => {
+      if (!cancelled) setReady(true);
+    }, requested ? 0 : RESULTS_START_AFTER_MS);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
-      if (idle != null && window.cancelIdleCallback) window.cancelIdleCallback(idle);
     };
-  }, [want, src]);
+  }, [want, url, requested]);
 
   useEffect(() => {
-    setLoaded(false);
-  }, [url]);
+    if (!ready || loaded || timedOut) return undefined;
+    const timer = window.setTimeout(() => setTimedOut(true), RESULTS_GIVE_UP_MS);
+    return () => window.clearTimeout(timer);
+  }, [ready, loaded, timedOut, url]);
+
+  // Drop the iframe on timeout so the browser aborts the hung results request.
+  useEffect(() => {
+    if (!timedOut) return;
+    setReady(false);
+  }, [timedOut]);
 
   const prepare = () => {
     trimFrame(frame.current);
     routeLinks(frame.current, picksPath, onPredictions);
     if (view === 'cards') holdLastNightCards(frame.current);
     setLoaded(true);
+    setTimedOut(false);
   };
 
-  useEffect(() => (ready && frame.current ? whenFrameParsed(frame.current, url, prepare) : undefined),
+  useEffect(() => (ready && !timedOut && frame.current ? whenFrameParsed(frame.current, url, prepare) : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [url, ready]);
+    [url, ready, timedOut]);
+
+  const retry = () => {
+    setTimedOut(false);
+    setLoaded(false);
+    setReady(false);
+    setRequested(true);
+    window.setTimeout(() => setReady(true), 50);
+  };
+
+  const waiting = want && !loaded && !timedOut;
+  const idle = !want && !loaded && !timedOut;
 
   return (
     <>
@@ -92,8 +118,16 @@ export default function ResultsPanel({ src, picksPath, onPredictions, enabled = 
         </button>
       </div>
       <div className={`pl-results-shell${loaded ? ' is-loaded' : ''}`}>
-        {!loaded && <p className="pl-empty pl-results-pending">Loading results…</p>}
-        {ready && (
+        {idle && <p className="pl-empty pl-results-pending">Waiting for predictions…</p>}
+        {waiting && <p className="pl-empty pl-results-pending">Loading results…</p>}
+        {timedOut && !loaded && (
+          <div className="pl-empty pl-results-pending" role="status">
+            <p>Results are taking too long.</p>
+            <button type="button" className="pl-results-retry" onClick={retry}>Retry results</button>
+            <p><a href={src}>Open full results page</a></p>
+          </div>
+        )}
+        {ready && !timedOut && (
           <iframe
             ref={frame}
             className="pl-results-frame"
