@@ -1531,6 +1531,7 @@ def read_nhl_results_disk() -> str:
         text = _nhl_read_fallback()
         if text:
             _schedule_nhl_results_rebuild()
+            _mark_served_from_disk()
         return text
     needs_rebuild = False
     if not _nhl_results_html_usable(text):
@@ -1547,15 +1548,20 @@ def read_nhl_results_disk() -> str:
         # Serve what we have (or last_good) so visitors are not stuck behind
         # a multi-minute rebuild on the single gunicorn worker.
         fallback = _nhl_read_fallback()
-        return fallback or text
+        out = fallback or text
+        if out:
+            _mark_served_from_disk()
+        return out
     # Only rewrite Last 7 tallies when the page already has that night's cards.
     aligned = nhl_last7_end_yesterday(text)
     try:
         _start, end7, _c = _nhl_last7_stored_finals()
         if end7 and _nhl_page_has_finals_on(aligned, end7):
-            return nhl_align_last7_count(aligned)
+            aligned = nhl_align_last7_count(aligned)
     except Exception:
         pass
+    if aligned:
+        _mark_served_from_disk()
     return aligned
 
 

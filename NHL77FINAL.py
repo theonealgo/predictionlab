@@ -18042,12 +18042,9 @@ def _served_layout_last__cfl(response):
             from_disk = bool(getattr(_layout_g, "_pl_results_from_disk", False))
         except Exception:
             from_disk = False
-        if (
-            from_disk
-            and 'id="pl-served-layout"' in html
-            and "<!-- pl-isolate-repaired" in html
-            and (path or "").rstrip("/").endswith(("-results", "-picks"))
-        ):
+        # Saved pages are finished. Re-running layout on 300KB–1.5MB HTML
+        # was costing multi-second (sometimes 30s+) results hits on the only worker.
+        if from_disk and (path or "").rstrip("/").endswith(("-results", "-picks")):
             return response
         import served_layout_fixes
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html
@@ -18112,12 +18109,9 @@ def _served_layout_last__tennis(response):
             from_disk = bool(getattr(_layout_g, "_pl_results_from_disk", False))
         except Exception:
             from_disk = False
-        if (
-            from_disk
-            and 'id="pl-served-layout"' in html
-            and "<!-- pl-isolate-repaired" in html
-            and (path or "").rstrip("/").endswith(("-results", "-picks"))
-        ):
+        # Saved pages are finished. Re-running layout on 300KB–1.5MB HTML
+        # was costing multi-second (sometimes 30s+) results hits on the only worker.
+        if from_disk and (path or "").rstrip("/").endswith(("-results", "-picks")):
             return response
         import served_layout_fixes
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html
@@ -18167,18 +18161,13 @@ def _served_layout_last(response):
         if _root not in _layout_sys.path:
             _layout_sys.path.insert(0, _root)
         # Already-saved pages were laid out when stored. Re-running the full
-        # pass on ~300KB NHL/NBA HTML costs ~0.5–2s per request for no gain.
+        # pass on 300KB–1.5MB HTML costs seconds per request for no gain.
         try:
             from flask import g as _layout_g
             from_disk = bool(getattr(_layout_g, "_pl_results_from_disk", False))
         except Exception:
             from_disk = False
-        if (
-            from_disk
-            and 'id="pl-served-layout"' in html
-            and "<!-- pl-isolate-repaired" in html
-            and (path or "").rstrip("/").endswith(("-results", "-picks"))
-        ):
+        if from_disk and (path or "").rstrip("/").endswith(("-results", "-picks")):
             return response
         import served_layout_fixes
         fixed = served_layout_fixes.apply_served_layout(html, sport, path, view) or html

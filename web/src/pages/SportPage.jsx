@@ -410,7 +410,9 @@ export default function SportPage({ slug }) {
       <aside className={mobilePane === 'results' ? 'pl-right' : 'pl-right pl-mobile-hidden'}>
         <div className="pl-right-title">Results</div>
         <ResultsPanel
-          enabled
+          // Start results after cards have an answer (or the user opens Results on
+          // mobile) so both requests do not fight the only gunicorn worker.
+          enabled={Boolean(payload || error) || mobilePane === 'results'}
           src={`/${slug.replace('-picks', '-results')}`}
           picksPath={`/${slug.replace('-projections', '-picks')}`}
           onPredictions={() => { chooseTab(nav.tabs[0]); setMobilePane('predictions'); }}

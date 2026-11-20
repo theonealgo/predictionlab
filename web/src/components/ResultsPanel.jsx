@@ -41,21 +41,45 @@ export default function ResultsPanel({ src, picksPath, onPredictions, enabled = 
   const frame = useRef(null);
   const [view, setView] = useState('cards');
   const [requested, setRequested] = useState(false);
-  // Load as soon as the column is enabled — do not wait for IntersectionObserver
-  // (mobile starts with the pane hidden, so visibility never flipped and results
-  // stayed on "Loading results…" forever).
-  const active = Boolean(enabled || requested);
+  const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  // Wait until the middle column has had a chance to claim the worker, then
+  // load results — concurrent card SSR + results was hanging the only worker.
+  const want = Boolean(enabled || requested);
   const url = view === 'chart' ? `${src}?view=chart` : src;
+
+  useEffect(() => {
+    if (!want) {
+      setReady(false);
+      return undefined;
+    }
+    let cancelled = false;
+    const start = () => { if (!cancelled) setReady(true); };
+    const idle = window.requestIdleCallback
+      ? window.requestIdleCallback(start, { timeout: 1200 })
+      : null;
+    const timer = window.setTimeout(start, idle == null ? 400 : 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      if (idle != null && window.cancelIdleCallback) window.cancelIdleCallback(idle);
+    };
+  }, [want, src]);
+
+  useEffect(() => {
+    setLoaded(false);
+  }, [url]);
 
   const prepare = () => {
     trimFrame(frame.current);
     routeLinks(frame.current, picksPath, onPredictions);
     if (view === 'cards') holdLastNightCards(frame.current);
+    setLoaded(true);
   };
 
-  useEffect(() => (active && frame.current ? whenFrameParsed(frame.current, url, prepare) : undefined),
+  useEffect(() => (ready && frame.current ? whenFrameParsed(frame.current, url, prepare) : undefined),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [url, active]);
+    [url, ready]);
 
   return (
     <>
@@ -67,8 +91,18 @@ export default function ResultsPanel({ src, picksPath, onPredictions, enabled = 
           Chart
         </button>
       </div>
-      {!active && <p className="pl-empty">Loading results…</p>}
-      <iframe ref={frame} className="pl-results-frame" title="Results" src={active ? url : undefined} onLoad={prepare} />
+      <div className={`pl-results-shell${loaded ? ' is-loaded' : ''}`}>
+        {!loaded && <p className="pl-empty pl-results-pending">Loading results…</p>}
+        {ready && (
+          <iframe
+            ref={frame}
+            className="pl-results-frame"
+            title="Results"
+            src={url}
+            onLoad={prepare}
+          />
+        )}
+      </div>
     </>
   );
 }

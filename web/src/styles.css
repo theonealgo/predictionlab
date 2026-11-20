@@ -958,11 +958,37 @@ button {
   color: #fff;
 }
 
+/* Hold the results column size while the classic page loads (avoids a collapsed layout). */
+.pl-results-shell {
+  position: relative;
+  min-height: 480px;
+  height: calc(100vh - 240px);
+  background: #f8fafc;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.pl-results-shell.is-loaded {
+  background: #fff;
+  border-color: transparent;
+}
+
+.pl-results-pending {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
 /* The sport's full results page inside the results column, with its own header and footer hidden. */
 .pl-results-frame {
   display: block;
   width: 100%;
-  height: calc(100vh - 240px);
+  height: 100%;
   min-height: 480px;
   border: 0;
   background: #fff;
