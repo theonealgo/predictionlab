@@ -168,12 +168,30 @@ def page_context(conn, premium: bool, cfg: Config | None = None) -> dict:
     for row in stats["per_day"]:
         row["rate"] = _pct(row["success_rate"])
     stats["completion_pct"] = _pct(stats["completion_rate"])
+    # One row per day of one ladder. A loss is the last row of that ladder.
+    # Day numbers are not added together across ladders.
+    history_rows = []
+    for run in conn.execute("SELECT * FROM ladder_runs ORDER BY id DESC LIMIT 25"):
+        ladder_no = _number(conn, run["id"])
+        for row in conn.execute(
+            "SELECT * FROM ladder_days WHERE ladder_id = ? AND result != 'no_pick' ORDER BY day_number",
+            (run["id"],),
+        ):
+            history_rows.append({
+                "id": ladder_no,
+                "day": row["day_number"],
+                "result": row["result"],
+                "result_label": _RESULT_LABEL.get(row["result"], row["result"]),
+            })
+            if row["result"] == "loss":
+                break
     return {
         "ladder": ladder,
         "days": days,
         "today_pick": today_pick,
         "progress": progress,
         "history": history,
+        "history_rows": history_rows,
         "stats": stats,
         "total_days": cfg.days,
     }
@@ -193,7 +211,7 @@ def ladder_page():
     except Exception:
         logger.exception("ladder: page data failed")
         ctx = {"ladder": None, "days": [], "today_pick": None, "progress": [], "history": [],
-               "stats": None, "total_days": 10}
+               "history_rows": [], "stats": None, "total_days": 10}
         manual_post = None
     html = render_template(
         "ladder_picks.html", is_premium=premium, is_logged_in=logged_in, manual_post=manual_post, **ctx

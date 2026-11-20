@@ -267,8 +267,27 @@ def _visitor_words(response):
     return response
 
 
+# Face chips are only these two. Books/Market spread and total stay in the details table.
+_FACE_LINE_ONLY = re.compile(
+    r'<div class="line-chip">\s*'
+    r'<div class="line-chip-label">\s*(?:Books|Market)\s+'
+    r'(?:spread|total|run line|puck line)\s*</div>'
+    r'[\s\S]*?</div>\s*</div>\s*',
+    re.I,
+)
+
+
+def _face_chips_only(html):
+    if not html or 'line-chip-label' not in html:
+        return html
+    return _FACE_LINE_ONLY.sub('', html)
+
+
 def _reword_cards(payload):
     """Card HTML with visitor wording (site_words), done once per built or loaded feed."""
+    for card in payload.get('cards') or []:
+        if card.get('html'):
+            card['html'] = _face_chips_only(card['html'])
     from site_words import WORDING_VERSION
     if payload.get('words') == WORDING_VERSION:
         return payload
@@ -1063,8 +1082,22 @@ def _save_cards(slug, tier, payload, allow_empty=False):
         tmp = _cards_file(slug, tier).with_suffix('.tmp')
         tmp.write_bytes(gzip.compress(json.dumps(payload).encode(), compresslevel=5))
         tmp.replace(_cards_file(slug, tier))
+        if tier == 'member':
+            _fill_missing_locked_feeds(slug, payload)
     except OSError:
         pass
+
+
+def _fill_missing_locked_feeds(slug, payload):
+    """Guest and free are the member cards with the two face chips locked.
+    Write them when a member feed exists and those files were never saved.
+    """
+    if not payload.get('cards'):
+        return
+    for locked_tier in ('guest', 'free'):
+        if _cards_file(slug, locked_tier).is_file():
+            continue
+        _save_cards(slug, locked_tier, _locked_from_member(payload), allow_empty=True)
 
 
 def _refresh_cards(slug, tier, app, host, cookie):

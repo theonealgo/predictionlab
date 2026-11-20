@@ -43,7 +43,7 @@ from .player_eligibility import (
     select_top_pool,
 )
 from prop_player_pool import VERSION as PLAYER_POOL_VERSION, select_market_players
-from .pl_lines import iter_market_histories as hydrate_market_histories
+from .pl_lines import hydrate_market_histories
 from .data_sources import _LEAGUE_PROP_TYPES
 from .player_eligibility import market_allowed
 

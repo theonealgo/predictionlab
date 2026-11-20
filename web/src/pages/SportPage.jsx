@@ -141,6 +141,11 @@ export default function SportPage({ slug }) {
   const [gameParam] = useState(() => new URLSearchParams(window.location.search).get('game'));
   const target = useMemo(() => targetCard(cards, gameParam), [cards, gameParam]);
   useEffect(() => { setTodayIso(todayET()); }, [payload]);
+  // Today empty but the feed may hold tomorrow — open the next two days once.
+  useEffect(() => {
+    if (!cardsReady || error || extraDays !== 0 || isGolf) return;
+    if (payload && (payload.cards || []).length === 0) setExtraDays(2);
+  }, [cardsReady, error, extraDays, isGolf, payload]);
   useEffect(() => {
     if (!payload?.hasMore || loadingMore || !moreGames.current) return undefined;
     const observer = new IntersectionObserver((entries) => {

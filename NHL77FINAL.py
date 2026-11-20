@@ -87330,14 +87330,18 @@ def _web_game_counts():
     if now - _WEB_COUNTS['ts'] < 300:
         return _WEB_COUNTS['counts']
     counts = {}
+    predictions_ok = False
     try:
         # Game dates are US (Eastern) dates; the live server clock is UTC.
         from zoneinfo import ZoneInfo as _ZI
         today_et = datetime.now(_ZI('America/New_York')).date()
-        conn = sqlite3.connect(f'file:{DATABASE}?mode=ro', uri=True, timeout=.1)
+        conn = sqlite3.connect(f'file:{DATABASE}?mode=ro', uri=True, timeout=2)
         try:
-            _deadline = _time.monotonic()+.15
-            conn.set_progress_handler(lambda: int(_time.monotonic()>_deadline), 1000)
+            # A cold read of this table measured 176ms. The old 150ms cutoff
+            # aborted it, cached an empty count for 5 minutes, and left only
+            # tennis (its own database) marked Today.
+            _deadline = _time.monotonic()+2
+            conn.set_progress_handler(lambda: int(_time.monotonic()>_deadline), 10000)
             rows = conn.execute(
                 "SELECT sport,SUM(CASE WHEN game_date<? THEN 1 ELSE 0 END),COUNT(*) "
                 "FROM predictions WHERE game_date>=? AND game_date<? GROUP BY sport",
@@ -87348,8 +87352,9 @@ def _web_game_counts():
             conn.close()
         for row in rows:
             counts[row[0]] = (int(row[1] or 0), int(row[2] or 0))
+        predictions_ok = True
     except Exception as exc:
-        logger.debug(f"[web] game counts failed: {exc}")
+        logger.warning(f"[web] game counts failed: {exc}")
     # Tennis lives in its own DB; the main predictions table is often empty/stale for it.
     try:
         from pathlib import Path as _Path
@@ -87374,6 +87379,8 @@ def _web_game_counts():
             tconn.close()
     except Exception as exc:
         logger.debug(f"[web] tennis game counts failed: {exc}")
+    if not predictions_ok:
+        return counts
     _WEB_COUNTS['ts'] = now
     _WEB_COUNTS['counts'] = counts
     return counts
