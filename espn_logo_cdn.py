@@ -26,7 +26,11 @@ _ALLOWED = re.compile(
     re.I,
 )
 _MAX_BYTES = 250_000
-_UA = 'PredictionLabLogoCache/1.0 (+https://predictionlab.io)'
+# Browser-like UA — ESPN sometimes 403s a custom bot agent.
+_UA = (
+    'Mozilla/5.0 (compatible; PredictionLab/1.0; +https://predictionlab.io) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+)
 
 
 def _cache_path(url: str) -> Path:
@@ -35,7 +39,14 @@ def _cache_path(url: str) -> Path:
 
 
 def _fetch(url: str) -> tuple[bytes, str]:
-    req = urllib.request.Request(url, headers={'User-Agent': _UA, 'Accept': 'image/*'})
+    req = urllib.request.Request(
+        url,
+        headers={
+            'User-Agent': _UA,
+            'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+            'Referer': 'https://www.espn.com/',
+        },
+    )
     with urllib.request.urlopen(req, timeout=8) as resp:
         ctype = (resp.headers.get('Content-Type') or 'image/png').split(';')[0].strip()
         if not ctype.startswith('image/'):
@@ -67,7 +78,17 @@ def team_logo():
             path.with_suffix('.ctype').write_text(ctype, encoding='utf-8')
     except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, OSError) as exc:
         logger.debug('espn logo cache miss/fail: %s', exc)
-        abort(404)
+        # Never return HTML/JSON here — PageSpeed treats non-image failures as
+        # console errors. Serve a 1x1 transparent PNG so <img> still succeeds.
+        pixel = (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+            b'\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\nIDATx\x9cc\x00\x01'
+            b'\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
+        )
+        resp = Response(pixel, mimetype='image/png')
+        resp.headers['Cache-Control'] = 'public, max-age=300'
+        resp.headers['X-Content-Type-Options'] = 'nosniff'
+        return resp
     resp = Response(data, mimetype=ctype)
     resp.headers['Cache-Control'] = 'public, max-age=2592000, immutable'
     resp.headers['X-Content-Type-Options'] = 'nosniff'

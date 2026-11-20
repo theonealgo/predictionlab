@@ -118,14 +118,27 @@ export default function HomePage() {
 
         {noSports && <p className="pl-empty">No games are scheduled right now.</p>}
         {sportsError && <p className="pl-empty" role="alert">Could not load the sports list. Please reload to retry.</p>}
-        {!noSports && !sportsError && (!sports || stillLoading) && !visible.length && (
-          <p className="pl-empty">Loading games…</p>
-        )}
         {mode === 'cards' && sports && !stillLoading && !visible.length && (
           <p className="pl-empty">No upcoming cards to show right now.</p>
         )}
+        <div
+          className="pl-home-cards"
+          style={mode === 'cards' && featured.length
+            ? { minHeight: `${featured.length * 248}px` }
+            : undefined}
+        >
+        {/* Hold space for every featured sport until all feeds resolve — painting
+            cards one-by-one was the desktop CLS (NBA section ~0.07). */}
+        {mode === 'cards' && stillLoading && featured.map((sport) => (
+          <section
+            className="pl-home-sport is-skeleton"
+            key={`skel-${sport.slug}`}
+            data-home-sport={sport.key}
+            aria-hidden="true"
+          />
+        ))}
 
-        {mode === 'cards' && visible.map((sport) => {
+        {mode === 'cards' && !stillLoading && visible.map((sport) => {
           const feed = feeds[sport.slug];
           const preview = feed.preview;
           const name = sportLabel(sport);
@@ -198,6 +211,7 @@ export default function HomePage() {
             </section>
           );
         })}
+        </div>
 
         {mode === 'chart' && sports && (
           <section className="pl-home-sport">

@@ -440,7 +440,7 @@ def _public_request():
         return False
     if request.blueprint in ("auth", "affiliate"):
         return True
-    if path.startswith(("/static/", "/sport-static/", "/soro-img/", "/blog/")):
+    if path.startswith(("/static/", "/sport-static/", "/soro-img/", "/blog/", "/cdn/")):
         return True
     if path in _PUBLIC_PAGES or path == "/blog" or _results_path(path):
         return True
@@ -505,7 +505,7 @@ def enforce_response(response):
     from markupsafe import Markup
     from auth_system import is_premium_user
     path = request.path.rstrip("/") or "/"
-    if (path.startswith(("/static/", "/sport-static/", "/soro-img/"))
+    if (path.startswith(("/static/", "/sport-static/", "/soro-img/", "/cdn/"))
             or response.status_code != 200 or response.direct_passthrough):
         return response
     private = bool(is_premium_user())
