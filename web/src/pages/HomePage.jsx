@@ -126,6 +126,7 @@ export default function HomePage() {
           const href = publicPath(sport.slug);
           return (
             <section className="pl-home-sport" key={sport.slug} data-home-sport={sport.key}>
+              <div className="pl-home-sport-label">{name}</div>
               <h2 className="pl-home-sport-title">
                 <span className="pl-home-sport-name">{name}</span>
                 <a href={href}>
@@ -138,7 +139,7 @@ export default function HomePage() {
               >
                 <h3>{preview.title || preview.teams.slice(0, 2).map((team) => team.name).join(' vs ')}</h3>
                 <div className="pl-home-preview-meta">
-                  {[preview.date, preview.time, name].filter(Boolean).join(' · ')}
+                  {[preview.date, preview.time].filter(Boolean).join(' · ')}
                 </div>
                 <div className="pl-home-preview-teams">
                   {preview.teams.map((team, index) => (

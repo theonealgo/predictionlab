@@ -49,11 +49,24 @@ export function readCardPreview(card) {
   if (teams.every((team) => team.percent === null) && !confidence) {
     const consensus = [...root.querySelectorAll('.pc-box')].find((box) =>
       /^(?:Sharp|Market) Consensus$/i.test(box.querySelector('.pc-name')?.textContent.replace(/[ⓘℹ]/g, '').trim() || ''));
-    const match = consensus?.querySelector('.pc-val')?.textContent.match(/^\s*(\d+(?:\.\d+)?)\s*%/);
+    const match = consensus?.querySelector('.pc-val')?.textContent.match(/^\s*(\d+(?:\.\d+)?)\s*%?/);
     const team = consensus?.querySelector('.pc-side')?.textContent.trim();
     if (match && Number(match[1]) <= 100 && team) {
       confidence = { percent: match[1], team };
     }
+  }
+  // Guest/free faces often omit .win-pct (NFL/soccer) and only stamp data-conf /
+  // data-pick. Paint the green bar on the picked side from that published %.
+  if (confidence) {
+    const pick = (confidence.team || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    teams = teams.map((team) => {
+      if (team.percent !== null) return team;
+      const key = (team.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      if (key && pick && (key === pick || pick.includes(key) || key.includes(pick))) {
+        return { ...team, percent: confidence.percent };
+      }
+      return team;
+    });
   }
   return {
     teams,
