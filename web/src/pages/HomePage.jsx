@@ -13,6 +13,12 @@ function sportLabel(sport) {
   return String(sport?.name || sport?.key || '').trim();
 }
 
+// Same number Featured shows ("Today · 12") — not the full multi-day card feed total.
+function todayGameCount(sport) {
+  const match = /·\s*(\d+)/.exec(sport?.statusText || '');
+  return match ? Number(match[1]) : 0;
+}
+
 export default function HomePage() {
   const [mode, setMode] = useState('cards');
   const [sports, setSports] = useState(null);
@@ -124,13 +130,13 @@ export default function HomePage() {
           const preview = feed.preview;
           const name = sportLabel(sport);
           const href = publicPath(sport.slug);
+          const games = todayGameCount(sport) || feed.total || 0;
           return (
             <section className="pl-home-sport" key={sport.slug} data-home-sport={sport.key}>
-              <div className="pl-home-sport-label">{name}</div>
               <h2 className="pl-home-sport-title">
                 <span className="pl-home-sport-name">{name}</span>
                 <a href={href}>
-                  {feed.total ? `See all ${feed.total} ${name} games` : `Open ${name}`}
+                  {games ? `See all ${games} ${name} games` : `Open ${name}`}
                 </a>
               </h2>
               <a

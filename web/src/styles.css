@@ -1304,33 +1304,16 @@ button {
   background-size: 200% 100%;
 }
 
-.pl-home-sport-label {
-  margin: 0 0 4px;
-  color: #0f172a;
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-}
-
 .pl-home-sport-title {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 16px;
   margin: 0 0 10px;
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 800;
   color: #0f172a;
-}
-
-.pl-home-sport-title .pl-home-sport-name {
-  /* Label above carries the sport name; keep the row for the “See all” link. */
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
+  letter-spacing: -0.02em;
 }
 
 .pl-home-sport-name {
