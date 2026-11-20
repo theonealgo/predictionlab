@@ -7,8 +7,6 @@ import { readCardPreview, readGolfPreview } from '../homePreview.js';
 // The sports that have a chart view on their results page.
 const CHART_SPORTS = new Set(['NHL', 'NBA', 'NCAAB', 'NCAAW', 'MLB', 'SOCCER', 'NFL', 'NCAAF', 'WNBA', 'CFL']);
 
-const FEATURED_CARDS = 6;
-
 function sportLabel(sport) {
   return String(sport?.name || sport?.key || '').trim();
 }
@@ -39,8 +37,7 @@ export default function HomePage() {
           setNoSports(true);
           return;
         }
-        const today = list.filter((item) => item.status === 'Today');
-        const shown = (today.length ? today : list.filter((item) => item.status === 'In season')).slice(0, FEATURED_CARDS);
+        const shown = list.filter((item) => item.status === 'Today' || item.status === 'In season');
         if (!shown.length) {
           setNoSports(true);
           return;

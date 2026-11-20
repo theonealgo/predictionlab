@@ -33,7 +33,7 @@ export function readCardPreview(card) {
       reason: headline?.getAttribute('title') || 'A displayed probability is not available for this event.',
     };
   };
-  const teams = names.map((name, index) => read(slots[index], name));
+  let teams = names.map((name, index) => read(slots[index], name));
   if (!teams.some((team) => team.name)) return null;
   const draw = root.querySelector('.soccer-draw-row .draw-slot');
   if (draw) teams.push({ ...read(draw, 'Draw'), name: 'Draw' });

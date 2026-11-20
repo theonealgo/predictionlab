@@ -709,7 +709,12 @@ def _build_row_from_odds_api_nhl(
 ) -> Optional[dict[str, Any]]:
     events: list[dict] = []
     seen = set()
-    keys = {"NHL": _NHL_ODDS_API_KEYS, "NCAAB": ("basketball_ncaab",), "NCAAW": ("basketball_wncaab",)}.get(sport, ())
+    keys = {
+        "NHL": _NHL_ODDS_API_KEYS,
+        "NCAAB": ("basketball_ncaab",),
+        "NCAAW": ("basketball_wncaab",),
+        "NCAAF": ("americanfootball_ncaaf",),
+    }.get(sport, ())
     for sport_key in keys:
         for ev in _fetch_odds_api_events(sport_key):
             eid = ev.get('id') or (ev.get('home_team'), ev.get('away_team'), ev.get('commence_time'))
@@ -1040,13 +1045,13 @@ def build_pl_book_odds(
         item = _fetch_core_odds_item(
             sport, event_id, game_id=game_id, league_name=league_name,
         )
-        if not item and sport == "NCAAB":
+        if not item and sport in ("NCAAB", "NCAAW"):
             item = _summary_odds(sport, event_id, home_team, away_team)
     if not item and sport == 'SOCCER':
         return _build_row_from_odds_api(
             sport, game_id, home_team, away_team, game_date, league_name,
         )
-    if not item and sport in ('NHL', 'NCAAB'):
+    if not item and sport in ('NHL', 'NCAAB', 'NCAAW', 'NCAAF'):
         return _build_row_from_odds_api_nhl(
             sport, game_id, home_team, away_team, game_date,
         )
@@ -1066,7 +1071,7 @@ def build_pl_book_odds(
             return _build_row_from_odds_api(
                 sport, game_id, home_team, away_team, game_date, league_name,
             )
-        if sport in ('NHL', 'NCAAB'):
+        if sport in ('NHL', 'NCAAB', 'NCAAW', 'NCAAF'):
             return _build_row_from_odds_api_nhl(
                 sport, game_id, home_team, away_team, game_date,
             )

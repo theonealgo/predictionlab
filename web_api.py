@@ -720,8 +720,11 @@ def _tennis_sync_in_background():
             from tennis.espn_sync import sync_tennis_db
             sync_tennis_db(force=True)
             slate = _tennis_slate_ids()
-            if slate and slate != _TENNIS_SYNC.get('slate'):
+            previous = _TENNIS_SYNC.get('slate')
+            if slate:
                 _TENNIS_SYNC['slate'] = slate
+            # A fresh process has no remembered slate. Drop only after a real change.
+            if slate and previous and slate != previous:
                 _drop_saved_tennis_pages()
         except Exception as exc:
             logging.getLogger(__name__).info('[web] tennis sync failed: %s', exc)
@@ -1338,7 +1341,7 @@ def api_cards(slug):
             response.vary.add('Cookie')
             return response
         payload, status = _card_page(slug, tier, app, offset, limit, span)
-        if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NBA'}:
+        if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'NBA'}:
             from market_card_refresh import refresh as refresh_market_cards
             from NHL77FINAL import DATABASE
             payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)
@@ -1381,7 +1384,7 @@ def api_cards(slug):
                              args=(slug, tier, app, request.host, request.headers.get('Cookie')),
                              daemon=True).start()
     payload['refreshing'] = (slug, tier) in _CARDS_BUILDING
-    if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NBA'}:
+    if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'NBA'}:
         from market_card_refresh import refresh as refresh_market_cards
         from NHL77FINAL import DATABASE
         payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)

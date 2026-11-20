@@ -662,20 +662,20 @@ def _drop_model_pick_confidence(html: str) -> str:
 
 
 def _card_model_sides(card: str) -> dict[str, str]:
-    """Model name -> HOME / AWAY from the card's stored home win percents."""
+    """Model name -> HOME / AWAY from the side printed on the card.
+
+    data-m-* is that pick's confidence, which is always above 50, so it cannot
+    tell the two players apart.
+    """
     sides: dict[str, str] = {}
-    for name, key in _TENNIS_CONSENSUS_MODELS:
-        m = re.search(rf'data-m-{key}="([0-9.]+)"', card[:3000])
-        if not m:
-            continue
-        try:
-            pct = float(m.group(1))
-        except ValueError:
-            continue
-        if pct > 50.0:
-            sides[name] = "HOME"
-        elif pct < 50.0:
-            sides[name] = "AWAY"
+    for name, _key in _TENNIS_CONSENSUS_MODELS:
+        m = re.search(
+            rf'pc-name">{re.escape(name)}</div>\s*<div class="pc-val">[^<]*</div>\s*'
+            rf'<div class="pc-side (home|away)"',
+            card,
+        )
+        if m:
+            sides[name] = m.group(1).upper()
     return sides
 
 
@@ -748,13 +748,59 @@ def _paid_card_lookup() -> dict[str, str]:
     return cards
 
 
+def _tennis_past30_table() -> dict[tuple[str, tuple[str, ...]], list[int]]:
+    """Past 30 W-L from the saved tennis consensus table.
+
+    The key matches _consensus_pattern: ('unanimous', ()) or
+    ('majority', dissent names in model order). This copies the Past 30
+    cell. It does not recount the games.
+    """
+    path = _tennis_results_cache_path()
+    try:
+        page = path.read_text(encoding="utf-8") if path.is_file() else ""
+    except OSError:
+        return {}
+    start = page.find("Consensus Based Betting Records")
+    if start < 0:
+        return {}
+    end = page.find("</table>", start)
+    block = page[start:end if end > start else start + 20000]
+    order = [name for name, _key in _TENNIS_CONSENSUS_MODELS]
+    known = {name.casefold(): name for name in order}
+    out: dict[tuple[str, tuple[str, ...]], list[int]] = {}
+    for row in re.findall(r"<tr>([\s\S]*?)</tr>", block):
+        bucket = re.search(r'<td class="bucket">([^<]+)</td>', row)
+        if not bucket:
+            continue
+        cells = re.findall(r"<td>([\s\S]*?)</td>", row[bucket.end():])
+        if len(cells) < 3:
+            continue
+        rec = re.search(r"(\d+)\s*-\s*(\d+)", re.sub(r"<[^>]+>", " ", cells[2]))
+        if not rec:
+            continue
+        name = bucket.group(1).casefold()
+        if "unanimous" in name and "all but" not in name:
+            key = ("unanimous", ())
+        else:
+            found = re.search(r"all but (.+)$", name)
+            if not found:
+                continue
+            raw = [part.strip() for part in re.split(r"\s+and\s+", found.group(1))]
+            names = [known[part] for part in raw if part in known]
+            if len(names) != len(raw):
+                continue
+            key = ("majority", tuple(n for n in order if n in names))
+        out[key] = [int(rec.group(1)), int(rec.group(2))]
+    return out
+
+
 def _inject_tennis_consensus_hist(html: str) -> str:
     """Face Consensus Historical Record chip, same box as UFC."""
     if not html or "data-pick-card" not in html:
         return html
-    history = _tennis_consensus_history()
+    history = _tennis_past30_table() or _tennis_consensus_history()
     paid_cards: dict[str, str] | None = None
-    parts = re.split(r"(?=<div class=\"game-card-stack\b)", html)
+    parts = re.split(r'(?=<div\b(?=[^>]*\bgame-card-stack\b)[^>]*>)', html)
     out = [parts[0]]
     for card in parts[1:]:
         if "data-pick-card" not in card[:400] or '<div class="lines-strip">' not in card:
@@ -840,6 +886,9 @@ def _read_tennis_results_cache() -> str:
 def _write_tennis_results_cache(page: str) -> None:
     if not page or len(page) < 8000 or "<html" not in page.lower():
         return
+    # The startup refresh deletes a saved results page that lacks this marker.
+    if "<!-- pl-isolate-repaired v2 -->" not in page:
+        page = page.replace("<head>", "<head>\n<!-- pl-isolate-repaired v2 -->", 1)
     path = _tennis_results_cache_path()
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -932,9 +981,20 @@ def _render_tennis_results(*, view: str = "normal") -> str:
         page = _ensure_results_view_toggle(page, chart=False)
     page = _relabel_best_performing_today(page)
     page = _public_share_hrefs(page)
+    page = _fix_tennis_tally_columns(page)
     if not is_chart:
         _write_tennis_results_cache(page)
     return page
+
+
+def _fix_tennis_tally_columns(page: str) -> str:
+    """The performance board ships a 3-column grid that collapses in a narrow pane."""
+    if not page:
+        return page
+    return page.replace(
+        "grid-template-columns:repeat(3,minmax(0,1fr));gap:10px",
+        "grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px",
+    )
 
 
 def _public_share_hrefs(html: str) -> str:

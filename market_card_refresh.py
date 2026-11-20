@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 import sqlite3
 
-SPORTS = {"NHL", "NFL", "NCAAB", "NCAAW", "NBA"}
+SPORTS = {"NHL", "NFL", "NCAAB", "NCAAW", "NCAAF", "NBA"}
 ML = re.compile(r'(<div class="ml-line face-books-ml">\s*<span[^>]*>.*?</span>\s*<span class="ml-num[^"]*">)(.*?)(</span>)(\s*<button\b.*?</button>)?', re.S)
 ROWS = re.compile(r'<tr\b[^>]*>.*?</tr>', re.S)
 CELL = re.compile(r'(<td class="val-books">)(.*?)(</td>)', re.S)
@@ -279,6 +279,17 @@ def repair_card(card, row, allow_final=False):
     return {**card, "html": html} if html != original else card
 
 
+def _open_readonly(database):
+    """Read the lines database without writing.
+
+    A file URI with a space in the path (%20) fails to open on this SQLite,
+    which left every college card's market cells blank.
+    """
+    conn = sqlite3.connect(str(Path(database).resolve()), timeout=3)
+    conn.execute("PRAGMA query_only=ON")
+    return conn
+
+
 def refresh(payload, sport, database, allow_final=False, fetch_missing=True):
     if sport not in SPORTS or not payload.get("cards"):
         return payload
@@ -291,7 +302,7 @@ def refresh(payload, sport, database, allow_final=False, fetch_missing=True):
         return payload
     latest = {}
     try:
-        with closing(sqlite3.connect(Path(database).resolve().as_uri()+"?mode=ro", uri=True, timeout=3)) as conn:
+        with closing(_open_readonly(database)) as conn:
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA query_only=ON")
             keys = list(set(ids.values()))
@@ -326,7 +337,7 @@ def refresh(payload, sport, database, allow_final=False, fetch_missing=True):
     xs_probs = {}
     if sport in {"NCAAB", "NCAAW", "NBA", "WNBA", "NHL"}:
         try:
-            with closing(sqlite3.connect(Path(database).resolve().as_uri()+"?mode=ro", uri=True, timeout=3)) as conn:
+            with closing(_open_readonly(database)) as conn:
                 conn.row_factory = sqlite3.Row
                 conn.execute("PRAGMA query_only=ON")
                 keys = list(set(ids.values()))

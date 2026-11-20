@@ -934,13 +934,31 @@ function togglePickDetails(btn){{
       margin: 0 0 10px !important;
       color: #0f172a !important;
     }}
+    body[data-sandbox-sport="tennis"] .pl-analytics,
+    body[data-sandbox-sport="tennis"] .tennis-perf-analytics,
+    body[data-sandbox-sport="tennis"] .tennis-perf-window {{
+      width: 100% !important;
+      max-width: 1100px !important;
+      box-sizing: border-box !important;
+    }}
     body[data-sandbox-sport="tennis"] .daily-tally-grid,
     body[data-sandbox-sport="tennis"] .tally-grid {{
       display: grid !important;
-      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
       gap: 12px !important;
       width: 100% !important;
       justify-content: stretch !important;
+    }}
+    body[data-sandbox-sport="tennis"] .tally-card,
+    body[data-sandbox-sport="tennis"] .tally-card .rec,
+    body[data-sandbox-sport="tennis"] .tally-card .acc,
+    body[data-sandbox-sport="tennis"] .tally-card .mlabel {{
+      overflow-wrap: normal !important;
+      word-break: normal !important;
+    }}
+    body[data-sandbox-sport="tennis"] .tally-card .rec b,
+    body[data-sandbox-sport="tennis"] .tally-card .acc {{
+      white-space: nowrap !important;
     }}
     body[data-sandbox-sport="tennis"] .daily-tally-card,
     body[data-sandbox-sport="tennis"] .tally-card {{
@@ -968,11 +986,15 @@ function togglePickDetails(btn){{
     }}
     body[data-sandbox-sport="tennis"] .daily-tally-card .rec,
     body[data-sandbox-sport="tennis"] .tally-card .rec {{
-      font-size: 1.15rem !important;
-      font-weight: 800 !important;
-      line-height: 1.15 !important;
+      font-size: 0.85rem !important;
+      font-weight: 700 !important;
+      line-height: 1.25 !important;
       color: #0f172a !important;
       margin: 0 !important;
+    }}
+    body[data-sandbox-sport="tennis"] .tally-card .rec b {{
+      font-size: 1.05rem !important;
+      font-weight: 800 !important;
     }}
     body[data-sandbox-sport="tennis"] .daily-tally-card .muted {{
       font-size: 0.78rem !important;
