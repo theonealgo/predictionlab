@@ -1,34 +1,29 @@
-{# Checker + customers expect these exact h2 titles and sport-link rows. #}
 <div class="pl-results-summary">
-  <p class="pl-results-summary-note">Completed results from each sport’s results page. Accuracy = wins ÷ (wins + losses); pushes are shown separately and excluded.</p>
-  {% macro cell(value) -%}
-    {%- if value.n or value.pushes -%}
-      <div class="asr-pct">{{ '%.1f'|format(value.pct) }}%</div>
-      <div class="asr-rec">{{ value.record }}</div>
-    {%- elif value.status == 'empty' -%}
-      <div class="asr-status" title="{{ value.reason }}">0–0</div>
-    {%- else -%}
-      <div class="asr-status">{{ 'Not applicable' if value.status == 'not_applicable' else 'N/A' }}</div>
-    {%- endif -%}
-  {%- endmacro %}
-
-  <div class="asr-section">
-    <h2>Moneyline</h2>
-    <div class="pl-results-summary-scroll" role="region" aria-label="Season moneyline records" tabindex="0">
+  <p class="pl-results-summary-note">Completed results from each sport’s results page. Accuracy = wins ÷ (wins + losses); pushes are shown separately and excluded. Reporting periods are labelled below.</p>
+  {% macro cell(value) %}
+    {% if value.n or value.pushes %}
+      <strong class="asr-pct">{{ '%.1f'|format(value.pct) ~ '%' if value.pct is not none else 'N/A' }}</strong>
+      <span class="asr-rec" title="{{ value.reason }}">{{ value.record }}</span>
+    {% elif value.status == 'empty' %}
+      <span class="asr-status" title="{{ value.reason }}">0–0</span>
+      <small>No graded decisions</small>
+    {% else %}
+      <span class="asr-status">{{ 'Not applicable' if value.status == 'not_applicable' else 'N/A' }}</span>
+      <small>{{ value.reason }}</small>
+    {% endif %}
+  {% endmacro %}
+  <details class="pl-results-summary-section" open>
+    <summary>Season record · Straight up</summary>
+    <div class="pl-results-summary-scroll" role="region" aria-label="Season straight-up records" tabindex="0">
       <table class="asr-table">
-        <caption>Season moneyline model records</caption>
-        <thead>
-          <tr>
-            <th scope="col">Sport</th>
-            {% for key, label in models %}<th scope="col">{{ label }}</th>{% endfor %}
-          </tr>
-        </thead>
+        <caption>Season model records, matching the season boards on the sport results pages</caption>
+        <thead><tr><th scope="col">Sport</th>{% for key, label in models %}<th scope="col">{{ label }}</th>{% endfor %}</tr></thead>
         <tbody>
           {% for row in rows %}
-          <tr>
-            <td><a class="sport-link" href="{{ row.results_url }}">{{ row.name }}</a></td>
+          <tr data-summary-sport="{{ row.sport }}">
+            <th scope="row"><a href="{{ row.results_url }}">{{ row.name }}</a></th>
             {% if row.sport == 'GOLF' %}
-            <td colspan="{{ models|length }}">Tournament finishes are on the <a href="{{ row.results_url }}">golf results page</a>.</td>
+            <td colspan="{{ models|length }}">Tournament finishes are reported on the <a href="{{ row.results_url }}">golf results page</a>, not as two-way model win–loss records.</td>
             {% else %}
             {% for key, label in models %}<td>{{ cell(row.ml[key]) }}</td>{% endfor %}
             {% endif %}
@@ -37,49 +32,26 @@
         </tbody>
       </table>
     </div>
-  </div>
-
-  <div class="asr-section">
-    <h2>Spread vs book</h2>
-    <p class="pl-results-summary-note">Past 30 days on each sport’s results page (recent, not season){% if rows %}.{% endif %}</p>
-    <div class="pl-results-summary-scroll" role="region" aria-label="Spread vs book past 30 days" tabindex="0">
+  </details>
+  {% for market, title in (('spread', 'Spread'), ('ou', 'Over / Under')) %}
+  <details class="pl-results-summary-section">
+    <summary>{{ title }} · Past 30 days</summary>
+    <p class="pl-results-summary-note">Matches the “Past 30 days” column on each sport’s results page, through its most recent results date. These are recent records, not season totals.</p>
+    <div class="pl-results-summary-scroll" role="region" aria-label="{{ title }} past-30-day records" tabindex="0">
       <table class="asr-table">
-        <caption>Spread vs book · Past 30 days</caption>
-        <thead>
-          <tr><th scope="col">Sport</th><th scope="col">XSharp</th><th scope="col">PL</th></tr>
-        </thead>
+        <caption>{{ title }} results · Past 30 days</caption>
+        <thead><tr><th scope="col">Sport</th><th scope="col">Through</th><th scope="col">XSharp</th><th scope="col">Prediction Lab</th></tr></thead>
         <tbody>
           {% for row in rows if row.sport not in ('TENNIS', 'UFC', 'GOLF') %}
-          <tr>
-            <td><a class="sport-link" href="{{ row.results_url }}">{{ row.name }}</a></td>
-            <td>{{ cell(row.spread.xgboost) }}</td>
-            <td>{{ cell(row.spread.pl) }}</td>
+          <tr data-summary-sport="{{ row.sport }}">
+            <th scope="row"><a href="{{ row.results_url }}">{{ row.name }}</a></th>
+            <td>{{ row.through or 'N/A' }}</td>
+            <td>{{ cell(row[market].xgboost) }}</td><td>{{ cell(row[market].pl) }}</td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
-  </div>
-
-  <div class="asr-section">
-    <h2>Over / Under vs book</h2>
-    <p class="pl-results-summary-note">Past 30 days totals on each sport’s results page.</p>
-    <div class="pl-results-summary-scroll" role="region" aria-label="Over Under vs book past 30 days" tabindex="0">
-      <table class="asr-table">
-        <caption>Over / Under vs book · Past 30 days</caption>
-        <thead>
-          <tr><th scope="col">Sport</th><th scope="col">XSharp</th><th scope="col">PL</th></tr>
-        </thead>
-        <tbody>
-          {% for row in rows if row.sport not in ('TENNIS', 'UFC', 'GOLF') %}
-          <tr>
-            <td><a class="sport-link" href="{{ row.results_url }}">{{ row.name }}</a></td>
-            <td>{{ cell(row.ou.xgboost) }}</td>
-            <td>{{ cell(row.ou.pl) }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
+  </details>
+  {% endfor %}
 </div>

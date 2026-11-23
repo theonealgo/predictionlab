@@ -14,7 +14,7 @@
   },
   "expected_page_labels": [
     "Grinder2", "Takedown", "Edge", "XSharp", "Consensus",
-    "Market Consensus"
+    "Sharp Consensus", "via"
   ],
   "stale_model_names": [
     "fallback", "default model", "placeholder"

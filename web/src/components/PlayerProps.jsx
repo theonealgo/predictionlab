@@ -94,8 +94,7 @@ const PROP_HEAD = [
 
 export default function PlayerProps({ league }) {
   const [tab, setTab] = useState('props');
-  // Empty until the API names the latest night with records (yesterday is often blank).
-  const [day, setDay] = useState('');
+  const [day, setDay] = useState(() => dayIso(-1));
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [market, setMarket] = useState('all');
@@ -120,10 +119,6 @@ export default function PlayerProps({ league }) {
         .then((body) => {
           if (!alive) return;
           setData(body);
-          if (tab === 'results' && !requestDay) {
-            const newest = (body?.dates || []).find(Boolean) || body?.result_date;
-            if (newest) setDay(newest);
-          }
           // The server is building this league's first slate; ask again shortly.
           if (body && body.building) retry = setTimeout(load, 4000);
         })
@@ -285,7 +280,7 @@ export default function PlayerProps({ league }) {
                   onChange={(e) => setMinEv(e.target.value)}
                 />
               </div>
-              <PropsTable rows={rows} league={league} sort={sort} onSort={toggleSort} />
+              <PropsTable rows={market === 'all' ? rows.slice(0, 3) : rows} league={league} sort={sort} onSort={toggleSort} />
             </>
           )}
         </>

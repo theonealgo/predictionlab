@@ -59,14 +59,6 @@ def apply_served_layout(html: str, sport: str = "", path: str = "", view: str = 
     if (sport or "").upper() in ("NCAAB", "NCAAW") and low.endswith("-results"):
         html = _drop_ungraded_line_rows(html)
     if low.endswith("-results"):
-        # Cheap display repair only — no model rebuild (Render-safe).
-        try:
-            from team_results_charts import _fill_efficiency_na
-
-            html = _fill_efficiency_na(html, sport) or html
-        except Exception:
-            pass
-        html = _strip_empty_model_faces(html)
         html = _ensure_date_picker(html)
         if (view or "").strip().lower() == "chart" and sport:
             try:
@@ -104,53 +96,6 @@ _OLD_BOOKS_NA_TIP_RE = re.compile(
 
 def _college_books_na_tip(html: str) -> str:
     return _OLD_BOOKS_NA_TIP_RE.sub(_COLLEGE_BOOKS_NA_TIP, html)
-
-
-_PICK_CONF_RE = re.compile(
-    r'<div class="pick-conf(?:idence)?(?:-bar|-grid|-section)?\b[\s\S]*?</div>\s*(?:</div>\s*){0,3}',
-    re.I,
-)
-_FACE_ML_STACK_RE = re.compile(
-    r'<div class="ml-stack face-ml-stack">[\s\S]*?</div>\s*</div>\s*</div>',
-    re.I,
-)
-
-
-def _strip_empty_model_faces(html: str) -> str:
-    """Drop blank Pick Confidence / face ML stacks so N/A grids are not shown.
-
-    Does not invent percents. Cards with any real pc-val / ml-num stay untouched.
-    Per-cell blanks (mixed cards, "not available" titles) rename the checker
-    class so —/N/A is still shown but not counted as a missing model value.
-    """
-    if not html or "game-card" not in html.lower():
-        return html
-    parts = re.split(r'(?=<div\b[^>]*class="[^"]*\bgame-card\b)', html, flags=re.I)
-    if len(parts) < 2:
-        return html
-    out = [parts[0]]
-    for stack in parts[1:]:
-        vals = re.findall(
-            r'class="(?:pc-val|pc-pct)[^"]*"[^>]*>\s*([^<]*?)\s*<',
-            stack,
-            flags=re.I,
-        )
-        # Keep every model box. Blank cells stay visible as — but rename the
-        # checker class (pc-val|pc-pct|ml-num) so they are not counted missing.
-        stack = re.sub(
-            r'(class=")(?:pc-val|pc-pct)([^"]*"[^>]*>\s*)(?:—|–|N/A|-)\s*<',
-            r'\1pc-empty\2—<',
-            stack,
-            flags=re.I,
-        )
-        stack = re.sub(
-            r'(class=")ml-num([^"]*"[^>]*>\s*)(?:—|–|N/A|-)\s*<',
-            r'\1ml-na\2—<',
-            stack,
-            flags=re.I,
-        )
-        out.append(stack)
-    return "".join(out)
 
 
 _LINE_TABLE_RE = re.compile(

@@ -839,22 +839,8 @@ def merge_stored_upcoming_pick_cards(html: str) -> str:
     missing = 0
     from datetime import timedelta
 
-    today = _today_et()
-    first = (today - timedelta(days=2)).isoformat()
-    last = (today + timedelta(days=7)).isoformat()
-    # In-season quiet week: if nothing sits in today..+7, open the next
-    # scheduled event day so the picks page is not an empty/stale slate.
-    future_days = sorted(
-        {
-            d
-            for row in stored
-            for d in [_fight_day_key(row) or str(row.get("fight_date") or "")[:10]]
-            if d and d >= today.isoformat()
-        }
-    )
-    if future_days and not any(first <= d <= last for d in future_days):
-        last = future_days[0]
-        first = today.isoformat()
+    first = (_today_et() - timedelta(days=2)).isoformat()
+    last = (_today_et() + timedelta(days=7)).isoformat()
     render_card = _engine_render_card()
     for idx, row in enumerate(stored):
         home = str(row.get("home_fighter") or "")

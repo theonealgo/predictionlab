@@ -1,29 +1,4 @@
-/* One date picker on every sport picks page (MLB picks is the reference).
-   Results pages hide .date-nav and use #plShowNight instead. */
-html body.sport-results .date-nav,
-html body .date-nav.pl-results-hidden,
-html.pl-results-page body .date-nav{
-  display:none!important;visibility:hidden!important;height:0!important;margin:0!important;
-  padding:0!important;overflow:hidden!important;border:0!important;
-}
-html body .pl-show-results-wrap{
-  display:flex!important;justify-content:center!important;align-items:center!important;
-  margin:28px auto 40px!important;padding:0 16px!important;max-width:1200px!important;
-}
-html body .pl-show-results-cards,
-html body #plShowNight.pl-load-btn{
-  display:inline-flex!important;align-items:center!important;justify-content:center!important;
-  border:1px solid #0c1e3a!important;background:#0c1e3a!important;color:#fff!important;
-  font:700 15px -apple-system,system-ui,"Segoe UI",sans-serif!important;
-  padding:12px 22px!important;border-radius:10px!important;cursor:pointer!important;
-  box-shadow:none!important;min-height:44px!important;
-}
-html body .pl-show-results-cards:hover,
-html body #plShowNight.pl-load-btn:hover{background:#1e3a8a!important}
-html body .pl-show-results-cards:disabled,
-html body #plShowNight.pl-load-btn:disabled{
-  opacity:.72!important;cursor:default!important;background:#334155!important;border-color:#334155!important
-}
+/* One date picker on every sport picks / results page (MLB picks is the reference). */
 html body .date-nav{
   display:flex!important;align-items:center!important;justify-content:center!important;
   flex-wrap:wrap!important;gap:8px!important;padding:14px!important;margin:16px auto!important;

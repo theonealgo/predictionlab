@@ -4965,91 +4965,6 @@ def _nfl_consensus_hist_label(
     return f"Consensus Record: {pattern} ({rec})"
 
 
-def _nba_cache_roots() -> list[Path]:
-    """Repo .cache whether this file is the root copy or sport_variants/nba/."""
-    here = Path(__file__).resolve().parent
-    roots = [here / ".cache"]
-    if here.parent.name == "sport_variants":
-        roots.append(here.parent.parent / ".cache")
-    else:
-        roots.append(here / ".cache")
-    # Dedupe while keeping order.
-    out: list[Path] = []
-    for r in roots:
-        if r not in out:
-            out.append(r)
-    return out
-
-
-def _nba_past30_records() -> dict[tuple[str, ...], tuple[int, int]]:
-    """Past 30 W-L from the saved NBA moneyline consensus table.
-
-    The key is ('unanimous',) or the sorted dissent names ('edge', 'grinder2').
-    Copies the table cell — does not recompute. Face chips must match this board.
-    """
-    html = ""
-    for cache_dir in _nba_cache_roots():
-        for name in ("served_NBA_.html", "served_NBA___free.html", "chart_src_NBA.html"):
-            path = cache_dir / name
-            try:
-                text = path.read_text(encoding="utf-8")
-            except OSError:
-                continue
-            if "Consensus Based Betting Records" in text:
-                html = text
-                break
-        if html:
-            break
-    if not html:
-        return {}
-    start = html.find("Consensus Based Betting Records")
-    if start < 0:
-        return {}
-    end = html.find("</table>", start)
-    block = html[start:end if end > start else start + 20000]
-    out: dict[tuple[str, ...], tuple[int, int]] = {}
-    for row in re.findall(r"<tr>([\s\S]*?)</tr>", block):
-        bucket = re.search(r'<td class="bucket">([^<]+)</td>', row)
-        if not bucket:
-            continue
-        cells = re.findall(r"<td>([\s\S]*?)</td>", row[bucket.end():])
-        if len(cells) < 3:
-            continue
-        # Prefer Past 30 (3rd data col after Last Night / Past 7); fall back.
-        rec = None
-        for cell in (cells[2], cells[1], cells[0]):
-            rec = re.search(r"(\d+)\s*-\s*(\d+)", re.sub(r"<[^>]+>", " ", cell))
-            if rec and not (int(rec.group(1)) == 0 and int(rec.group(2)) == 0):
-                break
-        if not rec:
-            continue
-        name = bucket.group(1).lower()
-        if "unanimous" in name and "all but" not in name:
-            key = ("unanimous",)
-        else:
-            found = re.search(r"all but (.+)$", name)
-            if not found:
-                continue
-            key = tuple(sorted(part.strip() for part in re.split(r"\s+and\s+", found.group(1))))
-        out[key] = (int(rec.group(1)), int(rec.group(2)))
-    return out
-
-
-def _nba_past30_record(
-    records: dict[tuple[str, ...], tuple[int, int]],
-    folded: int,
-    dissent: tuple[str, ...],
-    panel: int,
-) -> tuple[int, int] | None:
-    if folded >= panel and not dissent:
-        key = ("unanimous",)
-    elif dissent:
-        key = tuple(sorted(name.strip().lower() for name in dissent))
-    else:
-        return None
-    return records.get(key)
-
-
 def _inject_consensus_hist_chips(
     html: str,
     *,
@@ -5082,7 +4997,6 @@ def _inject_consensus_hist_chips(
     parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
     if len(parts) < 2:
         return html
-    nba_past30 = _nba_past30_records() if sport_u == "NBA" else {}
     out = [parts[0]]
     for stack in parts[1:]:
         dissent_info = _card_dissent_for_models(stack, grade_models)
@@ -5113,13 +5027,6 @@ def _inject_consensus_hist_chips(
             else:
                 w, l, pct = hit[0], hit[1], hit[2]
                 pushes = 0
-            if sport_u == "NBA":
-                # Season nba_cards lookup keys often miss 6/6 unanimous; the
-                # results Past 30 table is the source of truth for the face chip.
-                past30 = _nba_past30_record(nba_past30, folded, dissent, panel)
-                if past30 is not None:
-                    w, l = past30
-                    pct, pushes = None, 0
             if sport_u in ("WNBA", "NBA", "UFC", "SOCCER"):
                 label = _wnba_consensus_hist_label(
                     folded, dissent, w, l, pct, panel=panel, pushes=pushes

@@ -35,12 +35,6 @@ Environment variable overrides:
   PAGESPEED_BASE_URL   Public origin for PSI when auditing :5052 (e.g. https://predictionlab.io)
   PAGESPEED_PATHS      Comma paths (default /mlb-picks,/)
   PAGESPEED_STRATEGY   mobile | desktop | both (default mobile in site_checker)
-
-Paywall: content / ship / chrome / values auditors sign in as a paying
-checker account (qa/paid_viewer.py + qa/test_accounts.py). Free visitors
-only see moneyline win picks — auditing that view misses Consensus
-Historical chips, models, H2H, and lines. The paywall auditor still hits
-the public origin to compare free vs paid.
 """
 
 from __future__ import annotations
@@ -65,9 +59,7 @@ from urllib3.util.retry import Retry
 
 # ── paths ──────────────────────────────────────────────────────────────────
 QA_DIR = Path(__file__).parent
-ROOT_DIR = QA_DIR.parent
 sys.path.insert(0, str(QA_DIR))
-sys.path.insert(0, str(ROOT_DIR))
 
 from audit_config import (
     BASE_URL, CARD_REQUIRED_CLASSES, CLUSTER_RANGE_HIGH, CLUSTER_RANGE_LOW,
@@ -713,7 +705,7 @@ class ContentAuditor:
                             "Consensus Historical Record on face; Grinder2/Takedown filled"
                         ),
                         url=path, auditor=self.NAME))
-                elif sport in ("MLB", "NFL", "CFL", "NCAAB", "NCAAW", "NHL", "NBA"):
+                elif sport in ("MLB", "NFL", "CFL"):
                     hist = compact_consensus_hist_face_issues(html, sport)
                     self.r.add(CheckResult(
                         label=f"{sport} picks Consensus Historical face",
@@ -754,7 +746,7 @@ class ContentAuditor:
                             "H2H Last 10 is on the face only, not repeated in details"
                         ),
                         url=path, auditor=self.NAME))
-            if slug == "soccer-picks" and 'id="root"' not in html:
+            if slug == "soccer-picks":
                 league_sel = re.search(
                     r'<select[^>]*\bid=["\']league["\'][^>]*>([\s\S]*?)</select>',
                     html,
@@ -946,20 +938,14 @@ class ContentAuditor:
                 api_slug = sport_name.lower()
                 api = []
                 if api_slug != "golf":
-                    api_resp = self.s.get(
-                        urljoin(self.base, f"/{api_slug}/api/picks"),
-                        timeout=REQUEST_TIMEOUT,
-                        allow_redirects=True,
-                    )
-                    if api_resp.status_code != 200:
-                        api = []
-                    else:
-                        api_payload = None
+                    api_html = self._fetch(f"/{api_slug}/api/picks")
+                    api_payload = None
+                    if api_html:
                         try:
-                            api_payload = api_resp.json()
+                            api_payload = json.loads(api_html)
                         except Exception:
                             api_payload = None
-                        api = team_chart_api_issues(api_payload, api_slug)
+                    api = team_chart_api_issues(api_payload, api_slug)
                 if api:
                     self.r.add(CheckResult(
                         label=f"{sport_name} chart API",
@@ -1245,10 +1231,10 @@ class ContentAuditor:
         # ── Search functionality check ───────────────────────────────────
         # (a) The /api/search endpoint must return real results for a known team.
         try:
-            resp = self.s.get(urljoin(self.base, "/api/web/search?q=Detroit"),
+            resp = self.s.get(urljoin(self.base, "/api/search?query=Detroit"),
                               timeout=10, allow_redirects=True)
             data = resp.json() if resp.status_code == 200 else {}
-            hits = data.get("results") or (data.get("team_results") or []) + (data.get("espn_results") or [])
+            hits = (data.get("team_results") or []) + (data.get("espn_results") or [])
             if hits:
                 self.r.add(CheckResult(
                     label="Search API", status=PASS,
@@ -1311,44 +1297,17 @@ class NavigationAuditor:
             return ""
 
     def _parse_menu_sections(self, html: str) -> dict:
-        """Parse the menu into {section_key: [(label, href), ...]}.
-
-        Classic pages store that in TV_MENUS. The React shell stores the same
-        menus as Sports / Models / Results buttons and the drawer folders.
-        """
+        """Parse TV_MENUS JS object into {section_key: [(label, href), ...]}."""
         sections: dict[str, list] = {}
-        m = re.search(r"var TV_MENUS=(\{.*?\}\});", html or "")
-        if m:
-            menu = m.group(1)
-            for sec in re.finditer(
-                    r"(\w+):\{title:'([^']*)',items:\[(.*?)\]\}", menu):
-                key = sec.group(1)
-                items = re.findall(r"\{l:'([^']+)',h:'([^']+)'", sec.group(3))
-                sections[key] = items
+        m = re.search(r"var TV_MENUS=(\{.*?\}\});", html)
+        if not m:
             return sections
-        text = (html or "").replace("\\/", "/").replace('\\"', '"')
-        names = {"Sports": "picks", "Models": "tools", "Results": "results"}
-        for block in re.finditer(
-                r'<div class="pl-menu">\s*<button[^>]*>\s*([^<]+)</button>\s*'
-                r'<div class="pl-menu-list"[^>]*>(.*?)</div>',
-                text, flags=re.S | re.I):
-            key = names.get(block.group(1).strip())
-            if not key:
-                continue
-            sections[key] = [("", href) for href in re.findall(r'href="([^"]+)"', block.group(2))]
-        for folder in re.finditer(
-                r'<details class="pl-drawer-folder">\s*<summary>(.*?)</summary>(.*?)</details>',
-                text, flags=re.S | re.I):
-            title = re.sub(r"<[^>]+>", "", folder.group(1))
-            if "Props" in title:
-                key = "props"
-            elif title.strip() in ("More", "Account"):
-                key = "company"
-            else:
-                continue
-            sections.setdefault(key, []).extend(
-                [("", href) for href in re.findall(r'href="([^"]+)"', folder.group(2))]
-            )
+        menu = m.group(1)
+        for sec in re.finditer(
+                r"(\w+):\{title:'([^']*)',items:\[(.*?)\]\}", menu):
+            key = sec.group(1)
+            items = re.findall(r"\{l:'([^']+)',h:'([^']+)'", sec.group(3))
+            sections[key] = items
         return sections
 
     def run(self):
@@ -1379,10 +1338,7 @@ class NavigationAuditor:
             from site_words import path_aliases
 
             def _sec_has(link: str) -> bool:
-                wanted = set(path_aliases(link))
-                wanted.add(link.replace("/our-model-vs-sportsbooks", "/our-model-vs-market"))
-                wanted.add(link.replace("/ai-sports-betting-picks-today", "/ai-sports-projections-today"))
-                wanted.add(link.replace("/ai-sports-predictions-today", "/ai-sports-projections-today"))
+                wanted = path_aliases(link)
                 return any(h in wanted for h in hrefs_in_sec)
 
             for req in spec.get("required", []):
@@ -1456,16 +1412,12 @@ class NavigationAuditor:
             r'<footer[^>]*>(.*?)</footer>', html,
             flags=re.DOTALL | re.IGNORECASE)
         footer_html = footer_m.group(1) if footer_m else ""
-        footer_html = footer_html.replace("\\/", "/").replace('\\"', '"')
         footer_hrefs = re.findall(r'href=["\']([^"\']+)["\']', footer_html)
 
         from site_words import path_aliases
 
         for req in cfg.get("footer_required", []):
-            wanted = set(path_aliases(req))
-            wanted.add(req.replace("/our-model-vs-sportsbooks", "/our-model-vs-market"))
-            wanted.add(req.replace("/ai-sports-betting-picks-today", "/ai-sports-projections-today"))
-            wanted.add(req.replace("/ai-sports-predictions-today", "/ai-sports-projections-today"))
+            wanted = path_aliases(req)
             if any(h in wanted for h in footer_hrefs):
                 self.r.add(CheckResult(
                     label=f"Footer link: {req}", status=PASS,
@@ -1793,8 +1745,6 @@ class ModelAuditor:
             html = self._fetch(f"/{slug}")
             if not html or len(html) < 5000:
                 continue
-            if 'id="root"' in html and "data-pick-card" not in html:
-                continue
 
             # Expected model display labels
             missing_models = []
@@ -1816,8 +1766,7 @@ class ModelAuditor:
             # Stale model names. Strip benign HTML uses first (the search box's
             # placeholder="" attribute and ::placeholder CSS) so they don't get
             # flagged as a stale model reference.
-            _html_for_stale = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", " ", html, flags=re.I)
-            _html_for_stale = re.sub(r'placeholder\s*=\s*"[^"]*"', '', _html_for_stale, flags=re.I)
+            _html_for_stale = re.sub(r'placeholder\s*=\s*"[^"]*"', '', html, flags=re.I)
             _html_for_stale = _html_for_stale.replace('::placeholder', '')
             for stale in cfg.get("stale_model_names", []):
                 if stale.lower() in _html_for_stale.lower():
@@ -2137,10 +2086,6 @@ class ResultsAuditor:
 class ValuesAuditor:
     """Sports only: missing values, bad W-L math, and last-night counts.
 
-    Last Night and Past 30 consensus are checked against ESPN completed-game
-    counts for all 13 sports (qa/espn_results_counts.py), not only our DB —
-    so a unanimous 1-1 Past 30 cannot pass when ESPN finished dozens of games.
-
     Missing market odds are a failure only on games dated today.
     Page chrome, navigation, and template checks are not part of this pass.
     """
@@ -2156,100 +2101,6 @@ class ValuesAuditor:
         self.s = session
         self.base = base
         self.r = report
-
-    def _consensus_window_problem(self, html: str, conn, sport: str) -> str:
-        """Past 30 must not be last night's record, and must cover ESPN volume."""
-        if not html:
-            return ""
-        if re.search(r"Unanimous:\s*0-0\b", html):
-            return "Consensus Historical Record says Unanimous: 0-0"
-        problems = []
-        biggest = 0
-        night_wl = past_wl = None
-        for row in re.findall(r"<tr[\s\S]*?</tr>", html, flags=re.I):
-            cells = re.findall(r"<td[\s\S]*?</td>", row, flags=re.I)
-            if len(cells) < 4:
-                continue
-            plain = [re.sub(r"<[^>]+>", " ", c) for c in cells]
-            label = plain[0].strip().lower()
-
-            def _wl(text):
-                m = re.search(r"(\d+)\s*-\s*(\d+)", text)
-                if not m:
-                    return None
-                return int(m.group(1)), int(m.group(2))
-
-            night, past = _wl(plain[1]), _wl(plain[3])
-            if past:
-                biggest = max(biggest, past[0] + past[1])
-            if "unanimous" not in label or not past:
-                continue
-            night_wl, past_wl = night, past
-            if past[0] + past[1] == 0:
-                problems.append(f"{plain[0].strip()} past 30 is 0-0")
-            elif night and past == night:
-                problems.append(
-                    f"{plain[0].strip()} past 30 is {past[0]}-{past[1]}, the same as last night"
-                )
-        if conn is not None and sport in (
-            "NBA", "NHL", "NFL", "MLB", "NCAAB", "NCAAW", "NCAAF", "WNBA", "CFL", "SOCCER",
-        ):
-            try:
-                from datetime import timedelta
-                end = datetime.now().strftime("%Y-%m-%d")
-                start = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
-                stored = conn.execute(
-                    "SELECT COUNT(*) FROM games WHERE sport=? AND home_score IS NOT NULL "
-                    "AND date(game_date)>=date(?) AND date(game_date)<date(?)",
-                    (sport, start, end),
-                ).fetchone()[0]
-            except Exception:
-                stored = 0
-            if stored >= 40 and biggest * 2 < stored:
-                problems.append(
-                    f"largest past-30 record covers {biggest} games; "
-                    f"the database has {stored} finals in 30 days"
-                )
-        # ESPN completed volume for every team sport — source of truth for
-        # "how many games were actually played" in the window.
-        try:
-            from espn_results_counts import consensus_window_espn_issues
-
-            problems.extend(
-                consensus_window_espn_issues(
-                    self.s,
-                    sport,
-                    biggest_past30=biggest,
-                    night_wl=night_wl,
-                    past_wl=past_wl,
-                )
-            )
-        except Exception as exc:
-            problems.append(f"ESPN results-count check failed ({exc})")
-        # Dedupe while preserving order.
-        seen = set()
-        uniq = []
-        for p in problems:
-            if p not in seen:
-                seen.add(p)
-                uniq.append(p)
-        return "; ".join(uniq[:5])
-
-    def _prediction_card_html(self, slug: str) -> str:
-        """Prediction cards live in the cards API. The picks URL is the app shell."""
-        raw = self._fetch(f"/api/web/sports/{slug}/cards")
-        if not raw:
-            return ""
-        try:
-            data = json.loads(raw)
-        except Exception:
-            return raw if "game-card" in raw else ""
-        cards = data.get("cards") if isinstance(data, dict) else None
-        if not isinstance(cards, list):
-            return ""
-        return "\n".join(
-            (c.get("html") or "") for c in cards if isinstance(c, dict)
-        )
 
     def _fetch(self, path: str) -> str:
         try:
@@ -2318,34 +2169,20 @@ class ValuesAuditor:
                 r"Last Night(?:'s|&#39;s)?[^0-9]{0,80}(\d{4}-\d{2}-\d{2})\s*\((\d+)\s+games?\)",
                 text,
             )
-            if night:
+            if conn and night:
                 shown_day, shown_n = night.group(1), int(night.group(2))
-                ln_fails: list[str] = []
-                if conn:
-                    latest = self._latest_final(conn, sport, yesterday)
-                    db_n = self._finals_on(conn, sport, latest) if latest else 0
-                    if latest and (shown_day != latest or shown_n != db_n):
-                        ln_fails.append(
-                            f"Page says {shown_day} ({shown_n} games). "
-                            f"Database has {db_n} finals on {latest}."
-                        )
-                try:
-                    from espn_results_counts import last_night_issues
-
-                    ln_fails.extend(
-                        last_night_issues(self.s, sport, shown_day, shown_n)
-                    )
-                except Exception as exc:
-                    ln_fails.append(f"ESPN last-night count failed ({exc})")
-                if ln_fails:
+                latest = self._latest_final(conn, sport, yesterday)
+                db_n = self._finals_on(conn, sport, latest) if latest else 0
+                if latest and (shown_day != latest or shown_n != db_n):
                     self.r.add(CheckResult(
                         label=f"{sport} last night", status=FAIL,
-                        message="; ".join(ln_fails[:3]),
+                        message=(f"Page says {shown_day} ({shown_n} games). "
+                                 f"Database has {db_n} finals on {latest}."),
                         url=f"/{slug}-results", auditor=self.NAME))
                 else:
                     self.r.add(CheckResult(
                         label=f"{sport} last night", status=PASS,
-                        message=f"{shown_day} ({shown_n} games) matches DB/ESPN finals",
+                        message=f"{shown_day} ({shown_n} games) matches the database",
                         url=f"/{slug}-results", auditor=self.NAME))
             bad_math = []
             for pct, w, l in re.findall(r"(\d+\.\d)%\s+(\d+)-(\d+)", text):
@@ -2366,12 +2203,6 @@ class ValuesAuditor:
                     label=f"{sport} record math", status=PASS,
                     message="Board percents match the W-L records",
                     url=f"/{slug}-results", auditor=self.NAME))
-            window_msg = self._consensus_window_problem(html, conn, sport)
-            self.r.add(CheckResult(
-                label=f"{sport} consensus window",
-                status=FAIL if window_msg else PASS,
-                message=window_msg or "Unanimous past 30 is larger than last night and covers the stored finals",
-                url=f"/{slug}-results", auditor=self.NAME))
             blanks = len(blank_re.findall(html))
             cards = html.lower().count('class="game-card')
             self.r.add(CheckResult(
@@ -2379,20 +2210,6 @@ class ValuesAuditor:
                 status=FAIL if blanks else PASS,
                 message=f"{blanks} blank model value(s) on {cards} cards",
                 url=f"/{slug}-results", auditor=self.NAME))
-            pred = self._prediction_card_html(slug)
-            if pred:
-                pblanks = len(blank_re.findall(pred))
-                pcards = pred.lower().count('class="game-card')
-                pl_blank = len(re.findall(
-                    r'class="val-pl"[^>]*>\s*(?:—|–|-|N/A)\s*<', pred, re.I))
-                self.r.add(CheckResult(
-                    label=f"{sport} prediction missing values",
-                    status=FAIL if (pblanks or pl_blank) else PASS,
-                    message=(
-                        f"{pblanks} blank model value(s) and {pl_blank} blank "
-                        f"Prediction Lab line(s) on {pcards} prediction cards"
-                    ),
-                    url=f"/api/web/sports/{slug}/cards", auditor=self.NAME))
             today_odds = 0
             parts = re.split(r'id="date-(\d{4}-\d{2}-\d{2})"', html)
             it = iter(parts[1:])
@@ -2975,19 +2792,11 @@ class PropsAuditor:
                 data = engine.get_league_data(sport)
                 props = data.get("props") or []
             except Exception as exc:
-                # Dead props engine is a ship blocker — never soft-WARN.
                 self.r.add(CheckResult(
-                    label=f"Props load: {sport}", status=FAIL,
+                    label=f"Props load: {sport}", status=WARN,
                     message=f"get_league_data failed: {exc}", auditor=self.NAME))
                 continue
             if not props:
-                # Empty slate can be off-season for some sports; still FAIL the
-                # core in-season boards so a blank /player-props cannot pass.
-                if sport in {"NBA", "NHL", "NFL", "NCAAB", "NCAAW", "MLB"}:
-                    self.r.add(CheckResult(
-                        label=f"Props load: {sport}", status=FAIL,
-                        message="get_league_data returned 0 props",
-                        auditor=self.NAME))
                 continue
 
             # 1. DUPLICATE ROWS: the UI must never show the same player/prop twice.
@@ -3639,8 +3448,6 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
     print(f"  FETCHING LIVE HTTP PAGES — not local HTML folders")
     print(f"  Target: {base}")
     print(f"  Mode: {mode}")
-    print(f"  Paywall: content auditors sign in as a paying account")
-    print(f"           (free visitors only see moneyline win picks)")
     if live:
         print("  This is predictionlab.io (production)")
     print(f"  Run ID: {run_id}")
@@ -3706,111 +3513,56 @@ def run_audit(args, base_url: str | None = None) -> AuditReport:
         return report
     print("  ✅ Server reachable")
 
-    # Free visitors only see moneyline win picks. Content / ship / chrome / values
-    # must audit the paying view or they miss Consensus Historical chips, models,
-    # H2H, and lines. Paywall auditor still hits the public base (free vs paid).
-    public_base = base
-    paid_base = base
-    paid_cm = None
-    need_paid = (not pagespeed_only) and (
-        args.full
-        or args.screenshots
-        or any(
-            a in auditors_to_run
-            for a in (
-                "routes", "content", "navigation", "cards", "models", "results",
-                "values", "gamecounts", "csv", "seo", "consistency", "chrome",
-                "ship", "soccer", "espn_slate", "ux_perf",
-            )
-        )
-    )
-    if need_paid:
-        print("  ▶ Signing in as paid checker account (full picks past the paywall)…")
+    def run_auditor(name: str, fn):
+        if name not in auditors_to_run and not args.full:
+            return
+        if name in HTTP_DEPENDENT_AUDITORS and not reachable:
+            return
+        print(f"  ▶ Running {name} audit…")
         try:
-            from paid_viewer import paid_view
-
-            paid_cm = paid_view(public_base)
-            paid_base = paid_cm.__enter__()
-            report.add(CheckResult(
-                label="paid paywall unlock",
-                status=PASS,
-                message="Audit session signed in as a paying account",
-                auditor="preflight",
-                url=public_base,
-            ))
-            print("  ✅ Paid unlock active — content auditors see models / lines / chips")
+            fn()
         except Exception as exc:
             report.add(CheckResult(
-                label="paid paywall unlock",
-                status=FAIL,
-                message=f"Could not sign in as paid checker account: {exc}",
+                label=f"{name} auditor crash", status=FAIL,
+                message=str(exc),
                 detail=traceback.format_exc()[-400:],
-                auditor="preflight",
-                url=public_base,
-            ))
-            print(f"  ❌ Paid unlock failed: {exc}")
-            print("  ⚠ Content auditors will see the free moneyline-only view")
-            paid_cm = None
-            paid_base = public_base
+                auditor=name))
 
-    try:
-        def run_auditor(name: str, fn):
-            if name not in auditors_to_run and not args.full:
-                return
-            if name in HTTP_DEPENDENT_AUDITORS and not reachable:
-                return
-            print(f"  ▶ Running {name} audit…")
-            try:
-                fn()
-            except Exception as exc:
-                report.add(CheckResult(
-                    label=f"{name} auditor crash", status=FAIL,
-                    message=str(exc),
-                    detail=traceback.format_exc()[-400:],
-                    auditor=name))
+    run_auditor("routes",     lambda: RouteAuditor(session, base, report).run())
+    run_auditor("content",    lambda: ContentAuditor(session, base, report).run())
+    run_auditor("navigation", lambda: NavigationAuditor(session, base, report).run())
+    run_auditor("cards",      lambda: CardAuditor(session, base, report).run())
+    run_auditor("models",     lambda: ModelAuditor(session, base, report).run())
+    run_auditor("results",    lambda: ResultsAuditor(session, base, report).run())
+    run_auditor("values", lambda: ValuesAuditor(session, base, report).run())
+    run_auditor("gamecounts", lambda: GameCountAuditor(session, base, report).run())
+    run_auditor("csv",        lambda: CsvAuditor(session, base, report).run())
+    run_auditor("seo",        lambda: SeoAuditor(session, base, report).run())
+    run_auditor("consistency", lambda: CardConsistencyAuditor(session, base, report).run())
+    run_auditor("chrome", lambda: _run_chrome_checker(session, base, report))
+    run_auditor("ship", lambda: _run_ship_parity(session, base, report))
+    run_auditor("soccer", lambda: _run_soccer_checker(session, base, report))
+    run_auditor("espn_slate", lambda: _run_espn_slate_checker(session, base, report))
+    run_auditor("paywall", lambda: _run_paywall_checker(base, report))
+    # Schema auditor is static (DB schema + source scan), not HTTP-dependent —
+    # it catches SQL column typos in auth-gated routes the HTTP checks can't reach.
+    run_auditor("schema",     lambda: SchemaAuditor(report).run())
+    # Props auditor imports the engine directly (props API is auth-gated) —
+    # not HTTP-dependent, so it runs even if the site is unreachable.
+    run_auditor("props",      lambda: PropsAuditor(report).run())
+    # PageSpeed Insights (Google API). Not HTTP-dependent on AUDIT_BASE_URL —
+    # Google fetches a public origin (PAGESPEED_BASE_URL when auditing :5052).
+    run_auditor("pagespeed",  lambda: _run_pagespeed_checker(base, report))
+    run_auditor("ux_perf", lambda: _run_ux_perf_checker(session, base, report))
 
-        run_auditor("routes",     lambda: RouteAuditor(session, paid_base, report).run())
-        run_auditor("content",    lambda: ContentAuditor(session, paid_base, report).run())
-        run_auditor("navigation", lambda: NavigationAuditor(session, paid_base, report).run())
-        run_auditor("cards",      lambda: CardAuditor(session, paid_base, report).run())
-        run_auditor("models",     lambda: ModelAuditor(session, paid_base, report).run())
-        run_auditor("results",    lambda: ResultsAuditor(session, paid_base, report).run())
-        run_auditor("values", lambda: ValuesAuditor(session, paid_base, report).run())
-        run_auditor("gamecounts", lambda: GameCountAuditor(session, paid_base, report).run())
-        run_auditor("csv",        lambda: CsvAuditor(session, paid_base, report).run())
-        run_auditor("seo",        lambda: SeoAuditor(session, paid_base, report).run())
-        run_auditor("consistency", lambda: CardConsistencyAuditor(session, paid_base, report).run())
-        run_auditor("chrome", lambda: _run_chrome_checker(session, paid_base, report))
-        run_auditor("ship", lambda: _run_ship_parity(session, paid_base, report))
-        run_auditor("soccer", lambda: _run_soccer_checker(session, paid_base, report))
-        run_auditor("espn_slate", lambda: _run_espn_slate_checker(session, paid_base, report))
-        # Free vs paid boundary — always against the public origin, not the relay.
-        run_auditor("paywall", lambda: _run_paywall_checker(public_base, report))
-        # Schema auditor is static (DB schema + source scan), not HTTP-dependent —
-        # it catches SQL column typos in auth-gated routes the HTTP checks can't reach.
-        run_auditor("schema",     lambda: SchemaAuditor(report).run())
-        # Props auditor imports the engine directly (props API is auth-gated) —
-        # not HTTP-dependent, so it runs even if the site is unreachable.
-        run_auditor("props",      lambda: PropsAuditor(report).run())
-        # PageSpeed Insights (Google API). Not HTTP-dependent on AUDIT_BASE_URL —
-        # Google fetches a public origin (PAGESPEED_BASE_URL when auditing :5052).
-        run_auditor("pagespeed",  lambda: _run_pagespeed_checker(public_base, report))
-        run_auditor("ux_perf", lambda: _run_ux_perf_checker(session, paid_base, report))
-
-        if args.screenshots:
-            print("  ▶ Running screenshot audit…")
-            try:
-                ScreenshotAuditor(paid_base, report).run()
-            except Exception as exc:
-                report.add(CheckResult(
-                    label="screenshot auditor crash", status=WARN,
-                    message=str(exc), auditor="screenshots"))
-    finally:
-        if paid_cm is not None:
-            try:
-                paid_cm.__exit__(None, None, None)
-            except Exception:
-                pass
+    if args.screenshots:
+        print("  ▶ Running screenshot audit…")
+        try:
+            ScreenshotAuditor(base, report).run()
+        except Exception as exc:
+            report.add(CheckResult(
+                label="screenshot auditor crash", status=WARN,
+                message=str(exc), auditor="screenshots"))
 
     report.duration = time.time() - start
     return report

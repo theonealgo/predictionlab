@@ -3,7 +3,7 @@
 Consensus Based Betting Records must be dissent combinations
 (N/N unanimous, all but …) with color bars — not per-model 0-0 stubs.
 
-PL vs Market must be the Market favorite / PL favorite table with bars —
+PL vs Sportsbook must be the Books favorite / PL favorite table with bars —
 not the stub title Books · Prediction Lab · XSharp.
 """
 from __future__ import annotations
@@ -13,14 +13,14 @@ import re
 from datetime import date, datetime, timedelta
 
 ML_CHART = "Consensus Based Betting Records"
-PL_VS_BOOKS = "PL vs Market"
+PL_VS_BOOKS = "PL vs Sportsbook"
 OU_CHART_DOT = "Prediction Lab · XSharp — Totals"
 OU_CHART_AMP = "Prediction Lab & XSharp — Totals"
 PL_VS_ROWS = (
-    "Market favorite",
+    "Books favorite",
     "PL favorite",
-    "PL vs Market disagree",
-    "PL and Market agree",
+    "PL vs Books disagree",
+    "PL and Books agree",
 )
 # Match sports: moneyline only — no spread / totals books or chart markets.
 _ML_ONLY_LINE_SPORTS = frozenset({"tennis", "ufc", "golf"})
@@ -109,13 +109,13 @@ def missing_signed_off_charts(
         missing.append("Consensus color bars")
     if require_pl_vs_books:
         if PL_VS_BOOKS not in html:
-            missing.append("PL vs Market")
+            missing.append("PL vs Sportsbook")
         else:
             for row in PL_VS_ROWS:
                 if row not in html:
-                    missing.append(f"PL vs Market row: {row}")
+                    missing.append(f"PL vs Sportsbook row: {row}")
             if "cons-bar" not in html:
-                missing.append("PL vs Market color bars")
+                missing.append("PL vs Sportsbook color bars")
     if require_market_tabs and not has_market_tabs(html):
         missing.append("Moneyline | Spread | Totals market tabs")
     if require_totals and not has_totals_chart(html):
@@ -245,7 +245,7 @@ def picks_placeholder_issues(html: str) -> list[str]:
         r"<link[^>]*canonical[^>]*ncaa[bw]-picks|<link[^>]*ncaa[bw]-picks[^>]*canonical",
         html,
     )
-    stuck_models = ("XSharp", "Market Consensus") if college else ("Edge", "XSharp", "Market Consensus")
+    stuck_models = ("XSharp", "Sharp Consensus") if college else ("Edge", "XSharp", "Sharp Consensus")
     for model in stuck_models:
         vals = by_model.get(model) or []
         if len(vals) < 8:
@@ -486,16 +486,8 @@ def six_model_chart_issues(html: str, sport: str = "") -> list[str]:
     return issues
 
 
-def react_shell(html: str) -> bool:
-    """The predictions page is the React app. Its cards are not in this HTML."""
-    text = html or ""
-    return 'id="root"' in text and "data-pick-card" not in text
-
-
 def team_picks_template_issues(html: str, sport: str = "") -> list[str]:
     """FAIL when a team-sport picks page leaves the shared pick-card template."""
-    if react_shell(html):
-        return []
     sport_u = (sport or "").strip().upper()
     if sport_u not in _TEAM_SPORTS_SHARED_UI:
         return []
@@ -599,10 +591,10 @@ _SIX_MODEL_TALLY = (
     "Takedown",
     "Edge",
     "XSharp",
-    "Market Consensus",
+    "Sharp Consensus",
     "Efficiency",
 )
-_FOUR_MODEL_TALLY = ("Edge", "XSharp", "Market Consensus", "Efficiency")
+_FOUR_MODEL_TALLY = ("Edge", "XSharp", "Sharp Consensus", "Efficiency")
 _CHART_LEFTOVER = (
     "ncaafTopDates",
     "ncaaf-top-dates",
@@ -735,7 +727,7 @@ def results_card_parameter_issues(html: str, sport: str = "") -> list[str]:
     if missing_model:
         issues.append(
             f"{label}: {missing_model}/{len(cards)} results cards are missing a "
-            "model box (Grinder2 / Takedown / Edge / XSharp / Market Consensus / "
+            "model box (Grinder2 / Takedown / Edge / XSharp / Sharp Consensus / "
             "Efficiency)"
         )
     if blank_eff:
@@ -829,11 +821,11 @@ _ML_TALLY_MODELS = (
     "Takedown",
     "Edge",
     "XSharp",
-    "Market Consensus",
+    "Sharp Consensus",
     "Efficiency",
 )
 _ML_TALLY_REQUIRED = ("Grinder2", "Takedown", "Efficiency")
-_ML_TALLY_SIBLINGS = ("Edge", "XSharp", "Market Consensus")
+_ML_TALLY_SIBLINGS = ("Edge", "XSharp", "Sharp Consensus")
 _DASH_REC = frozenset({"", "—", "–", "-", "n/a", "na", "&mdash;", "&ndash;"})
 
 
@@ -903,7 +895,7 @@ def _tally_sections(text: str) -> list[tuple[str, str]]:
                 continue
         if re.search(r"Moneyline Accuracy by Model", label, flags=re.I):
             stop = re.search(
-                r"Consensus Based Betting Records|PL vs Market|"
+                r"Consensus Based Betting Records|PL vs Sportsbook|"
                 r"Moneyline Spread Totals|📅|date-nav",
                 chunk[40:],
                 flags=re.I,
@@ -931,7 +923,7 @@ def blank_moneyline_model_issues(html: str) -> list[str]:
     """FAIL when G2 / Takedown / Efficiency are — on a slate that graded other ML models.
 
     Catches the Aug 29 NFL last-night / last-7 / season accuracy board where
-    Edge / XSharp / Market Consensus have W-L but Grinder2, Takedown, and
+    Edge / XSharp / Sharp Consensus have W-L but Grinder2, Takedown, and
     Efficiency are dashes.
     """
     text = _plain_results_text(html)
@@ -1043,7 +1035,7 @@ def consensus_empty_vs_tally_issues(html: str) -> list[str]:
 
 
 def pl_vs_books_empty_vs_tally_issues(html: str) -> list[str]:
-    """FAIL when PL vs Market last night is 0-0 but the daily tally graded games."""
+    """FAIL when PL vs Sportsbook last night is 0-0 but the daily tally graded games."""
     text = _plain_results_text(html)
     if PL_VS_BOOKS not in text:
         return []
@@ -1054,18 +1046,18 @@ def pl_vs_books_empty_vs_tally_issues(html: str) -> list[str]:
     block = text[start : start + 2500]
     recs = _first_col_records(
         block,
-        r"(?m)^(Market favorite|PL favorite|PL vs Market disagree|PL and Market agree)",
+        r"(?m)^(Books favorite|PL favorite|PL vs Books disagree|PL and Books agree)",
     )
     if len(recs) < 2:
         return []
     if all(_is_zero_rec(r) for r in recs):
         return [
-            f"PL vs Market last night is all 0-0 while Last Night tally has {games} games"
+            f"PL vs Sportsbook last night is all 0-0 while Last Night tally has {games} games"
         ]
-    # row order: Market favorite, PL favorite, disagree, agree
+    # row order: Books favorite, PL favorite, disagree, agree
     if len(recs) >= 2 and _is_zero_rec(recs[0]) and not _is_zero_rec(recs[1]):
         return [
-            "Market favorite last night is 0-0 while PL favorite has a graded record"
+            "Books favorite last night is 0-0 while PL favorite has a graded record"
         ]
     return []
 
@@ -1075,7 +1067,7 @@ _SIX_CONSENSUS_MODELS = (
     "Takedown",
     "Edge",
     "XSharp",
-    "Market Consensus",
+    "Sharp Consensus",
     "Efficiency",
 )
 
@@ -1267,7 +1259,7 @@ def pl_vs_books_partition_issues(html: str, sport: str = "") -> list[str]:
     block = text[start : start + 2500]
     recs = _first_col_records(
         block,
-        r"(?m)^(Market favorite|PL favorite|PL vs Market disagree|PL and Market agree)",
+        r"(?m)^(Books favorite|PL favorite|PL vs Books disagree|PL and Books agree)",
     )
     if len(recs) < 4:
         return []
@@ -1290,7 +1282,7 @@ def pl_vs_books_partition_issues(html: str, sport: str = "") -> list[str]:
         )
     if games >= 3 and books[2] and books[2] != games:
         issues.append(
-            f"{label} Market favorite last night is {books[0]}-{books[1]} "
+            f"{label} Books favorite last night is {books[0]}-{books[1]} "
             f"({books[2]} games); Last Night has {games}"
         )
     return issues
@@ -1522,7 +1514,7 @@ def nfl_missing_efficiency_issues(html: str) -> list[str]:
 _CARD_MODELS = (
     "Edge",
     "XSharp",
-    "Market Consensus",
+    "Sharp Consensus",
     "Efficiency",
     "Grinder2",
     "Takedown",
@@ -1644,10 +1636,10 @@ def card_missing_model_value_issues(html: str, sport: str = "") -> list[str]:
     blank_val = 0
     required = _CARD_MODELS
     if (sport or "").strip().lower() == "soccer":
-        required = ("Edge", "XSharp", "Market Consensus")
+        required = ("Edge", "XSharp", "Sharp Consensus")
     # Owner 2026-10-08: WNBA has only these 4 models.
     if (sport or "").strip().lower() == "wnba":
-        required = ("Edge", "XSharp", "Market Consensus", "Efficiency")
+        required = ("Edge", "XSharp", "Sharp Consensus", "Efficiency")
     for card in cards:
         names = [
             re.sub(r"<[^>]+>", "", n).strip()
@@ -1860,7 +1852,7 @@ def nba_last_season_gap_issues(html: str) -> list[str]:
     if ML_CHART not in html:
         issues.append("NBA last-season results missing Consensus Based Betting Records")
     if PL_VS_BOOKS not in html:
-        issues.append("NBA last-season results missing PL vs Market")
+        issues.append("NBA last-season results missing PL vs Sportsbook")
     zeros = len(re.findall(r"\b0-0(?:-0)?\b", text))
     real = len(re.findall(r"\b[1-9]\d*-\d+\b", text))
     if zeros >= 8 and real < 4:
@@ -2091,7 +2083,7 @@ def wnba_consensus_hist_face_issues(html: str) -> list[str]:
         home = html_lib.unescape(hm.group(1) if hm else "")
         away = html_lib.unescape(am.group(1) if am else "")
         sides: dict[str, str] = {}
-        for name in ("Edge", "XSharp", "Market Consensus", "Efficiency"):
+        for name in ("Edge", "XSharp", "Sharp Consensus", "Efficiency"):
             m = re.search(
                 rf'<div class="pc-name">\s*{re.escape(name)}\s*</div>\s*'
                 r'<div class="pc-val"[^>]*>\s*([^<]*)</div>\s*'
@@ -2138,7 +2130,7 @@ def wnba_consensus_hist_face_issues(html: str) -> list[str]:
             elif top_n == 3:
                 dissent = [
                     n
-                    for n in ("Edge", "XSharp", "Market Consensus", "Efficiency")
+                    for n in ("Edge", "XSharp", "Sharp Consensus", "Efficiency")
                     if sides.get(n) != counts.most_common(1)[0][0]
                 ]
                 need = "All but " + " and ".join(dissent)
@@ -2158,7 +2150,7 @@ def wnba_consensus_hist_face_issues(html: str) -> list[str]:
     if missing_hist:
         issues.append(
             f"WNBA: {missing_hist}/{len(cards)} cards missing Consensus Historical "
-            "Record on the face (not live Market Consensus %)"
+            "Record on the face (not live Sharp Consensus %)"
         )
     if face_h2h:
         issues.append(
@@ -2173,8 +2165,8 @@ def wnba_consensus_hist_face_issues(html: str) -> list[str]:
     return issues
 
 
-_CHIP_PANEL_MODELS = ("Grinder2", "Takedown", "Edge", "XSharp", "Market Consensus", "Efficiency")
-_CHIP_PANEL_4 = ("Edge", "XSharp", "Market Consensus", "Efficiency")
+_CHIP_PANEL_MODELS = ("Grinder2", "Takedown", "Edge", "XSharp", "Sharp Consensus", "Efficiency")
+_CHIP_PANEL_4 = ("Edge", "XSharp", "Sharp Consensus", "Efficiency")
 
 
 def _card_face_model_sides(card: str, models: tuple[str, ...]) -> dict[str, str]:
@@ -2318,8 +2310,6 @@ def ufc_consensus_hist_face_issues(html: str) -> list[str]:
 
 def golf_picks_board_issues(html: str) -> list[str]:
     """FAIL when golf picks board CSS/chrome is missing or still bare-link junk."""
-    if react_shell(html):
-        return []
     html = html or ""
     if not html:
         return ["Golf picks page did not load"]
@@ -2459,11 +2449,7 @@ def compact_consensus_hist_face_issues(html: str, sport: str = "") -> list[str]:
     """
     html = html or ""
     sport_u = (sport or "").strip().upper()
-    # NCAAB / NCAAW / NHL / NBA use the same compact face chip as NFL/MLB.
-    # WNBA and UFC have their own face checkers.
-    if sport_u and sport_u not in (
-        "MLB", "NFL", "NCAAF", "CFL", "NCAAB", "NCAAW", "NHL", "NBA",
-    ):
+    if sport_u and sport_u not in ("MLB", "NFL", "NCAAF", "CFL"):
         return []
     if "data-pick-card" not in html:
         return []
@@ -2513,9 +2499,7 @@ def compact_consensus_hist_face_issues(html: str, sport: str = "") -> list[str]:
             f"{label}: {face_h2h}/{len(cards)} cards still show H2H Last 10 on the face "
             "— use Consensus Historical Record instead"
         )
-    # NCAAB / NCAAW / NHL / NBA keep Season · pattern copy on the face; only
-    # MLB / NFL / NCAAF / CFL require the short `Consensus Record: 3/6 Split (0-0)`.
-    if verbose and sport_u in ("MLB", "NFL", "NCAAF", "CFL"):
+    if verbose:
         issues.append(
             f"{label}: {verbose}/{len(cards)} cards still use verbose Consensus face "
             "(Last 7 Days / no consensus / pct) — need compact "
@@ -2554,7 +2538,7 @@ def ncaaf_consensus_hist_face_issues(html: str) -> list[str]:
             val = (m.group(1) or "").strip().lower()
             if val in {"n/a", "na", "—", "–", "-", ""}:
                 others = 0
-                for other in ("Edge", "XSharp", "Market Consensus", "Efficiency"):
+                for other in ("Edge", "XSharp", "Sharp Consensus", "Efficiency"):
                     om = re.search(
                         rf'<div class="pc-name">\s*{other}\s*</div>\s*'
                         r'<div class="pc-val"[^>]*>\s*([^<]+)',
@@ -2572,7 +2556,7 @@ def ncaaf_consensus_hist_face_issues(html: str) -> list[str]:
     if missing_hist:
         issues.append(
             f"NCAAF: {missing_hist}/{len(cards)} cards missing Consensus Historical "
-            "Record on the face (not live Market Consensus %)"
+            "Record on the face (not live Sharp Consensus %)"
         )
     if face_h2h:
         issues.append(
@@ -2902,7 +2886,7 @@ def results_math_issues(
     if is_nfl:
         issues.extend(nfl_missing_efficiency_issues(html))
         issues.extend(nfl_stale_season_perf_issues(html))
-    if "Consensus Based Betting Records" not in html and "PL vs Market" not in html:
+    if "Consensus Based Betting Records" not in html and "PL vs Sportsbook" not in html:
         return issues
     try:
         from team_results_charts import four_model_chart_mismatches
@@ -3010,8 +2994,6 @@ def predictions_share_image_issues(
 
 def share_ad_card_issues(html: str, min_picks: int = 2) -> list[str]:
     """FAIL when the bottom advertising / share card is missing or has <2 picks."""
-    if react_shell(html):
-        return []
     html = html or ""
     if "social-export-wrap" not in html:
         return ["Picks page missing bottom share / advertising card"]
@@ -3042,8 +3024,8 @@ def team_chart_sou_table_issues(html: str, market: str, sport: str = "") -> list
         "Moneyline games" in html and "Edge pick" in html and ssr_m != market
     ):
         issues.append(f"{market} chart still showing the moneyline Edge pick table")
-    if not re.search(r">\s*(?:Books?|Market)\s*<", html, flags=re.I):
-        issues.append(f"{market} chart missing Market line column")
+    if not re.search(r">\s*Books?\s*<", html, flags=re.I):
+        issues.append(f"{market} chart missing Books line column")
     if not re.search(r"Actual vs lines|Act \d", html, flags=re.I):
         issues.append(
             f"{market} chart does not compare actual score to books / PL lines"
@@ -3189,7 +3171,7 @@ _ASR_ML_MODELS = (
     "Takedown",
     "Edge",
     "XSharp",
-    "Market Consensus",
+    "Sharp Consensus",
     "Efficiency",
 )
 _ASR_ML_ONLY = frozenset({"TENNIS", "UFC", "GOLF"})
@@ -3347,7 +3329,7 @@ def all_sports_results_issues(
     html = asr_html or ""
     sport_u = (sport or "").strip().upper()
     issues: list[str] = []
-    if "All Sports Prediction Results" not in html and "All Sports Results" not in html:
+    if "All Sports Prediction Results" not in html:
         return ["All Sports Prediction Results page is missing its title"]
     if "Moneyline" not in html:
         issues.append("All Sports Results missing the Moneyline table")
@@ -3427,14 +3409,12 @@ _PERF_CORE_MODELS = (
     "Takedown",
     "Edge",
     "XSharp",
-    "Market Consensus",
+    "Sharp Consensus",
 )
 
 
 def picks_recent_results_issues(html: str) -> list[str]:
     """FAIL when picks is missing Last Night / Last 7 / Last 30 above the explainer."""
-    if react_shell(html):
-        return []
     html = html or ""
     if "How These AI Picks Are Generated" not in html and "seo-picks-footer" not in html:
         if "data-pick-card" not in html and "pick-card" not in html:
@@ -3485,8 +3465,6 @@ def performance_page_issues(html: str, sport: str = "") -> list[str]:
         return ["Model Performance redirected to plans / paywall"]
     if "Model Performance" not in html:
         return ["Model Performance page is missing its title"]
-    if react_shell(html):
-        return []
     missing = [s for s in _PERF_ALL_SPORTS if not re.search(rf'value="{s}"', html)]
     if missing:
         issues.append("Model Performance sport list missing " + ", ".join(missing))
@@ -3526,7 +3504,7 @@ def performance_page_issues(html: str, sport: str = "") -> list[str]:
     if checked and empty_core == checked:
         issues.append(
             "Team Model Performance only fills XSharp/Efficiency — "
-            "Grinder2, Takedown, Edge, and Market Consensus are 0"
+            "Grinder2, Takedown, Edge, and Sharp Consensus are 0"
         )
     elif checked and empty_core > max(2, checked // 3):
         issues.append(
@@ -3567,7 +3545,7 @@ def pagespeed_insight_issues(html: str) -> list[str]:
     if "<html" not in html.lower():
         return ["PageSpeed: response is not an HTML document"]
     issues: list[str] = []
-    if not react_shell(html) and not re.search(r"<main\b", html, flags=re.I):
+    if not re.search(r"<main\b", html, flags=re.I):
         issues.append("accessibility: document has no <main> landmark")
     if re.search(r"\brole=[\"']tab[\"']", html, flags=re.I) and not _pagespeed_tabs_ok(html):
         issues.append(
@@ -3615,7 +3593,7 @@ def pagespeed_insight_issues(html: str) -> list[str]:
         issues.append("SEO: missing meta description")
     if not re.search(r"<html\b[^>]*\blang=", html, flags=re.I):
         issues.append("SEO: html element is missing lang")
-    if not react_shell(html) and "application/ld+json" not in html:
+    if "application/ld+json" not in html:
         issues.append("SEO: structured data missing")
     if not re.search(r"<link\b[^>]*rel=[\"']canonical[\"']", html, flags=re.I):
         issues.append("SEO: canonical link missing")

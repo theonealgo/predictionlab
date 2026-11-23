@@ -333,19 +333,6 @@ def build_one(site, league, day):
                 _aware(game["start_time"]) > datetime.now(timezone.utc)]
     if upcoming:
         payload = engine._build_league_payload(league, schedule_override=upcoming, allow_live_lines=True)
-        # Prop rows often carry event_id but a blank event_start (next_game /
-        # ESPN date missing). Fill from the same upcoming schedule so the
-        # post-tip filter does not wipe a full slate.
-        starts = {
-            str(game.get("event_id") or ""): game.get("start_time")
-            for game in upcoming
-            if game.get("event_id") and game.get("start_time")
-        }
-        for row in payload.get("props") or []:
-            if not row.get("event_start"):
-                tip = starts.get(str(row.get("event_id") or ""))
-                if tip:
-                    row["event_start"] = tip
         published_at = datetime.now(timezone.utc)
         payload["props"] = [row for row in payload.get("props") or []
                             if _aware(row.get("event_start")) and _aware(row["event_start"]) > published_at]
@@ -356,9 +343,7 @@ def build_one(site, league, day):
     elif schedule:
         payload = {"schema_version": VERSION, "schedule": schedule, "players": [], "props": [],
                    "availability": "slate_started",
-                   "availability_reason": "The games for this date have started. View their saved selections and outcomes in Results.",
-                   # Hub UI jumps here so a started night is not a dead end.
-                   "next_date": (datetime.strptime(day, "%Y-%m-%d").date() + timedelta(days=1)).isoformat()}
+                   "availability_reason": "The games for this date have started. View their saved selections and outcomes in Results."}
     else:
         payload = {"schema_version": VERSION, "schedule": [], "players": [], "props": [],
                    "availability": "no_fixtures", "availability_reason": "No fixtures are scheduled for this date."}

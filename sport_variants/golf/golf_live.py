@@ -140,85 +140,8 @@ def golf_api_picks() -> list[dict[str, Any]]:
     ]
 
 
-def _free_visible_event_card(html: str, meta: dict | None) -> str:
-    """One game-card so the free visitor page keeps the ESPN event name.
-
-    Golf boards use a field table, not team-sport cards. The free delivery
-    path only keeps game-card / pick-card blocks — without one, /golf-picks
-    becomes an empty Win Predictions stub and the slate checker fails.
-    """
-    if not html:
-        return html
-    event = ""
-    if isinstance(meta, dict):
-        event = str(meta.get("event") or meta.get("name") or "").strip()
-    if not event:
-        m = re.search(
-            r"<title>\s*([^|<]+?)\s+Golf Picks\s*\|",
-            html,
-            flags=re.I,
-        )
-        event = (m.group(1).strip() if m else "") or "PGA Tour"
-    from html import escape as _esc
-
-    event_e = _esc(event)
-    # Refresh a stale free card so live ESPN names (e.g. The RSM Classic) stay.
-    if "game-card-stack" in html or "data-pick-card" in html:
-        if event and event.lower() not in html.lower():
-            html = re.sub(
-                r'(class="league-badge">)([^<]*)',
-                rf"\g<1>{event_e}",
-                html,
-                count=1,
-                flags=re.I,
-            )
-            html = re.sub(
-                r'(data-league=")([^"]*)(")',
-                rf"\g<1>{event_e}\g<3>",
-                html,
-                count=1,
-                flags=re.I,
-            )
-            if event.lower() not in html.lower():
-                html = re.sub(
-                    r"(<body\b[^>]*>)",
-                    rf'\1<span class="golf-event-name">{event_e}</span>',
-                    html,
-                    count=1,
-                    flags=re.I,
-                )
-        return html
-    players = re.findall(
-        r'class="golf-player"[^>]*>\s*([^<]+)',
-        html,
-        flags=re.I,
-    )
-
-    away = _esc(players[0].strip() if players else "Field")
-    home = _esc(players[1].strip() if len(players) > 1 else "Field")
-    card = (
-        f'<div class="game-card-stack game-card pick-card" data-pick-card '
-        f'data-league="{event_e}" data-away="{away}" data-home="{home}" '
-        f'data-pick="{away}" data-conf="50">'
-        f'<header class="pick-card-header">'
-        f'<span class="league-badge">{event_e}</span>'
-        f'<span class="game-time">PGA</span></header>'
-        f'<div class="matchup-row">'
-        f'<div class="team-slot"><div class="team-name">{away}</div>'
-        f'<div class="win-pct">50<span class="unit">%</span></div></div>'
-        f'<div class="matchup-at">/</div>'
-        f'<div class="team-slot"><div class="team-name">{home}</div>'
-        f'<div class="win-pct">50<span class="unit">%</span></div></div>'
-        f"</div></div>"
-    )
-    if re.search(r"<body\b[^>]*>", html, flags=re.I):
-        return re.sub(r"(<body\b[^>]*>)", r"\1" + card, html, count=1, flags=re.I)
-    return card + html
-
-
 def render_golf_picks(event_id: str | None = None) -> str:
-    page, meta = _iso_golf_page().render_golf_board_html(event_id)
-    page = _free_visible_event_card(page, meta if isinstance(meta, dict) else None)
+    page, _meta = _iso_golf_page().render_golf_board_html(event_id)
     return _strip_vendor_labels(_inject_chrome_into_page(page))
 
 

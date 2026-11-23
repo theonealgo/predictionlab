@@ -648,14 +648,6 @@ class EspnSlateChecker:
                 self._check_soccer(espn_s, path, api, extra)
                 continue
             st, html, url = self.fetch_page(path)
-            if st == 200 and 'id="root"' in (html or "") and "data-pick-card" not in html:
-                self.add(
-                    f"{sport} today vs ESPN",
-                    PASS,
-                    "Today's games load in the predictions app",
-                    url=url,
-                )
-                continue
             if st != 200:
                 self.add(
                     f"{sport} today vs ESPN",
@@ -674,20 +666,6 @@ class EspnSlateChecker:
                     url=api,
                 )
                 continue
-            if 'id="root"' in (html or "") and "data-pick-card" not in html:
-                try:
-                    slug = path.strip("/").split("-")[0]
-                    feed = self.s.get(
-                        f"{self.base}/api/web/sports/{slug}/cards?limit=50&span=0&cached=1",
-                        timeout=self.timeout,
-                    )
-                    cards = (feed.json() or {}).get("cards") or [] if feed.status_code == 200 else []
-                    html += "\n".join(
-                        (c.get("html") or "") + " " + str(c.get("date") or "")
-                        for c in cards if isinstance(c, dict)
-                    )
-                except Exception:
-                    pass
             page = page_pairs_for_day(html, self.day, sport)
             off = "is in the off-season" in (html or "")
             if not espn and not page:

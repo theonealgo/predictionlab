@@ -127,16 +127,7 @@ def latest_results_date(original_db, league=None, before=None):
             + (" AND league=?" if league else ""),
             params,
         ).fetchone()[0]
-        if day:
-            return day
-        # Sport whose only recorded slate tips tomorrow (pick_date > today):
-        # still surface that night so Results is not a blank yesterday.
-        upcoming_params = [league] if league else []
-        return conn.execute(
-            "SELECT MAX(pick_date) FROM forecasts"
-            + (" WHERE league=?" if league else ""),
-            upcoming_params,
-        ).fetchone()[0]
+        return day
 
 
 def read(original_db, day, league=None, end_day=None):

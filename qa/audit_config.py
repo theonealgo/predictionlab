@@ -79,7 +79,7 @@ EXPECTED_DASHBOARD_SPORTS = [
 ]
 
 # ── Model labels ──────────────────────────────────────────────────────────
-MODEL_DISPLAY_NAMES = ["Grinder2", "Takedown", "Edge", "XSharp", "Consensus", "Market Consensus"]
+MODEL_DISPLAY_NAMES = ["Grinder2", "Takedown", "Edge", "XSharp", "Consensus", "Sharp Consensus"]
 MODEL_KEYS          = ["glicko2", "trueskill", "xgb_prob", "xsharp_prob", "consensus_prob"]
 
 # ── Card field CSS classes expected in pick cards ─────────────────────────

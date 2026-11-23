@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from prop_models import observations
 
-VERSION = "prop-market-top100-last10-v2"
+VERSION = "prop-market-top100-last10-v1"
 LIMIT = 100
 SAMPLE = 10
 
