@@ -1,10 +1,33 @@
 #!/usr/bin/env bash
 set -e
 
-# ── Copy database to persistent disk on first deploy ──────────────────────────
-if [ ! -f /data/sports_predictions_original.db ]; then
+# ── Copy / repair database on persistent disk ────────────────────────────────
+# A crash mid-write can leave /data/...db present but not SQLite ("file is not a
+# database"). That crash-loops every deploy and blocks Render Shell. Detect the
+# header; quarantine the bad file; re-seed from the image copy so gunicorn can
+# bind. Quarantined copy kept for manual restore of users/predictions later.
+_DB=/data/sports_predictions_original.db
+_SEED="${RENDER_DB_SEED:-sports_predictions_original.db}"
+_db_header_ok() {
+    python3 - "$1" <<'PY'
+import sys
+from pathlib import Path
+p = Path(sys.argv[1])
+sys.exit(0 if p.is_file() and p.read_bytes()[:16] == b"SQLite format 3\x00" else 1)
+PY
+}
+
+if [ ! -f "$_DB" ]; then
     echo "[render_start] Initializing database on persistent disk..."
-    cp sports_predictions_original.db /data/sports_predictions_original.db
+    cp "$_SEED" "$_DB"
+elif ! _db_header_ok "$_DB"; then
+    _quarantine="/data/sports_predictions_original.db.corrupt.$(date +%s)"
+    echo "[render_start] ERROR: $_DB is not a SQLite database — quarantining to $_quarantine"
+    mv "$_DB" "$_quarantine"
+    # Drop orphan WAL/SHM that can keep a bad connection state.
+    rm -f /data/sports_predictions_original.db-wal /data/sports_predictions_original.db-shm
+    cp "$_SEED" "$_DB"
+    echo "[render_start] Re-seeded $_DB from $_SEED (login/subscription rows may need restore from quarantine)."
 else
     echo "[render_start] Database already on persistent disk."
 fi
@@ -16,6 +39,45 @@ mkdir -p /data/.cache
 date +%s > /data/.cache/gunicorn_boot_at
 _saved=$(ls /data/.cache/served_*.html 2>/dev/null | wc -l | tr -d ' ')
 echo "[render_start] served-page cache /data/.cache (${_saved} saved page(s))"
+
+# Warm NCAAW / UFC React card feeds on boot. A cold /data volume + PL_WEB_WARM=0
+# left those pages on "Loading games…" (202) until a multi-minute SSR finished;
+# a past-only UFC feed also filtered to zero cards under span=0/2.
+python3 - <<'PY'
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+import gzip
+import json
+
+seed = Path("/opt/render/project/src/data/web_cards_seed")
+dest = Path("/data/.cache/web_cards")
+if not seed.is_dir():
+    raise SystemExit(0)
+dest.mkdir(parents=True, exist_ok=True)
+today = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+
+def has_upcoming(path: Path) -> bool:
+    try:
+        raw = json.loads(gzip.decompress(path.read_bytes()))
+    except Exception:
+        return False
+    for card in raw.get("cards") or []:
+        day = str((card or {}).get("date") or "")[:10]
+        if day >= today and (card or {}).get("isFinal") is not True:
+            return True
+    return False
+
+wrote = 0
+for src in sorted(seed.glob("*.v2.json.gz")):
+    out = dest / src.name
+    if out.is_file() and has_upcoming(out):
+        continue
+    out.write_bytes(src.read_bytes())
+    wrote += 1
+    print(f"[render_start] seeded web_cards {src.name}", flush=True)
+print(f"[render_start] web_cards seed done (wrote {wrote})", flush=True)
+PY
 
 # Drop wipe-poisoned NHL/NBA results HTML (0-game Last Night + stale Last 7)
 # and the NHL last-good file that was re-saving that poison. Autorefresh reseeds.
