@@ -14,20 +14,23 @@ services:
     # Match Render budget (2 GB / 1 CPU). Docker Desktop VM RAM is separate.
     mem_limit: 2g
     cpus: 1.0
+    # Same launch path as Render (seeds /data DB, memory env, gunicorn).
+    command: ["bash", "render_start.sh"]
     environment:
       PORT: "10000"
       RENDER: "1"
       PL_EAGER_WARM: "0"
       PL_WEB_WARM: "0"
       # Short grace locally so cards start; master stamp stops recycle re-arm.
-      PL_BOOT_GRACE_S: "${PL_BOOT_GRACE_S:-30}"
+      PL_BOOT_GRACE_S: "${PL_BOOT_GRACE_S:-45}"
       PL_BUILD_SLOTS: "1"
-      GUNICORN_THREADS: "${GUNICORN_THREADS:-2}"
-      GUNICORN_MAX_REQUESTS: "${GUNICORN_MAX_REQUESTS:-5000}"
-      GUNICORN_MAX_REQUESTS_JITTER: "${GUNICORN_MAX_REQUESTS_JITTER:-100}"
-      # Props rebuild stays off in this smoke test. It pegged the only web thread.
-      PL_PROP_PUBLICATION: "0"
-      PL_PROPS_LEAGUES: "NBA"
+      # Match render_start.sh default (4 gthreads on 1 CPU / 2 GB).
+      GUNICORN_THREADS: "${GUNICORN_THREADS:-4}"
+      GUNICORN_MAX_REQUESTS: "${GUNICORN_MAX_REQUESTS:-400}"
+      GUNICORN_MAX_REQUESTS_JITTER: "${GUNICORN_MAX_REQUESTS_JITTER:-50}"
+      # Match live: props publication on. Local smoke seeds /data/.cache/props from host.
+      PL_PROP_PUBLICATION: "1"
+      PL_PROPS_START_DELAY: "0"
       PL_PROP_SETTLEMENT: "1"
       PL_PROPS_PRELOAD: "0"
       PL_SHARE_IMAGES: "0"
@@ -35,16 +38,17 @@ services:
       PRICE_SNAPSHOTS: "0"
       # Keep ladder picks publishing; pass still runs every 20 min.
       LADDER_SCHEDULER: "1"
-      # Optional: point at real secrets if you need login/paywall locally
-      # DATABASE: /data/sports_predictions_original.db
+      DATABASE: /data/sports_predictions_original.db
     volumes:
       - pl_render_data:/data
+      # .dockerignore excludes *.db from the image — seed like first Render deploy.
+      - ./sports_predictions_original.db:/opt/render/project/src/sports_predictions_original.db:ro
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:10000/healthz"]
       interval: 15s
       timeout: 5s
-      retries: 10
-      start_period: 120s
+      retries: 12
+      start_period: 180s
 
 volumes:
   pl_render_data:

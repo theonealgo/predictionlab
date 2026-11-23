@@ -1,6 +1,6 @@
 # PredictionLab
 
-> Quantitative sports forecasting model platform and statistical probability engine. Operated by GoodsandMore Inc. (Canada).
+> PredictionLab | Machine Learning Sports Forecasting. Operated by GoodsandMore Inc. (Canada).
 
 PredictionLab provides sports analytics, statistical forecasts, and transparent historical results. Model estimates are informational research outputs, not guaranteed outcomes.
 
@@ -16,7 +16,7 @@ PredictionLab provides sports analytics, statistical forecasts, and transparent 
 
 ## Public forecasts
 
-- [Home](https://predictionlab.io/): Quantitative sports forecasting model overview
+- [Home](https://predictionlab.io/): Machine learning sports forecasting across NBA, NFL, NHL, MLB and more
 - [NHL](https://predictionlab.io/nhl-predictions): Hockey forecasts
 - [NBA](https://predictionlab.io/nba-predictions): Basketball forecasts
 - [NFL](https://predictionlab.io/nfl-predictions): Football forecasts

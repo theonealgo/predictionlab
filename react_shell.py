@@ -53,9 +53,9 @@ _OTHER_PAGES = {
                       'Explore player props by sport and review recorded results by model and prop type.'),
     '/all-sports-predictions': ('All Sports Predictions Today | Prediction Lab',
                                 "Every sport's AI predictions on one page, with each prediction type's recent record."),
-    '/': ('Quantitative sports forecasting model | PredictionLab',
-          'Statistical probability engine for Straight-Up (SU) forecasts, historical accuracy, '
-          'and quantitative sports research across multiple sports.'),
+    '/': ('PredictionLab | Machine Learning Sports Forecasting',
+          'Explore machine learning sports forecasting powered by predictive models, '
+          'statistical analysis and data-driven insights across NBA, NFL, NHL, MLB and more.'),
     '/player-props': ('Players | Prediction Lab',
                       'AI player forecasts with each model graded in public.'),
     '/all-sports-picks': ('All Sports Predictions Today | Prediction Lab',
@@ -288,9 +288,23 @@ class ReactShell:
                 .replace('\u2028', '\\u2028')
                 .replace('\u2029', '\\u2029'))
 
+    @staticmethod
+    def _soccer_league_wants_classic(environ):
+        """League-filtered soccer picks stay on classic HTML (SSR cards + SEO).
+
+        React has no card SSR; ?league=english-premier-league must keep EPL
+        cards in the response for the checker and for indexable league pages.
+        """
+        path = (environ.get('PATH_INFO') or '').rstrip('/') or '/'
+        if not re.match(r'^/soccer-(picks|projections|predictions)$', path):
+            return False
+        qs = environ.get('QUERY_STRING') or ''
+        return bool(re.search(r'(?:^|&)league=', qs))
+
     def __call__(self, environ, start_response):
         path = environ.get('PATH_INFO', '')
-        meta = _page_meta(path) if self._wants_react(environ) else None
+        wants = self._wants_react(environ) and not self._soccer_league_wants_classic(environ)
+        meta = _page_meta(path) if wants else None
         shell = self._shell_html() if meta else None
         if not shell:
             return self.wsgi_app(environ, start_response)

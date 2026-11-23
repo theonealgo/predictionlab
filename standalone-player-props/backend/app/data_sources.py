@@ -154,8 +154,96 @@ def _norm_name(v: str) -> str:
 
 _NBA_CONSENSUS_RANK = {_norm_name(name): i + 1 for i, name in enumerate(_NBA_CONSENSUS_TOP100)}
 
+# Confirmed unavailable for today's props. Questionable / GTD / Day-To-Day / Probable stay eligible.
+_PROPS_UNAVAILABLE_STATUSES = frozenset({
+    "out", "doubtful", "injured reserve", "ir", "inactive", "suspended",
+})
+_PROPS_INJURY_CACHE: Dict[str, Dict] = {}
+_PROPS_INJURY_TTL = 15 * 60
+
 _PLAYER_METRICS_CACHE: Dict[str, Dict] = {}
 _PLAYER_METRICS_TTL = 6 * 3600
+
+
+def _status_token(value) -> str:
+    if isinstance(value, dict):
+        raw = value.get("description") or value.get("type") or value.get("name") or value.get("abbreviation") or ""
+    else:
+        raw = value or ""
+    return str(raw).strip().lower().replace("_", " ").replace("-", " ")
+
+
+def props_status_unavailable(status) -> bool:
+    """True when a player status means they should not appear in today's props."""
+    token = _status_token(status)
+    if not token:
+        return False
+    if token in _PROPS_UNAVAILABLE_STATUSES:
+        return True
+    # ESPN sometimes returns "injured reserve" split across words already normalized.
+    if "injured reserve" in token or token == "o":
+        return True
+    return False
+
+
+def _athlete_props_unavailable(athlete: Dict) -> bool:
+    """Use roster/athlete injury records (ESPN injuries feed often omits athlete ids)."""
+    if not isinstance(athlete, dict):
+        return False
+    roster_status = athlete.get("status")
+    if isinstance(roster_status, dict) and props_status_unavailable(roster_status.get("type") or roster_status.get("name")):
+        # "Active" athletes can still be Out on the injury report; only treat
+        # explicit inactive/suspended roster flags as unavailable here.
+        token = _status_token(roster_status.get("type") or roster_status.get("name"))
+        if token in {"inactive", "suspended"}:
+            return True
+    for injury in athlete.get("injuries") or []:
+        if not isinstance(injury, dict):
+            if props_status_unavailable(injury):
+                return True
+            continue
+        if props_status_unavailable(injury.get("status")):
+            return True
+        if props_status_unavailable(injury.get("type")):
+            return True
+        details = injury.get("details") if isinstance(injury.get("details"), dict) else {}
+        fantasy = details.get("fantasyStatus") if isinstance(details.get("fantasyStatus"), dict) else {}
+        if props_status_unavailable(fantasy.get("description") or fantasy.get("abbreviation")):
+            return True
+    return False
+
+
+def fetch_unavailable_prop_names(league: str) -> set:
+    """Normalized player names confirmed unavailable via ESPN's league injury feed."""
+    lg = (league or "").strip().upper()
+    now = time.time()
+    cached = _PROPS_INJURY_CACHE.get(lg)
+    if cached and (now - cached.get("ts", 0)) < _PROPS_INJURY_TTL:
+        return set(cached.get("names") or set())
+    cfg = LEAGUE_CONFIG.get(lg) or {}
+    sport = cfg.get("espn_sport") or ""
+    espn_league = cfg.get("espn_league") or ""
+    names: set = set()
+    if not (sport and espn_league):
+        _PROPS_INJURY_CACHE[lg] = {"ts": now, "names": names}
+        return names
+    url = f"{_espn_site_host(lg)}/apis/site/v2/sports/{sport}/{espn_league}/injuries"
+    try:
+        payload = requests.get(url, timeout=12).json() or {}
+        for team_group in payload.get("injuries") or []:
+            for item in team_group.get("injuries") or []:
+                if not isinstance(item, dict):
+                    continue
+                if not props_status_unavailable(item.get("status")) and not props_status_unavailable(item.get("type")):
+                    continue
+                athlete = item.get("athlete") if isinstance(item.get("athlete"), dict) else {}
+                name = (athlete.get("displayName") or athlete.get("fullName") or "").strip()
+                if name:
+                    names.add(_norm_name(name))
+    except Exception:
+        names = set((cached or {}).get("names") or set())
+    _PROPS_INJURY_CACHE[lg] = {"ts": now, "names": names}
+    return set(names)
 
 # ── The Odds API (real sportsbook player props) ───────────────────────────
 # League -> The Odds API sport key.
@@ -262,9 +350,19 @@ def _num(value: str) -> float:
         return 0.0
 
 
+def _espn_site_host(league: str = "") -> str:
+    """NBA-only: Akamai blocks site.api; site.web.api serves the same JSON."""
+    if (league or "").strip().upper() == "NBA":
+        return "https://site.web.api.espn.com"
+    return "https://site.api.espn.com"
+
+
 def _espn_scoreboard_url(league: str) -> str:
     cfg = LEAGUE_CONFIG[league]
-    return f"https://site.api.espn.com/apis/site/v2/sports/{cfg['espn_sport']}/{cfg['espn_league']}/scoreboard"
+    return (
+        f"{_espn_site_host(league)}/apis/site/v2/sports/"
+        f"{cfg['espn_sport']}/{cfg['espn_league']}/scoreboard"
+    )
 
 
 def fetch_schedule_and_teams(league: str, target_date=None) -> List[Dict]:
@@ -923,11 +1021,16 @@ def playing_leaders(
     league: str,
     schedule: List[Dict],
     markets: List[str],
-    per_market: int = 10,
-    board: int = 50,
+    per_market: int = 100,
+    board: int = 200,
     names: bool = True,
 ) -> tuple:
-    """ESPN season leaders who play on this slate: 10 per prop type."""
+    """ESPN season leaders who play on this slate: top N per prop type (default 100).
+
+    Confirmed unavailable players (Out / IR / Inactive / Suspended / Doubtful) are
+    skipped and the next slate leader fills the rank so each market still aims for
+    `per_market` available players.
+    """
     spec = _LEADER_BOARDS.get(league)
     if not spec:
         return [], {"league": league, "source": "espn_season_leaders", "error": "no board"}
@@ -954,12 +1057,15 @@ def playing_leaders(
                 },
             )
     wanted = [m for m in markets if m in set(category_map.values())]
+    unavailable_names = fetch_unavailable_prop_names(league)
     audit = {
         "league": league,
         "source": "espn_season_leaders",
         "per_market": per_market,
         "board": board,
         "teams_tonight": len(team_ids),
+        "unavailable_names": len(unavailable_names),
+        "excluded_unavailable": 0,
         "selected": {},
         "players": 0,
     }
@@ -976,22 +1082,22 @@ def playing_leaders(
     except Exception as exc:
         audit["error"] = str(exc)
         return [], audit
-    chosen = {}
+
+    # Collect every slate leader first (board order), then resolve names/injuries,
+    # then take the first per_market available players in each market.
+    market_candidates: Dict[str, List[str]] = {market: [] for market in wanted}
+    provisional: Dict[str, Dict] = {}
     for category in payload.get("categories") or []:
         market = category_map.get(str(category.get("name") or ""))
         if market not in wanted:
             continue
-        kept = 0
         for row in category.get("leaders") or []:
-            if kept >= per_market:
-                break
             athlete_id = _espn_ref_id((row.get("athlete") or {}).get("$ref"))
             team_id = _espn_ref_id((row.get("team") or {}).get("$ref"))
             if not athlete_id or team_id not in team_ids:
                 continue
-            player = chosen.setdefault(
-                athlete_id,
-                {
+            if athlete_id not in provisional:
+                provisional[athlete_id] = {
                     "player_id": athlete_id,
                     "team_id": team_id,
                     "team": team_name_by_id.get(team_id, team_id),
@@ -1000,14 +1106,25 @@ def playing_leaders(
                     "next_game": next_game_by_team.get(team_id, {}),
                     "market_rankings": {},
                     "season_rank": {},
-                },
-            )
-            player["market_rankings"][market] = kept + 1
-            player["season_rank"][market] = kept + 1
-            kept += 1
-        audit["selected"][market] = kept
-    if names:
-        for athlete_id, player in chosen.items():
+                }
+            market_candidates[market].append(athlete_id)
+
+    athlete_cache: Dict[str, Dict] = {}
+    excluded_unavailable = 0
+
+    # Prefetch only the athletes we may need to fill each market (cap overshoot for OUT skips).
+    prefetch_ids = []
+    seen_prefetch = set()
+    overshoot = max(25, per_market // 2)
+    for athlete_ids in market_candidates.values():
+        for athlete_id in athlete_ids[: per_market + overshoot]:
+            if athlete_id not in seen_prefetch:
+                seen_prefetch.add(athlete_id)
+                prefetch_ids.append(athlete_id)
+
+    def _fetch_one(athlete_id: str) -> tuple:
+        athlete: Dict = {}
+        if names:
             try:
                 info = requests.get(
                     "https://site.api.espn.com/apis/common/v3/sports/"
@@ -1017,19 +1134,68 @@ def playing_leaders(
                 athlete = info.get("athlete") if isinstance(info.get("athlete"), dict) else info
             except Exception:
                 athlete = {}
+        return athlete_id, athlete if isinstance(athlete, dict) else {}
+
+    if prefetch_ids and names:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        workers = min(12, len(prefetch_ids))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [pool.submit(_fetch_one, athlete_id) for athlete_id in prefetch_ids]
+            for future in as_completed(futures):
+                athlete_id, athlete = future.result()
+                athlete_cache[athlete_id] = athlete
+    elif prefetch_ids:
+        for athlete_id in prefetch_ids:
+            athlete_cache[athlete_id] = {}
+
+    def _load_athlete(athlete_id: str) -> Dict:
+        if athlete_id in athlete_cache:
+            return athlete_cache[athlete_id]
+        _, athlete = _fetch_one(athlete_id)
+        athlete_cache[athlete_id] = athlete
+        return athlete
+
+    def _player_unavailable(athlete_id: str, player: Dict) -> bool:
+        athlete = _load_athlete(athlete_id)
+        name = (athlete.get("displayName") or athlete.get("fullName") or player.get("name") or "").strip()
+        if name and _norm_name(name) in unavailable_names:
+            return True
+        if _athlete_props_unavailable(athlete):
+            return True
+        return False
+
+    chosen: Dict[str, Dict] = {}
+    for market, athlete_ids in market_candidates.items():
+        kept = 0
+        for athlete_id in athlete_ids:
+            if kept >= per_market:
+                break
+            player = provisional[athlete_id]
+            if _player_unavailable(athlete_id, player):
+                excluded_unavailable += 1
+                continue
+            athlete = _load_athlete(athlete_id)
             name = (athlete.get("displayName") or athlete.get("fullName") or "").strip()
-            player["name"] = name or ("Player " + athlete_id)
-            pos = athlete.get("position") if isinstance(athlete.get("position"), dict) else {}
-            pos_abbr = (pos.get("abbreviation") or "").strip().upper()
-            player["position"] = pos_abbr
-            player["role"] = position_to_role(league, pos_abbr) or "F"
-            player["minutes_band"] = "starter"
-        players = [p for p in chosen.values() if p.get("name")]
-    else:
-        for player in chosen.values():
-            player["name"] = player["player_id"]
-            player["role"] = "F"
-        players = list(chosen.values())
+            row = chosen.setdefault(athlete_id, {**player, "market_rankings": dict(player.get("market_rankings") or {}),
+                                                 "season_rank": dict(player.get("season_rank") or {})})
+            if names:
+                row["name"] = name or ("Player " + athlete_id)
+                pos = athlete.get("position") if isinstance(athlete.get("position"), dict) else {}
+                pos_abbr = (pos.get("abbreviation") or "").strip().upper()
+                row["position"] = pos_abbr
+                row["role"] = position_to_role(league, pos_abbr) or "F"
+                row["minutes_band"] = "starter"
+            else:
+                row.setdefault("name", athlete_id)
+                row.setdefault("role", "F")
+            row["is_available"] = True
+            row["market_rankings"][market] = kept + 1
+            row["season_rank"][market] = kept + 1
+            kept += 1
+        audit["selected"][market] = kept
+
+    audit["excluded_unavailable"] = excluded_unavailable
+    players = [p for p in chosen.values() if p.get("name")]
     audit["players"] = len(players)
     return players, audit
 
@@ -1037,10 +1203,10 @@ def playing_leaders(
 def nba_playing_leaders(
     schedule: List[Dict],
     markets: List[str],
-    per_market: int = 10,
-    board: int = 50,
+    per_market: int = 100,
+    board: int = 200,
 ) -> tuple:
-    """ESPN season leaders who play tonight: 10 per prop type."""
+    """ESPN season leaders who play tonight: top 100 per prop type."""
     return playing_leaders("NBA", schedule, markets, per_market, board)
 
 
@@ -1064,7 +1230,8 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
 
     log_lines = []
     for team_id, team_name in team_ids:
-        roster_url = f"https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/{team_id}/roster"
+        # NBA-only host: site.api is Akamai-blocked; site.web.api matches roster shape.
+        roster_url = f"{_espn_site_host('NBA')}/apis/site/v2/sports/basketball/nba/teams/{team_id}/roster"
         try:
             roster_resp = requests.get(roster_url, timeout=5)
             roster_resp.raise_for_status()
@@ -1076,10 +1243,7 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
             def prefetch(athlete):
                 identity = str(athlete.get("id") or "")
                 status = str((athlete.get("status") or {}).get("type") or "").lower()
-                injury = " ".join(str(value).lower() for value in athlete.get("injuries") or [])
-                if not identity or (status and status != "active") or any(
-                    flag in injury for flag in ("out", "doubtful", "questionable", "injured", "inactive")
-                ):
+                if not identity or (status and status not in ("", "active")) or _athlete_props_unavailable(athlete):
                     return identity, None
                 return identity, _fetch_nba_player_metrics(identity, athlete=athlete)
             with ThreadPoolExecutor(max_workers=8) as pool:
@@ -1094,17 +1258,14 @@ def build_validated_nba_player_pool(schedule_rows: List[Dict]) -> Dict:
                 roster_team_pairs.add((player_name.lower(), team_id))
                 status = (a.get("status") or {}).get("type", "").lower()
                 contracts = a.get("contracts") or []
-                injuries = a.get("injuries") or []
 
                 reasons = []
-                if status and status != "active":
+                if status and status not in ("", "active"):
                     reasons.append("inactive_status")
                 if "g league" in player_name.lower() or "g-league" in player_name.lower():
                     reasons.append("g_league_flag")
-                if injuries:
-                    injury_blob = " ".join(str(x).lower() for x in injuries)
-                    if any(flag in injury_blob for flag in ("out", "doubtful", "questionable", "injured", "inactive")):
-                        reasons.append("injury_or_not_available")
+                if _athlete_props_unavailable(a) or player_key in fetch_unavailable_prop_names("NBA"):
+                    reasons.append("injury_or_not_available")
                 # Fast path: skip expensive gamelog calls for obvious excludes.
                 if any(r in reasons for r in ("inactive_status", "injury_or_not_available", "g_league_flag")):
                     excluded.append({"player_id": player_id, "name": player_name, "team_id": team_id, "reasons": reasons})
@@ -1639,7 +1800,11 @@ def _espn_fetch_prop_rows(league: str, espn_sport: str, espn_league: str) -> Lis
     empty (e.g. Wed looking at Thu Night Football), walk forward up to 7 days
     so posted prop books are not missed.
     """
-    sb_url = f"https://site.api.espn.com/apis/site/v2/sports/{espn_sport}/{espn_league}/scoreboard"
+    # NBA uses site.web.api (site.api blocked); other leagues stay on site.api.
+    sb_url = (
+        f"{_espn_site_host(league)}/apis/site/v2/sports/"
+        f"{espn_sport}/{espn_league}/scoreboard"
+    )
     events: List[Dict] = []
     try:
         now_et = datetime.now(ZoneInfo("America/New_York"))

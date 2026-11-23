@@ -12,9 +12,9 @@ DISCLAIMER = (
 
 def test_home_metadata_is_research_focused():
     title, description = _page_meta("/")
-    assert "Quantitative sports forecasting model" in title
-    assert "Statistical probability engine" in description
-    assert "Straight-Up (SU)" in description
+    assert title == "PredictionLab | Machine Learning Sports Forecasting"
+    assert "machine learning sports forecasting" in description.lower()
+    assert "NBA" in description and "NFL" in description
     assert not any(word in (title + description).lower() for word in ("picks", "odds", "handicapping"))
 
 
@@ -28,8 +28,8 @@ def test_disclaimer_is_exact_and_survives_display_wording():
 def test_llm_discovery_is_research_focused_and_describes_the_paywall():
     text = (ROOT / "llms.txt").read_text()
     assert DISCLAIMER in text
-    assert "Quantitative sports forecasting model" in text
-    assert "statistical probability engine" in text
+    assert "PredictionLab | Machine Learning Sports Forecasting" in text
+    assert "machine learning sports forecasting" in text.lower()
     assert "require an active premium membership" in text
     assert "sports betting picks" not in text.lower()
     assert "/nhl-predictions" in text

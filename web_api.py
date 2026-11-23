@@ -109,15 +109,15 @@ def api_props_hub():
             raise ValueError
     except ValueError:
         return jsonify(error='Choose a valid YYYY-MM-DD props date.'), 400
-    # Default 3 rows per league; ?limit=all (or a higher int) loads the rest on demand.
-    raw_limit = (request.args.get('limit') or '3').strip().lower()
+    # Default: full slate. ?limit=N still caps per prop type for progressive loads.
+    raw_limit = (request.args.get('limit') or 'all').strip().lower()
     if raw_limit == 'all':
         item_limit = None
     else:
         try:
             item_limit = max(1, min(500, int(raw_limit)))
         except ValueError:
-            item_limit = 3
+            item_limit = None
     if day < datetime.now(ZoneInfo('America/New_York')).date().isoformat():
         from props_navigation import game_catalog, bind_games
         data = historical_catalog(site.DATABASE, day, selected, limit=item_limit)
@@ -133,7 +133,7 @@ def api_props_hub():
     from props_service import entries as prop_entries, ensure_selected, building as prop_building
     # A visit only reads the saved props. Load=1 publishes the one sport they chose.
     if not current_app.testing and request.args.get('load') == '1' and selected:
-        ensure_selected(site, day, selected)
+        ensure_selected(site, selected, day)
     entries = prop_entries(site, day)
     catalog = game_catalog(site.DATABASE, day)
     counts = []
@@ -953,7 +953,10 @@ _WARM_HOST = 'predictionlab.io'
 
 def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
     sport = _sport_for(slug)
-    path = '/' + slug.replace('-projections', '-picks')
+    # Card extraction needs classic SSR HTML. Plain /<sport>-picks is the React
+    # shell (no data-pick-card), which produced empty or truncated web_cards feeds
+    # and hid Load more on large slates (NCAAB).
+    path = '/classic/' + slug.replace('-projections', '-picks')
     if sport == 'SOCCER':
         path += '?region=all'  # the soccer page redirects to its region view without this
     # Member feeds must be full paid HTML. Background rebuilds often have no
@@ -974,22 +977,39 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
                 html = _page_html(path, app, host, cookie)
     if not html or 'upstream data/model dependency failed' in html.lower():
         raise RuntimeError(f'Original sport renderer returned no page for {slug}')
-    # NCAAB/NCAAW: stamp Consensus Historical Record on classic HTML before
-    # extracting React card feeds (Efficiency N/A must count in the pattern key).
-    if sport in ('NCAAB', 'NCAAW') and 'data-pick-card' in html:
+    # Stamp Consensus Historical Record on classic HTML before extracting React
+    # card feeds. NBA past30 lives on the results table — without this the
+    # web_cards JSON keeps baked "Unanimous: 0-0" forever.
+    if sport in ('NCAAB', 'NCAAW', 'NBA', 'WNBA', 'NHL', 'NFL', 'NCAAF', 'CFL') and 'data-pick-card' in html:
         try:
-            from team_results_charts import (
-                _inject_consensus_hist_chips,
-                _NCAAF_CONSENSUS_MODELS,
-            )
-            html = _inject_consensus_hist_chips(
-                html, sport=sport, models=_NCAAF_CONSENSUS_MODELS
-            ) or html
+            from card_face import _add_results_chips
+            html = _add_results_chips(html, sport) or html
+        except Exception:
+            try:
+                from team_results_charts import (
+                    _inject_consensus_hist_chips,
+                    _NCAAF_CONSENSUS_MODELS,
+                    _WNBA_CONSENSUS_MODELS,
+                )
+                models = (
+                    _WNBA_CONSENSUS_MODELS if sport == 'WNBA' else _NCAAF_CONSENSUS_MODELS
+                )
+                html = _inject_consensus_hist_chips(
+                    html, sport=sport, models=models
+                ) or html
+            except Exception:
+                pass
+    elif sport == 'TENNIS' and 'data-pick-card' in html:
+        # Same finals-backed history as tennis_live — without this, web_cards
+        # rebuilds keep baking Unanimous: 0-0 when served_TENNIS_.html is empty.
+        try:
+            from tennis_live import _inject_tennis_consensus_hist
+            html = _inject_tennis_consensus_hist(html) or html
         except Exception:
             pass
     # Free SSR strips the face chips; guest/free feeds lock the member cards.
     if (
-        sport in ('NCAAB', 'NCAAW')
+        sport in ('NCAAB', 'NCAAW', 'NBA', 'WNBA')
         and tier in ('guest', 'free')
         and 'Consensus Historical Record' not in html
     ):
@@ -1024,7 +1044,6 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
                           'offset': offset,
                           'nextOffset': next_offset, 'hasMore': next_offset is not None})
 
-
 def _cards_file(slug, tier):
     return _CARDS_DIR / f'{slug}.{tier}.v2.json.gz'
 
@@ -1048,25 +1067,38 @@ def _usable_cards(payload):
 
 def _saved_cards(slug, tier):
     saved = _CARDS.get((slug, tier))
+    path = _cards_file(slug, tier)
+    # Disk rewritten after a fix must beat the in-memory feed without a restart.
     if saved and _usable_cards(saved[1]):
-        return saved
+        try:
+            if path.is_file() and path.stat().st_mtime > (saved[0] + 0.5):
+                _CARDS.pop((slug, tier), None)
+            else:
+                return saved
+        except OSError:
+            return saved
     if saved and not _usable_cards(saved[1]):
         _CARDS.pop((slug, tier), None)
     try:
         candidates = [
-            _cards_file(slug, tier),
+            path,
             # Homepage only needs the first page; older warmers saved that slice alone.
             _CARDS_DIR / f'{slug}.{tier}-page-0-5.v2.json.gz',
         ]
-        for path in candidates:
-            if not path.is_file():
+        for candidate in candidates:
+            if not candidate.is_file():
                 continue
-            payload = _read_cards_file(path)
+            payload = _read_cards_file(candidate)
             if not _usable_cards(payload):
                 continue
             # Stamp "now" so a restart still serves multi-day-old disk feeds immediately
             # (stale-while-revalidate); the warmer owns rebuilds.
-            saved = (time.time(), payload)
+            # Use max(now, mtime) so a just-written file is not treated as newer than memory.
+            try:
+                stamp = max(time.time(), candidate.stat().st_mtime)
+            except OSError:
+                stamp = time.time()
+            saved = (stamp, payload)
             _CARDS[(slug, tier)] = saved
             return saved
     except (OSError, ValueError, TypeError):
@@ -1074,11 +1106,121 @@ def _saved_cards(slug, tier):
     return None
 
 
+def _consensus_chip_val(html: str) -> str:
+    m = re.search(
+        r'consensus-hist[\s\S]{0,220}?line-chip-val[^>]*>([^<]*)',
+        html or '',
+    )
+    return (m.group(1).strip() if m else '')
+
+
+def _consensus_chip_is_bare_dash(val: str) -> bool:
+    v = (val or '').strip()
+    return v in (
+        'Consensus Record: —',
+        'Consensus Record: –',
+        'Consensus Record: -',
+        '—',
+        '–',
+        '-',
+    )
+
+
+def _consensus_chip_needs_restamp(val: str, sport: str) -> bool:
+    """Bare dashes / empty 0-0 stubs, including baked NCAAB blank-model 0-0 chips."""
+    v = (val or '').strip()
+    if not v:
+        return False
+    if sport in ('NCAAB', 'NCAAW') and _consensus_chip_is_bare_dash(v):
+        return True
+    # NCAAB/NCAAW blank G2/TD invent "0-0 (—) — Season · …" — restamp those.
+    if sport in ('NCAAB', 'NCAAW') and (
+        '0-0 (—)' in v or '0-0 (–)' in v or '0-0 (-)' in v
+    ):
+        return True
+    # Already patterned with a real W-L — leave alone.
+    if 'Season ·' in v or ' · ' in v:
+        return False
+    if ': 0-0' in v or 'Unanimous: 0-0' in v or v.endswith('0-0'):
+        return True
+    return False
+
+
+def _restamp_consensus_hist_on_payload(payload, sport):
+    """Re-run Consensus Historical inject on each card HTML in a web_cards payload."""
+    if not payload or not isinstance(payload, dict) or not sport:
+        return payload
+    cards = payload.get('cards') or []
+    if not cards:
+        return payload
+    if not any(
+        _consensus_chip_needs_restamp(_consensus_chip_val(c.get('html') or ''), sport)
+        for c in cards
+    ):
+        return payload
+    tennis_inject = None
+    models = None
+    try:
+        if sport == 'TENNIS':
+            from tennis_live import _inject_tennis_consensus_hist as tennis_inject
+        else:
+            from team_results_charts import (
+                _inject_consensus_hist_chips,
+                _inject_nhl_consensus_hist_chips,
+                _NCAAF_CONSENSUS_MODELS,
+                _WNBA_CONSENSUS_MODELS,
+            )
+            models = _WNBA_CONSENSUS_MODELS if sport == 'WNBA' else _NCAAF_CONSENSUS_MODELS
+    except Exception:
+        return payload
+    out_cards = []
+    changed = False
+    for card in cards:
+        block = card.get('html') or ''
+        before_val = _consensus_chip_val(block)
+        if not _consensus_chip_needs_restamp(before_val, sport):
+            out_cards.append(card)
+            continue
+        try:
+            if sport == 'TENNIS':
+                fixed = tennis_inject(block) or block
+            elif sport == 'NHL':
+                fixed = _inject_nhl_consensus_hist_chips(block) or block
+            else:
+                fixed = _inject_consensus_hist_chips(block, sport=sport, models=models) or block
+        except Exception:
+            fixed = block
+        after_val = _consensus_chip_val(fixed)
+        # Never replace a patterned chip with a bare dash (stale process / failed inject).
+        if _consensus_chip_is_bare_dash(after_val) and not _consensus_chip_is_bare_dash(before_val):
+            fixed = block
+        if fixed != block:
+            changed = True
+        out_cards.append(dict(card, html=fixed))
+    if not changed:
+        return payload
+    return dict(payload, cards=out_cards)
+
+
 def _save_cards(slug, tier, payload, allow_empty=False):
     from slate_freshness import current_payload
     payload = current_payload(payload)
     if not payload['cards'] and not allow_empty:
         return  # an empty page (a failed build) never replaces a good saved feed
+    # Never replace a feed that already has upcoming cards with a past-only rebuild.
+    if slug.endswith('-picks') and payload.get('cards') and not _feed_has_upcoming(payload):
+        existing = _CARDS.get((slug, tier)) or _saved_cards(slug, tier)
+        if existing and _feed_has_upcoming(existing[1]):
+            return
+    # Never shrink a warm picks feed to a short page (usually a limit=10 response
+    # that was restamped and saved). Load-more needs the full slate on disk.
+    if slug.endswith('-picks') and payload.get('cards') is not None:
+        existing = _CARDS.get((slug, tier)) or _saved_cards(slug, tier)
+        if existing and _feed_has_upcoming(existing[1]):
+            old_n = len((existing[1] or {}).get('cards') or [])
+            new_n = len(payload.get('cards') or [])
+            if old_n > 10 and 0 < new_n < old_n and new_n <= 10:
+                return
     _CARDS[(slug, tier)] = (time.time(), payload)
     try:
         _CARDS_DIR.mkdir(parents=True, exist_ok=True)
@@ -1087,6 +1229,18 @@ def _save_cards(slug, tier, payload, allow_empty=False):
         tmp.replace(_cards_file(slug, tier))
         if tier == 'member':
             _fill_missing_locked_feeds(slug, payload)
+            # Refresh guest/free from member when the member feed has upcoming games,
+            # so a past-only locked feed cannot outlive a successful rebuild.
+            if _feed_has_upcoming(payload):
+                locked = _locked_from_member(payload)
+                for locked_tier in ('guest', 'free'):
+                    _CARDS[(slug, locked_tier)] = (time.time(), locked)
+                    try:
+                        tmp = _cards_file(slug, locked_tier).with_suffix('.tmp')
+                        tmp.write_bytes(gzip.compress(json.dumps(locked).encode(), compresslevel=5))
+                        tmp.replace(_cards_file(slug, locked_tier))
+                    except OSError:
+                        pass
     except OSError:
         pass
 
@@ -1259,24 +1413,180 @@ def _card_in_span(card, span):
     return today <= day <= end
 
 
+_NCAAW_ODDS_TIP = "odds currently unavailable"
+_NCAAW_ODDS_BTN = (
+    '<button type="button" class="pl-info-btn" '
+    f'data-tip="{_NCAAW_ODDS_TIP}" data-pl-info-tip="{_NCAAW_ODDS_TIP}" '
+    f'title="{_NCAAW_ODDS_TIP}" aria-label="{_NCAAW_ODDS_TIP}" '
+    'aria-expanded="false" aria-haspopup="true">ⓘ</button>'
+)
+
+
+def _stamp_ncaaw_unavailable_odds(payload):
+    """NCAAW-only: Books N/A uses ⓘ hover 'odds currently unavailable'."""
+    if not payload or not isinstance(payload, dict):
+        return payload
+    cards = payload.get('cards') or []
+    if not cards:
+        return payload
+    out = []
+    changed = False
+    old_tip = (
+        "No Market odds for this game. Market post lines the day before or "
+        "the day of the game, and often post none for games against "
+        "non-Division I schools."
+    )
+    for card in cards:
+        html = card.get('html') or ''
+        if 'data-pick-card' not in html:
+            out.append(card)
+            continue
+        fixed = html
+        if old_tip in fixed:
+            fixed = fixed.replace(old_tip, _NCAAW_ODDS_TIP)
+        # Rewrite any existing Market-odds info button tip to the owner copy.
+        fixed = re.sub(
+            r'((?:title|data-tip|data-pl-info-tip|aria-label)=")No Market odds[^"]*(")',
+            rf'\1{_NCAAW_ODDS_TIP}\2',
+            fixed,
+        )
+        fixed = re.sub(
+            r'(<div class="ml-line face-books-ml">\s*<span class="ml-src books">[^<]*</span>\s*)'
+            r'<span class="ml-num[^"]*">\s*(?:—|–|-|N/A)\s*</span>(?!\s*<button)',
+            lambda m: m.group(1) + '<span class="ml-num ">N/A</span> ' + _NCAAW_ODDS_BTN,
+            fixed,
+        )
+        fixed = re.sub(
+            r'<td class="val-books">\s*(?:—|–|-|N/A)\s*</td>',
+            '<td class="val-books">N/A ' + _NCAAW_ODDS_BTN + '</td>',
+            fixed,
+        )
+        if fixed != html:
+            changed = True
+            out.append(dict(card, html=fixed))
+        else:
+            out.append(card)
+    return dict(payload, cards=out) if changed else payload
+
+
+def _ncaab_feed_has_today(payload) -> bool:
+    """True when the NCAAB card feed includes at least one card dated today (ET)."""
+    return _feed_has_upcoming(payload, today_only=True)
+
+
+def _feed_has_upcoming(payload, today_only: bool = False) -> bool:
+    """True when the feed has a non-final card on/after today (ET)."""
+    today = datetime.now(ZoneInfo('America/New_York')).date().isoformat()
+    for card in (payload or {}).get('cards') or []:
+        day = str((card or {}).get('date') or '')[:10]
+        if not day:
+            continue
+        if today_only and day != today:
+            continue
+        if day < today:
+            continue
+        if (card or {}).get('isFinal') is True:
+            continue
+        return True
+    return False
+
+
+def _sport_in_season_for_cards(sport: str) -> bool:
+    if not sport:
+        return False
+    try:
+        from NHL77FINAL import get_season_phase
+        return get_season_phase(sport)[0] != 'offseason'
+    except Exception:
+        return False
+
+
+def _invalidate_sport_card_feeds(slug: str):
+    """Drop one sport's web_cards only (memory + disk)."""
+    if not slug or not slug.endswith('-picks'):
+        return
+    for locked_tier in ('guest', 'free', 'member'):
+        _CARDS.pop((slug, locked_tier), None)
+        try:
+            path = _cards_file(slug, locked_tier)
+            if path.is_file():
+                path.unlink()
+        except OSError:
+            pass
+
+
+def _invalidate_ncaab_card_feeds():
+    """Drop NCAAB web_cards only (memory + disk)."""
+    _invalidate_sport_card_feeds('ncaab-picks')
+
+
+def _next_available_cards(cards, span: int):
+    """When today..today+span is empty, return the next upcoming day (plus span days)."""
+    today = datetime.now(ZoneInfo('America/New_York')).date()
+    upcoming = []
+    for card in cards or []:
+        if (card or {}).get('isFinal') is True:
+            continue
+        raw = str((card or {}).get('date') or '')[:10]
+        if not raw:
+            continue
+        try:
+            day = datetime.strptime(raw, '%Y-%m-%d').date()
+        except ValueError:
+            continue
+        if day >= today:
+            upcoming.append((day, card))
+    if not upcoming:
+        return []
+    first = min(d for d, _ in upcoming)
+    end = first + timedelta(days=max(int(span or 0), 1))
+    return [card for day, card in upcoming if first <= day <= end]
+
+
 def _card_page(slug, tier, app, offset, limit, span=None):
     from slate_freshness import current_payload
     saved = _cards_for_tier(slug, tier)
     if saved and time.time()-saved[0] < _CARDS_KEEP:
-        payload = _ensure_live_share_image(current_payload(saved[1]), slug)
-        if payload is not saved[1] and payload.get('shareImage') != (saved[1] or {}).get('shareImage'):
-            _save_cards(slug, tier, payload, allow_empty=True)
-        source = payload['cards']
-        if span is not None:
-            source = [card for card in source if _card_in_span(card, span)]
-        total = len(source)
-        cards = source[offset:offset+limit]
-        next_offset = offset+len(cards) if offset+len(cards) < total else None
-        # Never flag refreshing when cards are already on hand — the client skips
-        # caching refreshing payloads and the homepage would refetch every sport.
-        return {**payload, 'cards': cards, 'total': total, 'offset': offset,
-                'nextOffset': next_offset, 'hasMore': next_offset is not None,
-                'refreshing': False}, 200
+        sport = _sport_for(slug)
+        # In-season sports: a past-only feed stays "fresh" for days and the React
+        # span filter then shows an empty slate. Force a rebuild when nothing
+        # upcoming remains (NCAAB today-miss, UFC next-card miss, etc.).
+        needs_rebuild = (
+            slug.endswith('-picks')
+            and _sport_in_season_for_cards(sport)
+            and not _feed_has_upcoming(saved[1])
+        )
+        if needs_rebuild:
+            _invalidate_sport_card_feeds(slug)
+            saved = None
+        else:
+            payload = _ensure_live_share_image(current_payload(saved[1]), slug)
+            if payload is not saved[1] and payload.get('shareImage') != (saved[1] or {}).get('shareImage'):
+                _save_cards(slug, tier, payload, allow_empty=True)
+            source = payload['cards']
+            used_next = False
+            if span is not None:
+                spanned = [card for card in source if _card_in_span(card, span)]
+                if spanned:
+                    source = spanned
+                elif _sport_in_season_for_cards(sport):
+                    # No games in today..today+span — show the next available slate.
+                    nxt = _next_available_cards(source, span)
+                    if nxt:
+                        source = nxt
+                        used_next = True
+                    else:
+                        source = spanned
+                else:
+                    source = spanned
+            total = len(source)
+            cards = source[offset:offset+limit]
+            next_offset = offset+len(cards) if offset+len(cards) < total else None
+            # Never flag refreshing when cards are already on hand — the client skips
+            # caching refreshing payloads and the homepage would refetch every sport.
+            return {**payload, 'cards': cards, 'total': total, 'offset': offset,
+                    'nextOffset': next_offset, 'hasMore': next_offset is not None,
+                    'refreshing': False, 'nextAvailable': used_next}, 200
     if time.time()-_CARD_ERRORS.get((slug, tier), 0) < 15:
         return {'error': 'Games could not be loaded. Please retry.', 'cards': []}, 503
     # One cold build at a time (semaphore inside _start_full_cards). Homepage stays
@@ -1341,13 +1651,37 @@ def api_cards(slug):
             response.vary.add('Cookie')
             return response
         payload, status = _card_page(slug, tier, app, offset, limit, span)
-        if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'NBA'}:
+        sport = _sport_for(slug)
+        # limit/offset responses are one page of the saved feed. Never write that
+        # slice back to disk — that shrank NCAAB/NBA feeds to 10 cards and hid
+        # "Load more" even when 40+ games were on the slate.
+        paged = 'limit' in request.args
+        if tier == 'member' and sport in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'NBA', 'WNBA'}:
             from market_card_refresh import refresh as refresh_market_cards
             from NHL77FINAL import DATABASE
-            payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)
-            if _sport_for(slug) == 'NHL':
+            payload = refresh_market_cards(payload, sport, DATABASE)
+            if sport == 'NHL':
                 from pl_line_repair import refresh as refresh_pl_cards
                 payload = refresh_pl_cards(payload, DATABASE)
+            fixed = _restamp_consensus_hist_on_payload(payload, sport)
+            if fixed is not payload:
+                payload = fixed
+                if not paged:
+                    try:
+                        _save_cards(slug, 'member', payload)
+                    except Exception:
+                        pass
+        elif sport == 'TENNIS':
+            fixed = _restamp_consensus_hist_on_payload(payload, sport)
+            if fixed is not payload:
+                payload = fixed
+                if not paged:
+                    try:
+                        _save_cards(slug, tier, payload)
+                    except Exception:
+                        pass
+        if sport == 'NCAAW':
+            payload = _stamp_ncaaw_unavailable_odds(payload)
         response = jsonify(payload)
         response.status_code = status
         response.headers['Cache-Control'] = 'private, no-store'
@@ -1384,13 +1718,29 @@ def api_cards(slug):
                              args=(slug, tier, app, request.host, request.headers.get('Cookie')),
                              daemon=True).start()
     payload['refreshing'] = (slug, tier) in _CARDS_BUILDING
-    if tier == 'member' and _sport_for(slug) in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'NBA'}:
+    sport = _sport_for(slug)
+    if tier == 'member' and sport in {'NHL', 'NFL', 'NCAAB', 'NCAAW', 'NCAAF', 'NBA', 'WNBA'}:
         from market_card_refresh import refresh as refresh_market_cards
         from NHL77FINAL import DATABASE
-        payload = refresh_market_cards(payload, _sport_for(slug), DATABASE)
-        if _sport_for(slug) == 'NHL':
+        payload = refresh_market_cards(payload, sport, DATABASE)
+        if sport == 'NHL':
             from pl_line_repair import refresh as refresh_pl_cards
             payload = refresh_pl_cards(payload, DATABASE)
+        fixed = _restamp_consensus_hist_on_payload(payload, sport)
+        if fixed is not payload:
+            payload = fixed
+            try:
+                _save_cards(slug, 'member', payload)
+            except Exception:
+                pass
+    elif sport == 'TENNIS':
+        fixed = _restamp_consensus_hist_on_payload(payload, sport)
+        if fixed is not payload:
+            payload = fixed
+            try:
+                _save_cards(slug, tier, payload)
+            except Exception:
+                pass
     limit = request.args.get('limit', type=int)
     if limit:
         payload = dict(payload, cards=payload['cards'][:limit])
