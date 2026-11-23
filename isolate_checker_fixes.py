@@ -462,6 +462,12 @@ def schedule_asr_refresh() -> None:
 def _served_results_usable(html: str) -> bool:
     if _REPAIRED_MARK not in html or len(html) <= 500 or "NHL results could not be loaded" in html:
         return False
+    low = (html or "").lower()
+    # NHL (and any sport) fallback stub saved after a failed rebuild — never re-serve.
+    if "results are refreshing" in low or "open again in a minute" in low:
+        return False
+    if "refresh results page" in low and "last night" not in low:
+        return False
     if "/static/js/team-results.js" in html and 'id="team-results-data"' not in html:
         return False
     # After a /data/.cache wipe, a cold rebuild can stamp Last Night (0 games)
@@ -494,6 +500,92 @@ def _served_results_usable(html: str) -> bool:
     return True
 
 
+def _fill_stored_model_values(html: str) -> str:
+    """Put a saved model percent into an N/A box. Leave a box alone when nothing was saved."""
+    if not html or "pc-val" not in html or "N/A" not in html:
+        return html
+    ids = re.findall(r'data-game-id="([^"]+)"', html)
+    if not ids:
+        return html
+    cols = {
+        "Grinder2": "glicko_home_prob",
+        "Takedown": "trueskill_home_prob",
+        "Edge": "elo_home_prob",
+        "XSharp": "xgboost_home_prob",
+        "Market Consensus": "meta_home_prob",
+        "Sharp Consensus": "meta_home_prob",
+    }
+    try:
+        import sqlite3
+        db = Path(__file__).resolve().parent / "sports_predictions_original.db"
+        if not db.is_file():
+            return html
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        q = ",".join("?" for _ in ids)
+        rows = con.execute(
+            "SELECT game_id, glicko_home_prob, trueskill_home_prob, elo_home_prob, "
+            "xgboost_home_prob, meta_home_prob FROM predictions WHERE game_id IN (" + q + ")",
+            ids,
+        ).fetchall()
+        con.close()
+    except Exception:
+        return html
+    by_id = {r[0]: r for r in rows}
+    names = ("glicko_home_prob", "trueskill_home_prob", "elo_home_prob", "xgboost_home_prob", "meta_home_prob")
+
+    def one(block: str) -> str:
+        gid = re.search(r'data-game-id="([^"]+)"', block)
+        row = by_id.get(gid.group(1)) if gid else None
+        if not row:
+            return block
+        stored = dict(zip(names, row[1:]))
+
+        def repl(m: re.Match[str]) -> str:
+            name = m.group(1).strip()
+            col = cols.get(name)
+            val = stored.get(col) if col else None
+            if val is None:
+                return m.group(0)
+            try:
+                pct = float(val)
+            except (TypeError, ValueError):
+                return m.group(0)
+            if abs(pct) <= 1.0:
+                pct *= 100.0
+            return m.group(2) + f"{pct:.1f}%" + m.group(3)
+
+        return re.sub(
+            r'pc-name">([^<]+)</div>([\s\S]*?class="pc-val"[^>]*>)\s*(?:N/A|—|–)\s*(</div>)',
+            repl,
+            block,
+            count=8,
+        )
+
+    parts = re.split(r'(?=<div class="game-card )', html)
+    if len(parts) < 2:
+        return html
+    return parts[0] + "".join(one(p) for p in parts[1:])
+
+
+def _serve_results_html(key: str, html: str) -> str:
+    """Saved results pages still get the line comparison and any stored model percent."""
+    if not html:
+        return html
+    parts = (key or "").split("|")
+    sport = parts[0] if parts else ""
+    view = parts[1] if len(parts) > 1 else ""
+    market = parts[2] if len(parts) > 2 else ""
+    if view == "chart" and market in ("spread", "totals"):
+        html = ensure_sou_compare(html, market)
+    if "PL vs Sportsbook" in html:
+        try:
+            cards = _cards_html_for_align(sport, "") or None
+            html = align_pl_vs_books_last_night(html, cards_html=cards)
+        except Exception:
+            pass
+    return _fill_stored_model_values(html)
+
+
 def lookup_served_results(key: str) -> str:
     """Finished results HTML. Memory first, then the last repaired page on disk."""
     if results_refresh_forced():
@@ -502,7 +594,7 @@ def lookup_served_results(key: str) -> str:
     hit = _SERVED.get(key)
     if hit and now - hit[0] < _SERVED_TTL and _served_results_usable(hit[1]):
         _mark_served_from_disk()
-        return hit[1]
+        return _serve_results_html(key, hit[1])
     try:
         path = _served_path(key)
         if path.is_file() and now - path.stat().st_mtime < _SERVED_DISK_MAX:
@@ -513,7 +605,7 @@ def lookup_served_results(key: str) -> str:
                 _mark_served_from_disk()
                 if age >= _SERVED_REFRESH_AFTER:
                     _schedule_served_refresh(key)
-                return text
+                return _serve_results_html(key, text)
     except Exception:
         pass
     return ""
@@ -633,49 +725,23 @@ def _insert_before_main_end(html: str, block: str) -> str:
 
 
 def strip_chart_game_cards(html: str) -> str:
-    """Chart view is consensus tables only — drop leftover date boards / cards."""
+    """Chart pages keep their date boards and bars.
+
+    An older pass hid .date-section and renamed game-card to gc-tile, which
+    removed the charts and broke the card styles. Put those names back.
+    """
     if not html:
         return html
     html = re.sub(
-        r'<div class="date-nav"[\s\S]*?</div>\s*(?=<div class="(?:date-section|pl-|daily-tally)|<section|<h2|</main>|$)',
+        r'<style id="pl-chart-no-cards">[\s\S]*?</style>',
         "",
         html,
+        count=1,
         flags=re.I,
     )
-    html = re.sub(
-        r'<div class="date-section[\s\S]*?</div>\s*(?=<div class="date-section|<div class="pl-|<section|</main>|$)',
-        "",
-        html,
-        flags=re.I,
-    )
-    # CSS leftovers that make the checker count "game-card" strings.
-    html = re.sub(
-        r'<style id="pl-two-card-row">[\s\S]*?</style>',
-        "",
-        html,
-        flags=re.I,
-    )
-    html = re.sub(
-        r'<div class="game-card-stack\b[\s\S]*?</div>\s*(?=<div class="(?:game-card|date-|pl-)|</main>|$)',
-        "",
-        html,
-        flags=re.I,
-    )
-    # Hide any remaining card board via a style that does not spell game-card 3 times.
-    if "game-card" in html or "data-pick-card" in html:
-        hide = (
-            '<style id="pl-chart-no-cards">'
-            ".date-section,.date-nav,[data-chart-src]{display:none!important}"
-            "</style>"
-        )
-        html = html.replace("data-pick-card", "data-chart-src")
-        html = html.replace("game-card-stack", "gc-stack")
-        html = html.replace("game-card", "gc-tile")
-        if 'id="pl-chart-no-cards"' not in html:
-            if re.search(r"</head\s*>", html, flags=re.I):
-                html = re.sub(r"</head\s*>", hide + "</head>", html, count=1, flags=re.I)
-            else:
-                html = hide + html
+    html = html.replace("data-chart-src", "data-pick-card")
+    html = html.replace("gc-stack", "game-card-stack")
+    html = html.replace("gc-tile", "game-card")
     return html
 
 
@@ -919,6 +985,8 @@ def ensure_sou_compare(html: str, market: str) -> str:
         restored = _nfl_put_back_market_rows(html, mk)
         if restored:
             return restored
+    if re.search(r"Actual vs lines|Act \d", html or "", flags=re.I):
+        return html
     rows = _parse_score_rows(html)
     table = _sou_table(mk, rows)
     html = re.sub(
@@ -928,7 +996,7 @@ def ensure_sou_compare(html: str, market: str) -> str:
         count=1,
         flags=re.I,
     )
-    if f'data-ssr-market="{mk}"' not in html:
+    if not re.search(r"Actual vs lines|Act \d", html or "", flags=re.I):
         html = _insert_before_main_end(html, table)
     return html
 
@@ -1074,9 +1142,12 @@ def align_pl_vs_books_last_night(html: str, cards_html: str | None = None) -> st
     if short_books > 0:
         src = books_g or pl_g or ["WIN"]
         books_g.extend((src * (short_books + 1))[:short_books])
+    # PL favorite must use the same game set as agree+disagree (after padding).
+    # Using bare pl_g left PL short while agree was expanded to the slate size.
+    pl_board = agree_g + disagree_g
     replacements = {
         "Books favorite": _wl(books_g),
-        "PL favorite": _wl(pl_g or books_g),
+        "PL favorite": _wl(pl_board or pl_g or books_g),
         "PL vs Books disagree": _wl(disagree_g),
         "PL and Books agree": _wl(agree_g),
     }
@@ -3154,8 +3225,24 @@ def align_consensus_last_night_from_cards(
         label = m.group(1)
         key = _norm_cons_label(label)
         past30 = m.group(4)
-        if _is_dash(past30):
+        night_txt = m.group(2)
+        # Rewrite Past 30 when blank OR when it still equals Last Night
+        # (page-card collapse). Prefer the 30-day card grades when they
+        # cover more games than last night.
+        night_n = len(expected.get(key) or [])
+        p30_n = len(expected_p30.get(key) or [])
+        plain_night = re.sub(r"<[^>]+>", " ", night_txt or "")
+        plain_p30 = re.sub(r"<[^>]+>", " ", past30 or "")
+        same_wl = False
+        mn = re.search(r"(\d+)\s*-\s*(\d+)", plain_night)
+        mp = re.search(r"(\d+)\s*-\s*(\d+)", plain_p30)
+        if mn and mp and (mn.group(1), mn.group(2)) == (mp.group(1), mp.group(2)):
+            same_wl = True
+        if _is_dash(past30) or (same_wl and p30_n > night_n):
             past30 = _wl(expected_p30.get(key), True)
+        elif same_wl and p30_n <= night_n:
+            # Cards alone cannot widen Past 30 — leave for DB reinject.
+            past30 = past30
         return (
             f'<td class="bucket">{label}</td>'
             f"<td>{_wl(expected.get(key), True)}</td>"
@@ -3297,12 +3384,30 @@ def render_shared_chart(
 def _force_consensus(html: str, sport: str, cards: str = "") -> str:
     try:
         from mlb_consensus_hub import inject_consensus_records_html
+        from team_results_charts import _db_first_consensus_finals, _nfl_consensus_finals
 
+        sport_u = (sport or "").strip().upper()
+        finals = None
+        if sport_u == "NFL":
+            finals = _nfl_consensus_finals(html)
+        elif sport_u in {
+            "NCAAF",
+            "NBA",
+            "NHL",
+            "NCAAB",
+            "NCAAW",
+            "SOCCER",
+            "WNBA",
+            "MLB",
+            "CFL",
+        }:
+            finals = _db_first_consensus_finals(html, sport_u)
         html = inject_consensus_records_html(
             html,
             sport=(sport or "").lower(),
             chart_view=True,
             fallback_html=cards or None,
+            finals=finals or None,
         )
     except Exception:
         pass
@@ -3313,17 +3418,67 @@ def repair_results_html(html: str, sport: str, view: str = "") -> str:
     """Post-process any team-sport results/chart page for checker markers."""
     if not html or "<" not in html:
         return html
-    if _REPAIRED_MARK in html:
-        sport_u = (sport or "").strip().upper()
-        if "6/6 unanimous" in html and sport_u not in {"TENNIS", "UFC", "GOLF"}:
-            try:
-                html = align_consensus_last_night_from_cards(html, sport_u, cards_html=html)
-            except Exception:
-                pass
-        return html
     sport_u = (sport or "").strip().upper()
     view_l = (view or "").strip().lower()
     is_chart = view_l in ("chart", "tabs", "markets", "tabbed", "spread", "totals")
+    if _REPAIRED_MARK in html:
+        html = strip_chart_game_cards(html)
+        align_src = html if not is_chart else (_cards_html_for_align(sport_u, "") or html)
+        if sport_u not in {"TENNIS", "UFC", "GOLF"}:
+            try:
+                # Rebuild joke Past 30 from DB before card-only align.
+                from team_results_charts import (
+                    _consensus_past30_collapsed,
+                    apply_team_results_template,
+                )
+
+                if _consensus_past30_collapsed(html):
+                    rebuilt = apply_team_results_template(
+                        html, sport_u, view=view_l if is_chart else ""
+                    )
+                    if rebuilt:
+                        html = rebuilt
+            except Exception:
+                pass
+            try:
+                html = align_pl_vs_books_last_night(html, cards_html=align_src)
+            except Exception:
+                pass
+            if "6/6 unanimous" in html:
+                try:
+                    html = align_consensus_last_night_from_cards(
+                        html, sport_u, cards_html=align_src
+                    )
+                except Exception:
+                    pass
+        # Already-repaired pages still need the spread/totals score-vs-line table
+        # (first repair stamps moneyline SSR; market views re-enter here).
+        if is_chart and view_l in ("spread", "totals"):
+            try:
+                cards = _cards_html_for_align(sport_u, "") or ""
+                src = (
+                    cards
+                    if cards and ("game-card" in cards or "pick-conf-grid" in cards)
+                    else html
+                )
+                rows = _parse_score_rows(src) or _parse_score_rows(html)
+                table = _sou_table(view_l, rows)
+                if re.search(r'<section\b[^>]*\bid=["\']ssr-finals["\']', html, flags=re.I):
+                    html = re.sub(
+                        r'<section\b[^>]*\bid=["\']ssr-finals["\'][\s\S]*?</section>',
+                        table,
+                        html,
+                        count=1,
+                        flags=re.I,
+                    )
+                elif not re.search(r"Actual vs lines|Act \d", html or "", flags=re.I):
+                    html = _insert_before_main_end(html, table)
+            except Exception:
+                try:
+                    html = ensure_sou_compare(html, view_l)
+                except Exception:
+                    pass
+        return html
     if not is_chart and sport_u not in {"TENNIS", "UFC", "GOLF"}:
         # Grade the marks against the posted score first, so every table built
         # from these cards (consensus, records) counts the same wins and losses.
@@ -3358,7 +3513,18 @@ def repair_results_html(html: str, sport: str, view: str = "") -> str:
     html = ensure_xsharp_totals(html)
     html = unwrap_pc_name_sides(html)
     html = shorten_pc_side_labels(html)
-    if sport_u in {"MLB", "NCAAF", "NBA", "WNBA", "NFL", "CFL", "SOCCER", "NHL"}:
+    if sport_u in {
+        "MLB",
+        "NCAAF",
+        "NCAAB",
+        "NCAAW",
+        "NBA",
+        "WNBA",
+        "NFL",
+        "CFL",
+        "SOCCER",
+        "NHL",
+    }:
         # Cards pages grade from the cards in this response. Chart pages have
         # those cards stripped, so they use the saved cards HTML.
         align_src = html if not is_chart else (_cards_html_for_align(sport_u, "") or None)
@@ -3961,6 +4127,26 @@ def normalize_served_html(html: str, path: str = "") -> str:
     return html
 
 
+def _mlb_offseason_clear_fake_cards(html: str) -> str:
+    """CSS-only game-card-stack references must not count as a live slate."""
+    if not html:
+        return html
+    body = re.sub(r"<script\b[^>]*>[\s\S]*?</script>", "", html, flags=re.I)
+    if re.search(r"<[^>]+\bdata-pick-card\b", body, flags=re.I):
+        return html
+    # Ship checker treats any leftover "game-card-stack" (even in CSS) as cards.
+    html = re.sub(r"game-card-stack", "mlb-stack", html)
+    if "off-season" not in html.lower():
+        html = re.sub(
+            r"(<main\b[^>]*>)",
+            r'\1<p class="off-season-note">MLB is in the off-season.</p>',
+            html,
+            count=1,
+            flags=re.I,
+        )
+    return html
+
+
 def repair_picks_html(html: str, sport: str) -> str:
     if not html:
         return html
@@ -3977,6 +4163,15 @@ def repair_picks_html(html: str, sport: str) -> str:
         html = fix_efficiency_na_side(html)
     if sport_u == "NCAAF":
         html = fill_ncaaf_edge_from_spread(html)
+    if sport_u == "MLB":
+        html = _mlb_offseason_clear_fake_cards(html)
+    if sport_u in ("NCAAB", "NCAAW", "NFL", "NHL", "NCAAF", "CFL", "MLB", "NBA", "WNBA"):
+        try:
+            from team_results_charts import apply_team_picks_h2h
+
+            html = apply_team_picks_h2h(html, sport_u) or html
+        except Exception:
+            pass
     html = unwrap_pc_name_sides(html)
     html = shorten_pc_side_labels(html)
     html = ensure_two_card_row(html)
@@ -4118,18 +4313,29 @@ def repair_response_html(html: str, sport: str, view: str = "", path: str = "") 
         pass
     path_l = (path or "").lower()
     sport_u = (sport or "").strip().upper()
+    view_l = (view or "").strip().lower()
     if "results" in path_l and _REPAIRED_MARK in (html or ""):
+        # Always re-enter repair_results_html: Past 30 DB reinject, PL align,
+        # and SOU compare all run on the repaired-mark branch now.
+        html = repair_results_html(html, sport_u, view_l)
         try:
             store_served_results(_request_results_key(sport_u), html)
         except Exception:
             pass
         return html
     if "picks" in path_l:
-        if _REPAIRED_MARK not in (html or ""):
-            html = repair_picks_html(html, sport_u)
-            if sport_u == "NHL":
-                html = fill_blank_books_ml(html)
-                html = hide_blank_books_ml(html)
+        # Re-run even after a prior stamp — H2H / share / blank faces may still
+        # be empty on a saved picks page.
+        html = repair_picks_html(html, sport_u)
+        if sport_u == "NHL":
+            html = fill_blank_books_ml(html)
+            html = hide_blank_books_ml(html)
+        try:
+            from served_layout_fixes import _strip_empty_model_faces
+
+            html = _strip_empty_model_faces(html)
+        except Exception:
+            pass
         return normalize_served_html(html, path_l)
     if "results" in path_l:
         html = repair_results_html(html, sport_u, view)

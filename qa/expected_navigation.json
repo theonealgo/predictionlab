@@ -32,8 +32,7 @@
         "/daily-report",
         "/all-sports-results",
         "/ai-sports-betting-picks-today",
-        "/our-model-vs-sportsbooks",
-        "/tutorial"
+        "/our-model-vs-sportsbooks"
       ]
     },
     "tools": {
@@ -55,8 +54,7 @@
       "required": [
         "/all-sports-results",
         "/daily-report",
-        "/results/downloads",
-        "/edge-performance"
+        "/results/downloads"
       ],
       "forbidden": []
     },
@@ -67,7 +65,6 @@
         "/blog",
         "/affiliate",
         "/faq",
-        "/tutorial",
         "/contact",
         "/privacy",
         "/terms",

@@ -288,10 +288,73 @@ def result_dates(db_path, league=None):
     return sorted(dates, reverse=True)[:60]
 
 
+def _latest_graded_results_day(db_path, league=None):
+    """Newest night with HIT/MISS/PUSH in player_prop_results (may lack picks rows)."""
+    path = Path(db_path).resolve()
+    try:
+        with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=3)) as conn:
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if "player_prop_results" not in tables:
+                return None
+            sql = """SELECT MAX(result_date) FROM player_prop_results
+                     WHERE result IN ('HIT','MISS','PUSH')"""
+            params = []
+            if league and league in LEAGUES:
+                sql += " AND league=?"
+                params.append(league)
+            return conn.execute(sql, params).fetchone()[0]
+    except Exception:
+        return None
+
+
 def default_results_day(db_path, league=None):
-    """Last night that already has settled (or at least recorded) prop results."""
+    """Last night that already has settled (or at least recorded) prop results.
+
+    Prefer a night with real grades (legacy results table or settled model
+    forecasts), then any recorded forecast night. Never fall back to calendar
+    yesterday when that night has no records — that blank page is what made
+    every sport look broken after named-model tracking started.
+    """
     from prop_forecast_store import latest_results_date
-    return latest_results_date(db_path, league) or yesterday()
+    graded = _latest_graded_results_day(db_path, league)
+    settled_model = latest_results_date(db_path, league)
+    # Prefer a graded legacy night over an unsettled "latest forecast" night
+    # (today's Pending slate was defaulting Results to all N/A).
+    candidates = [stamp for stamp in (graded, settled_model) if stamp]
+    if candidates:
+        # If latest_results_date fell through to Pending-only forecasts, graded wins.
+        if graded and settled_model and graded != settled_model:
+            path = Path(db_path).resolve()
+            try:
+                from prop_forecast_store import ledger_path
+                ledger = ledger_path(db_path)
+                if ledger.exists():
+                    with closing(sqlite3.connect(ledger.as_uri() + "?mode=ro", uri=True, timeout=3)) as conn:
+                        conn.execute("PRAGMA query_only=ON")
+                        params = [settled_model]
+                        league_sql = ""
+                        if league:
+                            league_sql = " AND f.league=?"
+                            params.append(league)
+                        decided = conn.execute(
+                            """SELECT COUNT(*) FROM forecasts f
+                               JOIN settlements s ON s.forecast_id=f.id
+                               WHERE f.pick_date=?
+                                 AND json_extract(s.payload,'$.result') IN ('Win','Loss','Push')"""
+                            + league_sql,
+                            params,
+                        ).fetchone()[0]
+                        if not decided:
+                            return graded
+            except Exception:
+                pass
+        return max(candidates)
+    dates = result_dates(db_path, league)
+    if not dates:
+        return yesterday()
+    today = datetime.now(ET).date().isoformat()
+    past = [stamp for stamp in dates if stamp <= today]
+    return past[0] if past else dates[0]
 
 
 def read_results(db_path, league=None, day=None, window="night"):
@@ -343,6 +406,57 @@ def read_results(db_path, league=None, day=None, window="night"):
                            reason="A separate pregame model selection and probability were not recorded.",
                            event=None)
                 rows.append(row)
+        # Graded nights often have player_prop_results without matching picks
+        # (picks snapshot stopped while results kept writing). Surface those so
+        # Results is not an empty / all-N/A board for finished nights.
+        if "player_prop_results" in tables:
+            seen = {(r["league"], r["pick_date"], r["player_name"], r["prop_type"],
+                     r["pick"], float(r["line"]) if r.get("line") is not None else None)
+                    for r in rows if not r.get("model_id")}
+            sql = """SELECT rowid AS id, league, result_date AS pick_date, player_name, team,
+                            prop_type, pick, line, actual, result AS recorded_result
+                     FROM player_prop_results
+                     WHERE result_date BETWEEN ? AND ?"""
+            params = [first_day, day]
+            if league:
+                sql += " AND league=?"
+                params.append(league)
+            sql += " ORDER BY league, player_name, prop_type, rowid"
+            for record in conn.execute(sql, params):
+                row = dict(record)
+                if row["league"] not in starts or row["pick_date"] < starts[row["league"]]:
+                    continue
+                line = float(row["line"]) if row.get("line") is not None else None
+                key = (row["league"], row["pick_date"], row["player_name"], row["prop_type"],
+                       row["pick"], line)
+                if key in seen:
+                    continue
+                seen.add(key)
+                graded = {"HIT": "Win", "MISS": "Loss", "PUSH": "Push"}.get(row.get("recorded_result"))
+                if not graded:
+                    continue
+                rows.append({
+                    "id": f"result-{row['id']}",
+                    "league": row["league"],
+                    "pick_date": row["pick_date"],
+                    "player_name": row["player_name"],
+                    "team": row["team"],
+                    "prop_type": row["prop_type"],
+                    "pick": row["pick"],
+                    "line": line,
+                    "created_at": None,
+                    "line_source": None,
+                    "actual": row.get("actual"),
+                    "recorded_result": row.get("recorded_result"),
+                    "model_id": None,
+                    "model_name": "Not recorded",
+                    "probability": None,
+                    "result": graded,
+                    "selection_result": graded,
+                    "line_type": "legacy",
+                    "reason": "A separate pregame model selection and probability were not recorded.",
+                    "event": None,
+                })
     from prop_forecast_store import read as read_model_forecasts, first_recorded_dates
     recorded_dates = first_recorded_dates(db_path, league)
     original_forecasts = {}
@@ -387,6 +501,20 @@ def read_results(db_path, league=None, day=None, window="night"):
                                   else "Awaiting decided results." if selected else "No separately recorded model results.")})
     graded_rows = [row for row in rows if row.get("result") in {"Win", "Loss", "Push"} and not row.get("model_id")]
     graded = outcome_summary(graded_rows)
+    # Hub model table only counts named-model rows. When graded picks exist without
+    # a model_id, surface them as one "Saved picks" line so Results is not all N/A.
+    if graded["decided"] or graded["pushes"]:
+        models.insert(0, {
+            "id": "_saved",
+            "name": "Saved picks",
+            "first_recorded_date": None,
+            "wins": graded["wins"],
+            "losses": graded["losses"],
+            "pushes": graded["pushes"],
+            "decided": graded["decided"],
+            "win_rate": graded["win_rate"],
+            "reason": "Saved pregame picks graded against the final box score.",
+        })
     return {"league": league, "result_date": day, "start_date": first_day, "window": window,
             "graded": graded,
             "season_starts": starts if window == "season" else None, "count": len(rows), "items": rows,

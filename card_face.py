@@ -130,6 +130,16 @@ def normalize_card_faces(html: str, sport: str, path: str) -> str:
                 or "Consensus Record: —" in html
                 or "Consensus Historical Record" not in html
             )
+        ) or (
+            # NBA / NHL baked empty 0-0 chips — rebuild from season lookup
+            # (NBA also overlays results-table Past 30).
+            sport_u in ("NBA", "NHL")
+            and (
+                ": 0-0" in html
+                or "(0-0)" in html
+                or "Unanimous: 0-0" in html
+                or "Consensus Historical Record" not in html
+            )
         ):
             html = _add_results_chips(html, sport_u)
         if low.endswith("-results"):

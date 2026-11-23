@@ -1,98 +1,152 @@
 The automated QA audit for PredictionLab detected the following issues:
-Audit run: 20261028_074207  |  2026-10-28 07:42:07
-Target: http://127.0.0.1:5122
+Audit run: 20261123_121508  |  2026-11-23 12:15:08
+Target: http://127.0.0.1:5148
 
 FAILURES (must fix):
-  - [speed] speed /all-sports-results: Won't open — took 10.6s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5122/all-sports-results
-  - [speed] speed /ncaaf-results: Won't open — took 6.6s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5122/ncaaf-results
-  - [speed] speed /nhl-picks: /nhl-picks took 32.3s (over 5s). Pages must load in 5s.
-    Page: http://127.0.0.1:5122/nhl-picks
-  - [speed] speed /results/export.csv: /results/export.csv took 37.0s (over 5s). Pages must load in 5s.
-    Page: http://127.0.0.1:5122/results/export.csv
-  - [content] NCAAB share card: Share card does not report how many picks it drew
-    Page: /ncaab-picks
-  - [content] NCAAF Efficiency N/A copy: Efficiency shows a copied % with N/A side on 1 card(s)
+  - [speed] speed /soccer-picks?league=fifa.world: /soccer-picks?league=fifa.world took 9.0s (over 5s). Pages must load in 5s.
+    Page: http://127.0.0.1:51879/soccer-picks?league=fifa.world
+  - [speed] speed /nhl-results: Won't open — took 9.7s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:51879/nhl-results
+  - [speed] speed /wnba-results: Won't open — took 5.3s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:51879/wnba-results
+  - [speed] speed /ncaaw-results: Won't open — took 9.9s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:51879/ncaaw-results
+  - [content] NBA spread chart table: spread chart does not compare actual score to books / PL lines
+    Page: /nba-results?view=chart&market=spread
+  - [content] NBA totals chart table: totals chart does not compare actual score to books / PL lines
+    Page: /nba-results?view=chart&market=totals
+  - [content] NBA Model Performance W-L %: NBA Flat Unit Season Spread 82-66 does not match Season Performance Spread 84-64
+    Page: /nba-results
+  - [content] NHL spread chart table: spread chart does not compare actual score to books / PL lines
+    Page: /nhl-results?view=chart&market=spread
+  - [content] NHL totals chart table: totals chart does not compare actual score to books / PL lines
+    Page: /nhl-results?view=chart&market=totals
+  - [content] NFL results card parameters: NFL: 5/154 results cards are missing a model box (Grinder2 / Takedown / Edge / XSharp / Market Consensus / Efficiency)
+    Page: /nfl-results
+  - [speed] speed /ncaab-results: Won't open — took 9.2s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:51879/ncaab-results
+  - [content] NCAAB spread chart table: spread chart does not compare actual score to books / PL lines
+    Page: /ncaab-results?view=chart&market=spread
+  - [content] NCAAB totals chart table: totals chart does not compare actual score to books / PL lines
+    Page: /ncaab-results?view=chart&market=totals
+  - [content] NCAAW PL vs Books partition: NCAAW PL vs Books agree+disagree is 58 game(s) but PL favorite is 7-2 (9 games)
+    Page: /ncaaw-results
+  - [content] Results math vs cards: ncaaw-results: Team PL vs Books agree+disagree is 58 game(s) but PL favorite is 7-2 (9 games)
+    Page: /ncaaw-results
+  - [cards] NHL milestone props: UNDER pick found: 14 milestone prop(s) show UNDER — these are anytime/over-only markets
+    Detail: Nick Suzuki assists, Macklin Celebrini assists, Mark Scheifele assists, Lane Hutson assists, Kyle Connor assists
+    Page: /player-props-api/props?league=NHL
+  - [values] NFL missing values: 20 blank model value(s) on 154 cards
+    Page: /nfl-results
+  - [values] NFL market odds: 2 missing market price(s) on today's games
+    Page: /nfl-results
+  - [values] NBA missing values: 27 blank model value(s) on 22 cards
+    Page: /nba-results
+  - [values] NCAAF missing values: 1 blank model value(s) on 128 cards
+    Page: /ncaaf-results
+  - [values] NCAAB consensus window: ESPN has 2452 completed NCAAB games in 30 days; the largest past-30 consensus record covers only 408
+    Page: /ncaab-results
+  - [values] NCAAW consensus window: largest past-30 record covers 189 games; the database has 470 finals in 30 days; ESPN has 2412 completed NCAAW games in 30 days; the largest past-30 consensus record covers only 189
+    Page: /ncaaw-results
+  - [values] WNBA missing values: 9 blank model value(s) on 3 cards
+    Page: /wnba-results
+  - [values] CFL consensus window: 6/6 unanimous past 30 is 2-0, the same as last night
+    Page: /cfl-results
+  - [values] CFL missing values: 14 blank model value(s) on 6 cards
+    Page: /cfl-results
+  - [values] SOCCER record math: 1 board record(s) do not match the W-L
+    Detail: 2.5% vs 41-39 (51.2%)
+    Page: /soccer-results
+  - [values] SOCCER missing values: 378 blank model value(s) on 118 cards
+    Page: /soccer-results
+  - [chrome] NFL results card parameters: NFL: 5/154 results cards are missing a model box (Grinder2 / Takedown / Edge / XSharp / Market Consensus / Efficiency)
+    Page: http://127.0.0.1:51879/nfl-results
+  - [chrome] speed /nhl-results: Won't open — took 5.5s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:51879/nhl-results
+  - [chrome] speed /ncaab-results: Won't open — took 11.8s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
+    Page: http://127.0.0.1:51879/ncaab-results
+  - [chrome] NCAAF All Sports Results: All Sports Results NCAAF Efficiency is 431-170; Season board grades 451-175
+    Page: http://127.0.0.1:51879/all-sports-results
+  - [chrome] DIGEST slow pages: 2 page(s) slower than 5s: /nhl-results 5.5s, /ncaab-results 11.8s
+  - [ship] TENNIS bottom share image: Picks page has cards but no /share/predictions image or /share.jpg
+    Page: /tennis-picks
+  - [ship] UFC bottom share image: Picks page has cards but no /share/predictions image or /share.jpg
+    Page: /ufc-picks
+  - [ship] SOCCER bottom share image: Picks page has cards but no /share/predictions image or /share.jpg
+    Page: /soccer-picks
+  - [ship] MLB bottom share image: Picks page has cards but no /share/predictions image or /share.jpg
+    Page: /mlb-picks
+  - [ship] NFL H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
+    Page: /nfl-picks
+  - [ship] MLB H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
+    Page: /mlb-picks
+  - [ship] MLB picks today: Pick cards exist but none for today (2026-11-23) — stale slate / missing today's games
+    Page: /mlb-picks
+  - [ship] NCAAF H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
     Page: /ncaaf-picks
-  - [content] NCAAF missing models/values: NCAAF: 1/102 cards have a blank or N/A model value, or every model at 50%
-    Page: /ncaaf-picks
-  - [content] NCAAW share card: Share card does not report how many picks it drew
-    Page: /ncaaw-picks
-  - [content] content auditor crash: No module named 'qa'
-    Detail: te_checker.py", line 3318, in <lambda>
-    run_auditor("content",    lambda: ContentAuditor(session, base, report).run())
-                                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
-  File "/Users/nimamesghali/Sports Sandbox/pl_cursor/qa/site_checker.py", line 700, in run
-    from qa.chart_shape import wnba_consensus_hist_face_issues
-ModuleNotFoundError: No module named 'qa'
-
-  - [navigation] Picks & Predictions: missing /nba-picks: Required link /nba-picks is NOT in the Picks & Predictions menu
-  - [navigation] Picks & Predictions: missing /nhl-picks: Required link /nhl-picks is NOT in the Picks & Predictions menu
-  - [navigation] Picks & Predictions: missing /nfl-picks: Required link /nfl-picks is NOT in the Picks & Predictions menu
-  - [navigation] Picks & Predictions: missing /mlb-picks: Required link /mlb-picks is NOT in the Picks & Predictions menu
-  - [navigation] Picks & Predictions: missing /ncaab-picks: Required link /ncaab-picks is NOT in the Picks & Predictions menu
-  - [navigation] Picks & Predictions: missing /ncaaf-picks: Required link /ncaaf-picks is NOT in the Picks & Predictions menu
-  - [navigation] Picks & Predictions: missing /ncaaw-picks: Required link /ncaaw-picks is NOT in the Picks & Predictions menu
-  - [navigation] Picks & Predictions: missing /wnba-picks: Required link /wnba-picks is NOT in the Picks & Predictions menu
-  - [navigation] Props: missing /player-props: Required link /player-props is NOT in the Props menu
-  - [navigation] Tools & Models: missing /performance: Required link /performance is NOT in the Tools & Models menu
-  - [navigation] Tools & Models: missing /ai-sports-betting-picks-today: Required link /ai-sports-betting-picks-today is NOT in the Tools & Models menu
-  - [navigation] Tools & Models: missing /our-model-vs-sportsbooks: Required link /our-model-vs-sportsbooks is NOT in the Tools & Models menu
-  - [navigation] Tools & Models: missing /tutorial: Required link /tutorial is NOT in the Tools & Models menu
-  - [navigation] Results & Tracking: missing /all-sports-results: Required link /all-sports-results is NOT in the Results & Tracking menu
-  - [navigation] Results & Tracking: missing /daily-report: Required link /daily-report is NOT in the Results & Tracking menu
-  - [navigation] Results & Tracking: missing /results/downloads: Required link /results/downloads is NOT in the Results & Tracking menu
-  - [navigation] Results & Tracking: missing /edge-performance: Required link /edge-performance is NOT in the Results & Tracking menu
-  - [navigation] Company: missing /plans: Required link /plans is NOT in the Company menu
-  - [navigation] Company: missing /blog: Required link /blog is NOT in the Company menu
-  - [navigation] Company: missing /affiliate: Required link /affiliate is NOT in the Company menu
-  - [navigation] Company: missing /faq: Required link /faq is NOT in the Company menu
-  - [navigation] Company: missing /tutorial: Required link /tutorial is NOT in the Company menu
-  - [navigation] Company: missing /contact: Required link /contact is NOT in the Company menu
-  - [navigation] Company: missing /privacy: Required link /privacy is NOT in the Company menu
-  - [navigation] Company: missing /terms: Required link /terms is NOT in the Company menu
-  - [navigation] Company: missing /refund-policy: Required link /refund-policy is NOT in the Company menu
-  - [navigation] Company: missing /responsible-gaming: Required link /responsible-gaming is NOT in the Company menu
-  - [speed] speed /soccer-results: Won't open — took 10.5s (over 5s). A results page that sits on the spinner is a fail, even if HTTP 200 arrives later.
-    Page: http://127.0.0.1:5122/soccer-results
-  - [chrome] NCAAF Efficiency N/A copy: Efficiency shows a copied % with N/A side on 1 card(s)
-    Page: http://127.0.0.1:5122/ncaaf-picks
-  - [chrome] NCAAF missing models/values: NCAAF: 1/102 cards have a blank or N/A model value, or every model at 50%
-    Page: http://127.0.0.1:5122/ncaaf-picks
-  - [chrome] CFL picks slate: Predictions page has no pick cards (blank slate on a live sport)
-    Page: http://127.0.0.1:5122/cfl-picks
+  - [ship] WNBA H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
+    Page: /wnba-picks
   - [ship] CFL H2H Last 10: Picks cards are missing H2H Last 10 values (label only, all —, or all 0)
     Page: /cfl-picks
-  - [ship] DIGEST missing card values: CFL
-  - [soccer] soccer picks week pages: Card dates span 7 days (2026-10-28–2026-11-04) — weeks must stay separate
-    Page: http://127.0.0.1:5122/soccer-picks?region=all
-  - [espn_slate] Soccer today vs ESPN: Scottish Premiership: Dundee United is on Celtic on the page; ESPN has Dundee vs Kilmarnock
-    Detail: leagues=4 day=2026-10-28
-    Page: http://127.0.0.1:5122/soccer-picks
-  - [props] NHL milestone UNDER pick: 39 over-only prop(s) show UNDER
-    Detail: Christian Dvorak assists, Dougie Hamilton assists, Mikael Backlund assists, Alex Ovechkin assists, Timo Meier assists
-
-WARNINGS (should investigate):
-  - [routes] Audit CSV (needs login): Expected [302], got 200
-    Page: /performance/audit.csv
-  - [routes] Slow pages on local server: 1 page(s) exceeded the 12s timeout — normal on local dev
-    Detail: /results/export.csv
-  - [models] Stale model name: NBA: Found stale model reference: 'fallback'
-    Page: /nba-picks
-  - [models] Stale model name: NHL: Found stale model reference: 'fallback'
-    Page: /nhl-picks
-  - [models] Stale model name: MLB: Found stale model reference: 'fallback'
-    Page: /mlb-picks
-  - [props] NHL diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  - [props] NFL diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  - [props] NFL diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
-  - [props] NCAAF diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
-  - [props] NCAAF diagnostics: degenerate distribution: All pick probabilities clustered near 50% — possible fallback model
-  - [props] SOCCER diagnostics: feature collapse: Only 1 feature(s) carry signal (model_agreement) — feature importance is degenerate
+  - [ship] DIGEST missing bottom share image: MLB, SOCCER, TENNIS, UFC
+  - [ship] DIGEST missing card values: CFL, MLB, NCAAF, NFL, WNBA
+  - [espn_slate] Golf today vs ESPN: ESPN golf event not on the page: The RSM Classic
+    Page: http://127.0.0.1:51879/golf-picks
+  - [props] Props load: NBA: get_league_data returned 0 props
+  - [props] Props load: NHL: get_league_data returned 0 props
+  - [props] Props load: MLB: get_league_data returned 0 props
+  - [props] Props load: NFL: get_league_data returned 0 props
+  - [props] Props load: NCAAB: get_league_data returned 0 props
+  - [props] Props load: NCAAW: get_league_data returned 0 props
   - [props] Props load: TENNIS: get_league_data failed: 'TENNIS'
   - [props] Props load: GOLF: get_league_data failed: 'GOLF'
-  - [pagespeed] pagespeed api key: PageSpeed skipped — no API key. Set PAGESPEED_API_KEY or qa/.pagespeed_api_key (see qa/.pagespeed_api_key.example).
+
+WARNINGS (should investigate):
+  - [routes] Player Props (needs login): Expected [302], got 200
+    Page: /player-props
+  - [routes] Picks CSV (needs login): Expected [302], got 200
+    Page: /picks/export.csv
+  - [routes] Audit CSV (needs login): Expected [302], got 200
+    Page: /performance/audit.csv
+  - [cards] Card fields: NBA: Missing expected CSS classes: ['league-badge', 'team-name', 'ml-num']
+    Page: /nba-picks
+  - [cards] Card fields: NHL: Missing expected CSS classes: ['league-badge', 'team-name', 'ml-num']
+    Page: /nhl-picks
+  - [cards] Card fields: MLB: Missing expected CSS classes: ['league-badge', 'team-name', 'ml-num']
+    Page: /mlb-picks
+  - [cards] Card fields: WNBA: Missing expected CSS classes: ['league-badge', 'team-name', 'ml-num']
+    Page: /wnba-picks
+  - [cards] Card fields: SOCCER: Missing expected CSS classes: ['league-badge', 'team-name', 'ml-num']
+    Page: /soccer-picks
+  - [models] Performance page: Grinder2: Model NOT found on performance page
+  - [models] Performance page: Takedown: Model NOT found on performance page
+  - [models] Performance page: XSharp: Model NOT found on performance page
+  - [models] Performance page: Consensus: Model NOT found on performance page
+  - [results] Models under 50%: 1 model record(s) statistically below 50% (p<0.05) — losing money, consider flipping
+    Detail: 49-77 (38.9%)
+  - [seo] SEO: /: 1 SEO issue(s)
+    Detail: no <h1>
+    Page: /
+  - [seo] SEO: /nba-picks: 2 SEO issue(s)
+    Detail: meta description too short (5 chars); no <h1>
+    Page: /nba-picks
+  - [seo] SEO: /nhl-picks: 2 SEO issue(s)
+    Detail: meta description too short (5 chars); no <h1>
+    Page: /nhl-picks
+  - [seo] SEO: /mlb-picks: 2 SEO issue(s)
+    Detail: meta description too short (5 chars); no <h1>
+    Page: /mlb-picks
+  - [seo] SEO: /soccer-picks: 2 SEO issue(s)
+    Detail: meta description too short (5 chars); no <h1>
+    Page: /soccer-picks
+  - [seo] SEO: /wnba-picks: 2 SEO issue(s)
+    Detail: meta description too short (5 chars); no <h1>
+    Page: /wnba-picks
+  - [seo] SEO: /all-sports-results: 1 SEO issue(s)
+    Detail: missing og:title
+    Page: /all-sports-results
+  - [pagespeed] pagespeed public base: PageSpeed skipped — Google cannot fetch this local base. Set PAGESPEED_BASE_URL=https://predictionlab.io (audit target was http://127.0.0.1:5148).
+    Page: http://127.0.0.1:5148
 
 ============================================================
 REQUIREMENTS FOR CLAUDE:

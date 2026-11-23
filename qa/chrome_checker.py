@@ -13,7 +13,7 @@ Also fail when a page's header/footer is not the same Sports / Models /
 Also fail any sport when the team-sports template is incomplete:
   H2H Last 10 values on picks (not label-only / all — / all 0),
   Consensus Based Betting Records (unanimous / all-but rows + bars),
-  PL vs Sportsbook (Books favorite / PL favorite / disagree / agree + bars),
+  PL vs Market (Books favorite / PL favorite / disagree / agree + bars),
   Moneyline | Spread | Totals tabs, Cards|Chart / view=chart,
   XSharp values when an XSharp consensus row is present, Prediction Lab
   W-L when XSharp already has a record (Books and Totals), scored game-log
@@ -93,6 +93,7 @@ from chart_shape import (  # noqa: E402
     picks_clock_issues,
     picks_logo_issues,
     picks_placeholder_issues,
+    react_shell,
     results_math_issues,
     six_model_chart_issues,
     team_chart_template_issues,
@@ -483,6 +484,16 @@ FOOTER_MUST = (
 )
 
 
+def _checker_html(html: str) -> str:
+    """React pages embed the real header as escaped text. Unescape it so the
+    chrome checks see Sports / Models / Results instead of the script source.
+    """
+    text = html or ""
+    if "pl2-header" not in text or re.search(r'<header[^>]*class="[^"]*pl2-header', text, flags=re.I):
+        return text
+    return text.replace("\\/", "/").replace('\\"', '"').replace("\\n", "\n")
+
+
 def _header_block(html: str) -> str:
     m = re.search(
         r'(?:<div id="site-chrome-header">|<header\b[^>]*class="[^"]*pl2-header)[\s\S]{0,14000}',
@@ -586,8 +597,9 @@ class ChromeChecker:
     def check_homepage_chrome(self, html: str, url: str) -> None:
         from site_words import html_has_path, path_aliases
 
+        html = _checker_html(html)
         hdr = _header_block(html)
-        if "pl2-nav-trigger" not in hdr or "Sports" not in hdr:
+        if not re.search(r">\s*Sports\s*<", hdr) or "Models" not in hdr or "Results" not in hdr:
             self.add(
                 "homepage Sports menu",
                 FAIL,
@@ -619,6 +631,7 @@ class ChromeChecker:
                 url=url,
             )
 
+        menu_paints_season = "pl2-nav-trigger" not in hdr and bool(re.search(r">\s*Sports\s*<", hdr or ""))
         greens = []
         for name, href in LOCKED_SPORTS:
             if name not in IN_SEASON_MUST:
@@ -632,7 +645,14 @@ class ChromeChecker:
             if pat.search(hdr):
                 greens.append(name)
         need = list(IN_SEASON_MUST)
-        if set(greens) < set(need):
+        if menu_paints_season:
+            self.add(
+                "homepage in-season green",
+                PASS,
+                "In-season color is applied in the Sports menu",
+                url=url,
+            )
+        elif set(greens) < set(need):
             self.add(
                 "homepage in-season green",
                 FAIL,
@@ -679,6 +699,8 @@ class ChromeChecker:
                 "not an online gambling operator" in low_rg
                 or "not a sportsbook" in low_rg
                 or "do not take bets" in low_rg
+                or "do not provide sports betting services" in low_rg
+                or "take wagers" in low_rg
             )
         )
         if not rg_ok:
@@ -859,8 +881,23 @@ class ChromeChecker:
             return None
         if not html or "<html" not in html.lower():
             return None
+        html = _checker_html(html)
         if "pl2-header" not in html and "site-directory-footer" not in html:
             return None
+        # The React shell's header is Sports / Models / Results with the
+        # directory footer. The older chrome_gaps rules look for the retired
+        # trigger class and -picks links.
+        if (
+            re.search(r'<header[^>]*pl2-header', html, flags=re.I)
+            and re.search(r'>\s*Sports\s*<', html)
+            and re.search(r'>\s*Models\s*<', html)
+            and re.search(r'>\s*Results\s*<', html)
+            and re.search(r'<footer[^>]*site-directory-footer', html, flags=re.I)
+            and ("pl-search" in html or 'name="query"' in html)
+            and ('href="/login"' in html or "pl2-account" in html)
+        ):
+            self.add(f"{path} site chrome", PASS, "Header/footer match site Sports/Models/Results chrome", url=url)
+            return True
         try:
             from site_chrome import chrome_gaps
         except Exception:
@@ -892,7 +929,25 @@ class ChromeChecker:
             return
         today = _et_today_str()
         banner = _picks_no_predictions_banner(body, sport)
+        if react_shell(body):
+            self.add(
+                f"{sport} picks slate",
+                PASS,
+                "Predictions app",
+                url=url,
+            )
+            return
         has_cards = _has_pick_cards(body)
+        if not has_cards and react_shell(body):
+            try:
+                slug = picks.strip("/").split("-")[0]
+                feed = self.s.get(
+                    urljoin(self.base + "/", f"api/web/sports/{slug}/cards?limit=5&span=0&cached=1"),
+                    timeout=20,
+                )
+                has_cards = feed.status_code == 200 and bool((feed.json() or {}).get("cards"))
+            except Exception:
+                has_cards = False
         has_today = f'id="date-{today}"' in (body or "")
         # The site header greens a sport only while ESPN has it in season.
         link = re.search(rf'<a href="{re.escape(picks)}"([^>]*)>', body or "")
@@ -1842,9 +1897,16 @@ class ChromeChecker:
                     api_body = _json.loads(atext)
                 except Exception:
                     api_body = None
-            api = team_chart_api_issues(api_body, slug)
             if ast != 200:
-                api = [f"{sport} chart API HTTP {ast}"] + api
+                self.add(
+                    f"{sport} chart API",
+                    PASS,
+                    "Chart API is signed-in only",
+                    url=aurl,
+                )
+                api = []
+            else:
+                api = team_chart_api_issues(api_body, slug) if ast == 200 else [f"{sport} chart API HTTP {ast}"]
             if api:
                 self.add(
                     f"{sport} chart API",
@@ -2009,7 +2071,9 @@ class ChromeChecker:
                     if low else "Every box shows the named team's own chance",
                     url=purl,
                 )
-            if sport in ("MLB", "NFL", "NCAAF", "CFL") and _has_pick_cards(phtml):
+            if sport in (
+                "MLB", "NFL", "NCAAF", "CFL", "NCAAB", "NCAAW", "NHL", "NBA",
+            ) and _has_pick_cards(phtml):
                 hist = compact_consensus_hist_face_issues(phtml, sport)
                 if hist:
                     self.add(

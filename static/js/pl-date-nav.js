@@ -1,4 +1,5 @@
-/* One date picker on every sport picks / results page: arrows, date bubbles, and a dropdown. */
+/* Shared date picker on picks pages. Results pages hide the picker and use a
+   bottom "Show last two days results cards" button instead. */
 (function () {
   var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -46,26 +47,130 @@
     return true;
   }
 
+  function isResults() {
+    return /\/[a-z0-9]+-results(?:\/|$)/i.test(location.pathname || '');
+  }
+
+  function isResultsCardsView() {
+    if (!isResults()) return false;
+    var q = (location.search || '').toLowerCase();
+    if (/[?&]view=(chart|tabs|markets|tabbed)\b/.test(q)) return false;
+    return !!document.querySelector('.date-section[id^="date-"]');
+  }
+
+  function holdStyle() {
+    if (document.getElementById('pl-cards-held')) return;
+    var st = document.createElement('style');
+    st.id = 'pl-cards-held';
+    st.textContent = [
+      '.date-section.pl-cards-held{display:none!important}',
+      'html body.sport-results .date-nav,',
+      'html body .date-nav.pl-results-hidden{display:none!important;visibility:hidden!important;height:0!important;',
+      'margin:0!important;padding:0!important;overflow:hidden!important;border:0!important}'
+    ].join('');
+    (document.head || document.documentElement).appendChild(st);
+  }
+
+  function hideResultsDateNav() {
+    document.documentElement.classList.add('pl-results-page');
+    if (document.body) document.body.classList.add('sport-results');
+    document.querySelectorAll('.date-nav').forEach(function (nav) {
+      nav.classList.add('pl-results-hidden');
+      nav.setAttribute('aria-hidden', 'true');
+      nav.style.setProperty('display', 'none', 'important');
+    });
+  }
+
+  function lastNights(n) {
+    var days = [];
+    document.querySelectorAll('.date-section[id^="date-"]').forEach(function (s) {
+      var d = (s.id || '').replace(/^date-/, '');
+      if (!ISO.test(d)) return;
+      if (!s.querySelector('.game-card, .game-card-stack, [data-pick-card]')) return;
+      if (days.indexOf(d) === -1) days.push(d);
+    });
+    days.sort();
+    return days.slice(Math.max(0, days.length - n));
+  }
+
+  function holdNights() {
+    if (!isResultsCardsView()) return;
+    holdStyle();
+    document.querySelectorAll('.date-section[id^="date-"]').forEach(function (s) {
+      s.classList.remove('visible');
+      s.classList.add('pl-cards-held');
+    });
+  }
+
+  function revealLastTwo() {
+    var days = lastNights(2);
+    if (!days.length) return [];
+    holdStyle();
+    document.querySelectorAll('.date-section[id^="date-"]').forEach(function (s) {
+      var d = (s.id || '').replace(/^date-/, '');
+      var on = days.indexOf(d) !== -1;
+      s.classList.toggle('visible', on);
+      s.classList.toggle('pl-cards-held', !on);
+      if (on && typeof window.showDate === 'function' && days.indexOf(d) === days.length - 1) {
+        try { window.showDate(d); } catch (e) {}
+      }
+    });
+    return days;
+  }
+
+  function ensureShowButton() {
+    if (!isResultsCardsView() || document.getElementById('plShowNight')) return;
+    holdStyle();
+    holdNights();
+    var show = document.createElement('button');
+    show.type = 'button';
+    show.id = 'plShowNight';
+    show.className = 'pl-load-btn pl-show-results-cards';
+    show.textContent = 'Show last two days results cards';
+    show.addEventListener('click', function () {
+      var days = revealLastTwo();
+      if (!days.length) return;
+      show.textContent = 'Showing last two days results cards';
+      show.disabled = true;
+      var first = document.getElementById('date-' + days[0]);
+      if (first) first.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    var wrap = document.createElement('div');
+    wrap.id = 'plShowNightWrap';
+    wrap.className = 'pl-show-results-wrap';
+    wrap.appendChild(show);
+    var sections = document.querySelectorAll('.date-section[id^="date-"]');
+    var anchor = sections.length ? sections[sections.length - 1] : null;
+    if (anchor && anchor.parentNode) {
+      anchor.parentNode.insertBefore(wrap, anchor.nextSibling);
+    } else {
+      var host = document.querySelector('.container, main, #content') || document.body;
+      host.appendChild(wrap);
+    }
+  }
+
+  function reveal(d) {
+    var sec = document.getElementById('date-' + d);
+    document.querySelectorAll('.date-section').forEach(function (s) {
+      var on = s === sec;
+      s.classList.toggle('visible', on);
+      s.classList.toggle('pl-cards-held', !on);
+    });
+    if (sec && typeof window.showDate === 'function') {
+      window.showDate(d);
+      if (typeof window.renderDateBubbles === 'function') window.renderDateBubbles();
+    }
+    return sec;
+  }
+
   function go(nav, sel, d) {
     if (!d) return;
     sel.value = d;
     nav.querySelectorAll('.date-bubble, .date-btn').forEach(function (b) {
       b.classList.toggle('active', bubbleDate(b) === d);
     });
-    var load = document.getElementById('plLoadDate');
-    if (load) { load.click(); return; }
-    var sec = document.getElementById('date-' + d);
-    if (sec) {
-      if (typeof window.showDate === 'function') {
-        window.showDate(d);
-        if (typeof window.renderDateBubbles === 'function') window.renderDateBubbles();
-      } else {
-        document.querySelectorAll('.date-section').forEach(function (s) {
-          s.classList.toggle('visible', s === sec);
-        });
-      }
-      return;
-    }
+    var sec = reveal(d);
+    if (sec) return;
     var b = Array.prototype.slice.call(nav.querySelectorAll('.date-bubble, .date-btn'))
       .filter(function (x) { return bubbleDate(x) === d; })[0];
     if (b && (b.onclick || b.getAttribute('onclick'))) { b.click(); return; }
@@ -162,7 +267,17 @@
     }
   }
 
+  function setupResults() {
+    holdStyle();
+    hideResultsDateNav();
+    ensureShowButton();
+  }
+
   function unify(final) {
+    if (isResults()) {
+      setupResults();
+      return;
+    }
     var navs = Array.prototype.slice.call(document.querySelectorAll('.date-nav'));
     navs.forEach(function (nav) {
       if (nav.__plDateNav) return;
@@ -176,20 +291,15 @@
       nav.__plDateNav = true;
       sel.classList.add('pl-dp-on');
       sel.style.display = '';
-      var load = document.getElementById('plLoadDate');
-      if (load && !sel.__plAuto) {
+      if (!sel.__plAuto) {
         sel.__plAuto = true;
-        sel.addEventListener('change', function () { load.click(); });
+        sel.addEventListener('change', function () { go(nav, sel, sel.value); });
       }
       nav.querySelectorAll('.date-btn').forEach(function (b) {
         if (b.onclick || b.getAttribute('onclick')) return;
         b.addEventListener('click', function () { go(nav, sel, bubbleDate(b)); });
       });
       ensureArrows(nav, sel);
-      if (sel.__plBuilt) {
-        var last = sel.options[sel.options.length - 1].value;
-        go(nav, sel, last);
-      }
     });
   }
 
@@ -198,5 +308,10 @@
   } else {
     unify(false);
   }
-  window.addEventListener('load', function () { setTimeout(function () { unify(true); }, 300); });
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      unify(true);
+      if (isResults()) setupResults();
+    }, 400);
+  });
 })();

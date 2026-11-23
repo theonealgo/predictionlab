@@ -251,14 +251,23 @@ def summary_rows(directory=None):
 
 
 def warm_missing(app, rows):
-    """Only missing boards are requested, one at a time, off the visitor's request."""
+    """Only missing boards are requested, one at a time, off the visitor's request.
+
+    Off by default on small hosts (Render 1 CPU / 2 GB): warming hits
+    /{sport}-results and can wedge the only worker. Set PL_ASR_WARM=1 to enable.
+    """
+    import os
     import time
+    if (os.environ.get("PL_ASR_WARM") or "0").strip() != "1":
+        return
     missing = [row["sport"] for row in rows if not row["available"] and row["sport"] != "GOLF"]
     with _LOCK:
         missing = [sport for sport in missing if sport not in _BUILDING
                    and time.monotonic() >= _RETRY_AT.get(sport, 0)]
         if not missing:
             return
+        # Cap to one sport per visitor hit — never stampede.
+        missing = missing[:1]
         _BUILDING.update(missing)
 
     def run():

@@ -17,10 +17,10 @@
     {"path": "/ai-sports-betting-picks-today",       "expected_status": [200],       "label": "AI Picks Today"},
     {"path": "/what-are-ai-sports-betting-picks",    "expected_status": [200],       "label": "What Are AI Picks"},
     {"path": "/our-model-vs-sportsbooks",            "expected_status": [200],       "label": "Model vs Sportsbooks"},
-    {"path": "/search",                              "expected_status": [200],       "label": "Search"},
+    {"path": "/api/web/search?q=Detroit",            "expected_status": [200],       "label": "Search"},
     {"path": "/all-sports-results",                  "expected_status": [200],       "label": "All Sports Results"},
     {"path": "/daily-report",                        "expected_status": [200],       "label": "Daily Report"},
-    {"path": "/edge-performance",                    "expected_status": [200],       "label": "Edge Performance"},
+    {"path": "/performance",                         "expected_status": [200],       "label": "Model Performance"},
     {"path": "/results/downloads",                   "expected_status": [200],       "label": "Results Downloads"},
     {"path": "/results",                             "expected_status": [200],       "label": "Results Redirect"},
     {"path": "/nba-picks",                           "expected_status": [200],       "label": "NBA Picks"},
@@ -44,7 +44,7 @@
     {"path": "/llms.txt",                            "expected_status": [200],       "label": "LLMs.txt"},
     {"path": "/ai.txt",                              "expected_status": [200],       "label": "AI.txt"},
     {"path": "/api/sports",                          "expected_status": [200],       "label": "Sports API"},
-    {"path": "/api/search?q=nba",                   "expected_status": [200, 302],  "label": "Search API"},
+    {"path": "/api/web/search?q=nba",               "expected_status": [200],       "label": "Search API"},
     {"path": "/results/export.csv",                 "expected_status": [200],       "label": "Results CSV (public)"}
   ],
   "protected": [

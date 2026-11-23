@@ -947,6 +947,54 @@ def _six_model_consensus_finals(html: str, sport: str) -> list[dict]:
     return _nfl_keep_six_model_rows(_nfl_attach_efficiency(rows))
 
 
+def _db_first_consensus_finals(html: str, sport: str) -> list[dict]:
+    """Prefer season DB + saved-card finals so Past 30 is not one night."""
+    sport_u = (sport or "").strip().upper()
+    try:
+        season = _season_consensus_finals(sport_u)
+    except Exception:
+        season = []
+    if len(season) >= 20:
+        return season
+    rows: list[dict] = []
+    try:
+        rows = _nfl_finals_from_db(limit=800, sport=sport_u)
+    except Exception:
+        rows = []
+    if rows:
+        for row in rows:
+            if not row.get("league"):
+                row["league"] = sport_u
+        kept = _nfl_keep_six_model_rows(_nfl_attach_efficiency(rows))
+        if len(kept) >= len(season or []):
+            return kept
+    if season:
+        return season
+    return _six_model_consensus_finals(html, sport_u)
+
+
+def _consensus_past30_collapsed(html: str) -> bool:
+    """True when unanimous Past 30 equals Last Night (joke sample)."""
+    if not html or "unanimous" not in (html or "").lower():
+        return False
+    for row in re.findall(r"<tr[\s\S]*?</tr>", html or "", flags=re.I):
+        cells = re.findall(r"<td[\s\S]*?</td>", row, flags=re.I)
+        if len(cells) < 4:
+            continue
+        plain = [re.sub(r"<[^>]+>", " ", c) for c in cells]
+        if "unanimous" not in plain[0].strip().lower():
+            continue
+
+        def _wl(text: str):
+            m = re.search(r"(\d+)\s*-\s*(\d+)", text or "")
+            return (int(m.group(1)), int(m.group(2))) if m else None
+
+        night, past = _wl(plain[1]), _wl(plain[3])
+        if night and past and night == past and (night[0] + night[1]) > 0:
+            return True
+    return False
+
+
 def _nfl_consensus_finals(html: str) -> list[dict]:
     """NFL 6-model sides for the MLB-shaped consensus table.
 
@@ -3051,7 +3099,13 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
         cfl_needs_inject = (not rec) or rec.group(1) == "0-0"
         if "No graded games for this market" in (html or ""):
             cfl_needs_inject = True
-    if six_wrong_panel or not _has_signed_off_consensus_charts(html) or cfl_needs_inject:
+    need_inject = (
+        six_wrong_panel
+        or not _has_signed_off_consensus_charts(html)
+        or cfl_needs_inject
+        or _consensus_past30_collapsed(html)
+    )
+    if need_inject:
         source = html
         if view_l == "chart":
             cards = _CHART_SOURCE_HTML.get(sport_u) or ""
@@ -3071,9 +3125,19 @@ def apply_team_results_template(html: str, sport: str, view: str = "") -> str:
                 except Exception:
                     six_finals = []
                 if not six_finals:
-                    six_finals = _six_model_consensus_finals(html, sport_u)
-            elif sport_u == "NCAAF":
-                six_finals = _six_model_consensus_finals(html, sport_u)
+                    six_finals = _db_first_consensus_finals(html, sport_u)
+            elif sport_u in (
+                "NCAAF",
+                "NBA",
+                "NHL",
+                "NCAAB",
+                "NCAAW",
+                "SOCCER",
+                "WNBA",
+                "MLB",
+            ):
+                # DB first — page cards alone collapse Past 30 to Last Night.
+                six_finals = _db_first_consensus_finals(html, sport_u)
             html = inject_consensus_records_html(
                 html,
                 sport=sport_u.lower(),
@@ -3826,7 +3890,8 @@ def _apply_h2h_faces(html: str, sport: str, *, results: bool = False) -> str:
         html = _inject_wnba_consensus_hist_chips(html)
     elif sport_u in ("NCAAB", "NCAAW"):
         html = _inject_consensus_hist_chips(html, sport=sport_u, models=_NCAAF_CONSENSUS_MODELS)
-        html = _inject_nhl_pl_vs_books_chips(html, sport=sport_u)
+        # PL vs Books face chips are filled elsewhere for college; the NHL
+        # helper hardcodes NHL finals and must not run here.
     else:
         html = _inject_face_h2h_chips(html)
         html = _sync_h2h_face_chips(html)
@@ -3845,19 +3910,29 @@ def apply_team_picks_h2h(html: str, sport: str) -> str:
             html = fill_wnba_card_gaps(html)
         except Exception:
             pass
-    if sport_u not in PICKS_H2H_SPORTS or not html or "H2H Last 10" not in html:
+    # Consensus Historical face chips must run even when the page has no
+    # "H2H Last 10" label yet (college cards often ship without it). Skipping
+    # here left NCAAB / NCAAW faces blank and the checker never saw it when
+    # auditing the free moneyline-only view.
+    needs_hist = sport_u in (
+        "NCAAF", "NCAAB", "NCAAW", "NFL", "NHL", "WNBA", "CFL", "MLB", "NBA",
+    )
+    if sport_u not in PICKS_H2H_SPORTS or not html or (
+        "H2H Last 10" not in html and not needs_hist
+    ):
         html = apply_team_picks_copy_all(html, sport_u)
         if sport_u == "CFL":
             html = _hide_blank_books_ml_lines(html)
         return html
-    html = _apply_h2h_faces(html, sport_u)
+    if "H2H Last 10" in html or needs_hist:
+        html = _apply_h2h_faces(html, sport_u)
     html = apply_team_picks_copy_all(html, sport_u)
     if sport_u == "CFL":
         html = _hide_blank_books_ml_lines(html)
         html = _hide_empty_books_spread_total(html)
     if sport_u == "NFL":
         html = _strip_nfl_duplicate_h2h(html)
-    if sport_u in ("NCAAF", "WNBA", "CFL", "NFL", "NHL"):
+    if sport_u in ("NCAAF", "NCAAB", "NCAAW", "WNBA", "CFL", "NFL", "NHL", "NBA", "MLB"):
         # Face shows Consensus Historical Record; keep one H2H in details only.
         html = re.sub(
             r'<div class="line-chip h2h-face-chip">[\s\S]*?</div>\s*</div>',
@@ -3867,6 +3942,11 @@ def apply_team_picks_h2h(html: str, sport: str) -> str:
         )
     if sport_u == "NHL" and "data-pick-card" in html:
         html = _inject_nhl_consensus_hist_chips(html)
+    elif sport_u in ("NCAAB", "NCAAW") and "data-pick-card" in html:
+        if "consensus-hist-chip" not in html and "Consensus Historical Record" not in html:
+            html = _inject_consensus_hist_chips(
+                html, sport=sport_u, models=_NCAAF_CONSENSUS_MODELS
+            )
     return html
 
 
@@ -4452,7 +4532,10 @@ def _fill_efficiency_na(html: str, sport: str) -> str:
         return parts[-1] if parts else name
 
     parts = re.split(r"(?=<div\b[^>]*\bdata-pick-card\b)", html, flags=re.I)
-    if len(parts) < 2 and sport_u in ("NCAAF", "NFL"):
+    # Results cards often use game-card without data-pick-card (NCAAB/NCAAW/NBA…).
+    if len(parts) < 2 and sport_u in (
+        "NCAAF", "NFL", "NCAAB", "NCAAW", "NBA", "NHL", "WNBA", "CFL", "MLB"
+    ):
         parts = re.split(
             r'(?=<div\b[^>]*class="[^"]*\bgame-card\b)',
             html,
@@ -4737,6 +4820,17 @@ def _card_dissent_for_models(
         if len(set(sides.values())) == 1:
             dissent = tuple(name for name in models if name not in sides)
             return agree_n, dissent
+        # Published models disagree, and blanks also count as dissent. Still
+        # form a pattern when the majority among *published* sides is clear
+        # (NCAAB early season: G2/TD N/A + 3–1 among the four that posted).
+        pub_maj = len(sides) // 2 + 1
+        if agree_n >= pub_maj:
+            dissent = tuple(
+                name
+                for name in models
+                if name not in sides or sides.get(name) != majority_side
+            )
+            return agree_n, dissent
         return None
     dissent = tuple(
         name
@@ -4849,10 +4943,8 @@ def _consensus_d7_combo_lookup(
         )
     except Exception:
         return {}
-    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER", "NHL", "NCAAB"):
+    if sport_u in ("NFL", "NCAAF", "CFL", "SOCCER", "NHL", "NCAAB", "NBA", "WNBA"):
         finals = _season_consensus_finals(sport_u)
-    elif sport_u in ("WNBA", "NBA"):
-        finals = _wnba_nba_consensus_finals(sport_u)
     elif sport_u == "UFC":
         finals = _ufc_consensus_finals()
     else:
@@ -5002,10 +5094,12 @@ def _consensus_hist_label(
         pct_s = f"{pct:.0f}%" if pct is not None else "—"
     if folded >= panel and not dissent:
         pattern = f"{panel}/{panel} unanimous"
+    elif dissent:
+        # Prefer "all but …" even when agree_n * 2 == panel (NCAAB early season:
+        # blanks pad a 3–1 majority into a false "3/6 Split").
+        pattern = f"{folded}/{panel} all but " + " and ".join(dissent)
     elif folded * 2 == panel:
         pattern = f"{folded}/{panel} Split / no consensus"
-    elif dissent:
-        pattern = f"{folded}/{panel} all but " + " and ".join(dissent)
     else:
         pattern = f"{folded}/{panel}"
     return f"Consensus Record: {rec} ({pct_s}) — Season · {pattern}"
@@ -5117,10 +5211,24 @@ def _nba_past30_records() -> dict[tuple[str, ...], tuple[int, int]]:
     The key is ('unanimous',) or the sorted dissent names ('edge', 'grinder2').
     This copies the table cell. It does not recompute the record.
     """
-    path = Path(__file__).resolve().parent / ".cache" / "served_NBA_.html"
-    try:
-        html = path.read_text(encoding="utf-8")
-    except OSError:
+    here = Path(__file__).resolve().parent
+    roots = [here / ".cache"]
+    if here.parent.name == "sport_variants":
+        roots.append(here.parent.parent / ".cache")
+    html = ""
+    for cache_dir in roots:
+        for name in ("served_NBA_.html", "served_NBA___free.html", "chart_src_NBA.html"):
+            path = cache_dir / name
+            try:
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if "Consensus Based Betting Records" in text:
+                html = text
+                break
+        if html:
+            break
+    if not html:
         return {}
     start = html.find("Consensus Based Betting Records")
     if start < 0:
@@ -5135,7 +5243,11 @@ def _nba_past30_records() -> dict[tuple[str, ...], tuple[int, int]]:
         cells = re.findall(r"<td>([\s\S]*?)</td>", row[bucket.end():])
         if len(cells) < 3:
             continue
-        rec = re.search(r"(\d+)\s*-\s*(\d+)", re.sub(r"<[^>]+>", " ", cells[2]))
+        rec = None
+        for cell in (cells[2], cells[1], cells[0]):
+            rec = re.search(r"(\d+)\s*-\s*(\d+)", re.sub(r"<[^>]+>", " ", cell))
+            if rec and not (int(rec.group(1)) == 0 and int(rec.group(2)) == 0):
+                break
         if not rec:
             continue
         name = bucket.group(1).lower()
@@ -5210,17 +5322,85 @@ def _inject_consensus_hist_chips(
                 label = "Consensus Record: —"
         else:
             folded, dissent = dissent_info
-            # Even splits (3/6, 2/4) share one table row keyed by ().
+            # Even splits (3/6, 2/4) share one table row keyed by () when there
+            # is no dissent list. A dissent list (incl. N/A blanks) keeps its key.
             lookup_key = (
                 (folded, ())
-                if folded * 2 == panel
+                if folded * 2 == panel and not dissent
                 else (folded, dissent)
             )
             hit = lookup.get(lookup_key)
             if hit is None and (folded, dissent) in lookup:
                 hit = lookup.get((folded, dissent))
+            if hit is None and folded * 2 == panel:
+                hit = lookup.get((folded, ()))
             if hit is None and folded >= panel and not dissent:
                 hit = lookup.get((panel, ()))
+            # NHL picks label the 6th box "Market Consensus" while season grades
+            # use Sharp Consensus. Live Market Consensus often opposes the other
+            # models, inventing patterns (Sharp Consensus + Efficiency) that have
+            # never appeared in graded NHL history → baked "0-0". Drop Sharp
+            # Consensus from the dissent key when that row is empty so the chip
+            # matches the season table (Sharp Consensus almost always rode with
+            # the majority in graded games).
+            if sport_u == "NHL" and (
+                hit is None or (hit[0] == 0 and hit[1] == 0)
+            ):
+                if "Sharp Consensus" in dissent:
+                    remapped = tuple(d for d in dissent if d != "Sharp Consensus")
+                    new_folded = min(panel, folded + 1)
+                    alt_key = (
+                        (new_folded, ())
+                        if new_folded * 2 == panel or not remapped
+                        else (new_folded, remapped)
+                    )
+                    alt = lookup.get(alt_key)
+                    if alt is None and remapped:
+                        alt = lookup.get((new_folded, remapped))
+                    if alt is None and new_folded >= panel and not remapped:
+                        alt = lookup.get((panel, ()))
+                    if alt is not None and not (alt[0] == 0 and alt[1] == 0):
+                        hit = alt
+                        folded, dissent = new_folded, remapped
+                        lookup_key = alt_key
+            # NCAAB / NCAAW: blank Pick Confidence boxes (G2 / Takedown N/A) are
+            # counted as dissent, inventing keys like 3/6 all but G2+TD+Eff that
+            # never appear in graded season rows → baked "0-0". Treat blanks as
+            # agreeing with the majority and re-lookup (same idea as NHL remap).
+            if sport_u in ("NCAAB", "NCAAW") and (
+                hit is None or (hit[0] == 0 and hit[1] == 0)
+            ):
+                hm = re.search(r'data-home="([^"]*)"', stack[:2500], flags=re.I)
+                am = re.search(r'data-away="([^"]*)"', stack[:2500], flags=re.I)
+                home = html_lib.unescape(hm.group(1) if hm else "").strip()
+                away = html_lib.unescape(am.group(1) if am else "").strip()
+                blanks = []
+                for name in grade_models:
+                    side = _pc_model_ml_side(stack, name, home=home, away=away)
+                    if side is None and name == "Sharp Consensus":
+                        side = _pc_model_ml_side(
+                            stack, "Market Consensus", home=home, away=away
+                        )
+                    if side not in ("HOME", "AWAY"):
+                        blanks.append(name)
+                blank_set = set(blanks)
+                if blank_set and any(name in blank_set for name in dissent):
+                    remapped = tuple(d for d in dissent if d not in blank_set)
+                    new_folded = min(panel, folded + (len(dissent) - len(remapped)))
+                    alt_key = (
+                        (new_folded, ())
+                        if new_folded * 2 == panel or not remapped
+                        else (new_folded, remapped)
+                    )
+                    alt = lookup.get(alt_key)
+                    if alt is None and remapped:
+                        alt = lookup.get((new_folded, remapped))
+                    if alt is None and new_folded >= panel and not remapped:
+                        alt = lookup.get((panel, ()))
+                    if alt is not None and not (alt[0] == 0 and alt[1] == 0):
+                        hit = alt
+                        folded, dissent = new_folded, remapped
+                        lookup_key = alt_key
             if hit is None:
                 w, l, pct, pushes = 0, 0, None, 0
             elif len(hit) >= 4:
