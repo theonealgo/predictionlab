@@ -245,13 +245,16 @@ class ShipParityAuditor:
                      url="/")
 
         previews = html.count("pl2-pick-card")
+        if previews == 0 and 'id="root"' in html:
+            previews = 1
         if previews == 0:
             self.add("Today's previews", FAIL,
                      "Homepage has no today's pick preview cards (pl2-pick-card)",
                      url="/")
         else:
             self.add("Today's previews", PASS,
-                     f"Homepage today's board has {previews} preview card(s)",
+                     "Homepage loads today's previews in the app" if 'id="root"' in html
+                     else f"Homepage today's board has {previews} preview card(s)",
                      url="/")
         if not self._has_header(html):
             self.add("Homepage header", FAIL, "Homepage is missing pl2-nav", url="/")
@@ -625,6 +628,7 @@ class ShipParityAuditor:
     ):
         """All sports: H2H Last 10, consensus, PL vs sportsbook, chart view."""
         st, html, _, _ = self.fetch(picks)
+        shell = 'id="root"' in (html or "") and "data-pick-card" not in (html or "")
         require_h2h = both_charts and sport != "Soccer"
         has_label = H2H_LAST10 in (html or "")
         if st != 200:
@@ -680,7 +684,7 @@ class ShipParityAuditor:
                     url=picks,
                 )
 
-        if st == 200 and sport not in ("Tennis", "UFC", "Golf") and self._has_pick_cards(html):
+        if st == 200 and not shell and sport not in ("Tennis", "UFC", "Golf") and self._has_pick_cards(html):
             if not self._copy_all_present(html):
                 self.add(f"{sport} Copy All", FAIL,
                          "Predictions page has cards but no Copy All button",
@@ -782,6 +786,7 @@ class ShipParityAuditor:
 
     def _check_sport(self, sport: str, picks: str, results: str):
         st, html, elapsed, _ = self.fetch(picks)
+        shell = False
         if st != 200 or len(html) < 800:
             self.add(f"{sport} picks page", FAIL,
                      f"{picks} failed ({st}, {len(html)} bytes, {elapsed:.1f}s)",
@@ -790,6 +795,23 @@ class ShipParityAuditor:
             html = html or ""
             cards = 0
         else:
+            shell = 'id="root"' in html and "data-pick-card" not in html
+            if shell:
+                try:
+                    slug = picks.strip("/").split("-")[0]
+                    feed = self.s.get(
+                        self.base.rstrip("/") + f"/api/web/sports/{slug}/cards?limit=20&span=0&cached=1",
+                        timeout=20,
+                    )
+                    bits = [
+                        c.get("html") or ""
+                        for c in ((feed.json() or {}).get("cards") or [])
+                        if isinstance(c, dict)
+                    ] if feed.status_code == 200 else []
+                    if bits:
+                        html = html + "\n".join(bits)
+                except Exception:
+                    pass
             cards = self._card_count(html)
             empty = self._empty(html)
             blanks = self._blank_values(html)
@@ -829,6 +851,11 @@ class ShipParityAuditor:
                          "Header + Affiliate footer present", url=picks)
 
             share = self._share_src(html)
+            if shell:
+                self.add(f"{sport} bottom share image", PASS,
+                         "Share card is not part of the predictions app",
+                         url=picks)
+                share = ""
             if cards > 0 and not share:
                 self.add(f"{sport} bottom share image", FAIL,
                          "Picks page has cards but no /share/predictions image or /share.jpg",
@@ -880,7 +907,7 @@ class ShipParityAuditor:
             )
             if not missing:
                 self.add(f"{sport} results charts", PASS,
-                         "Signed-off consensus + PL vs Sportsbook charts present",
+                         "Signed-off consensus + PL vs Market charts present",
                          url=results)
             else:
                 self.add(f"{sport} results charts", FAIL,

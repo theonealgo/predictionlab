@@ -257,6 +257,8 @@ _PUBLIC_PAGES = frozenset({
     "/results", "/all-sports-results", "/daily-report", "/historic-results",
     "/last-season-results", "/downloads", "/results/downloads", "/results/export.csv",
     "/what-are-ai-sports-betting-picks", "/what-are-ai-sports-predictions",
+    # Header search form fallback (JS uses /api/web/search; Enter without JS hits here).
+    "/search",
 })
 PUBLIC_CARD_CSS = """
 .pl-free-card{border:1px solid #e0e4e8;border-radius:14px;background:#fff;margin:12px 0;padding:16px;color:#0f172a}

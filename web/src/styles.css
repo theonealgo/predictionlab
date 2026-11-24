@@ -25,8 +25,15 @@ body {
 .pl-header-pin {
   position: sticky;
   top: 0;
-  z-index: 900;
+  z-index: 2000;
   background: #fff;
+  overflow: visible;
+}
+.pl-header-pin header.pl2-header,
+.pl-header-pin .pl-top,
+.pl-header-pin .pl-right,
+.pl-header-pin .pl-search-form {
+  overflow: visible;
 }
 
 a {
@@ -507,9 +514,14 @@ button {
 
 /* Games and results side by side: the results column (the sport's full results page) sits beside the games. */
 /* Both columns grow and shrink with the window; the games column takes the larger share. */
+/* Each of the three boxes (left nav, middle predictions, right results) scrolls on its own. */
 .pl-stage > .pl-center {
   flex: 3 1 640px;
   min-width: 0;
+  max-height: calc(100dvh - var(--pl-header-h, 72px) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-self: start;
 }
 
 .pl-stage > .pl-right {
@@ -521,6 +533,10 @@ button {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: #fff;
+  max-height: calc(100dvh - var(--pl-header-h, 72px) - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-self: start;
 }
 
 /* Results + Sports News stacked in the same right column slot. */
@@ -1463,7 +1479,7 @@ button {
   border: 1px solid #e5e7eb;
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15);
-  z-index: 1000;
+  z-index: 3000;
   padding: 4px;
 }
 

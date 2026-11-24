@@ -210,7 +210,7 @@ def _page_broken(where: str, body: str) -> list[str]:
     return []
 
 
-_REPORT_MODELS = ("Grinder2", "Takedown", "Edge", "XSharp", "Sharp Consensus", "Efficiency")
+_REPORT_MODELS = ("Grinder2", "Takedown", "Edge", "XSharp", "Market Consensus", "Efficiency")
 
 
 def _daily_report_issues(base: str) -> list[str]:

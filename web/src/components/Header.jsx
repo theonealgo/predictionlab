@@ -57,9 +57,11 @@ function wireSearch(root) {
       })
       .catch(() => {
         if (asked !== q || input.value.trim() !== q) return;
+        // Worker busy / brief network blip — keep the box usable; do not claim
+        // the player directory is down when a retry usually works.
         results = [];
         completed = '';
-        partial = true;
+        partial = false;
         show();
       });
   };

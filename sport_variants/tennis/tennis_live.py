@@ -803,6 +803,57 @@ def _consensus_pattern(sides: dict[str, str]) -> tuple[str, str, tuple[str, ...]
     return ("unanimous" if not dissent else "majority", major, dissent)
 
 
+def _tennis_history_from_finals(
+    *, past_days: int | None = 30
+) -> dict[tuple[str, tuple[str, ...]], list[int]]:
+    """W-L by agreement pattern from isolation graded finals (DB-backed)."""
+    try:
+        from zoneinfo import ZoneInfo
+
+        today = datetime.now(ZoneInfo("America/New_York")).date()
+    except Exception:
+        today = datetime.now().date()
+    try:
+        hub_s = str(_HUB.resolve())
+        if hub_s not in sys.path:
+            sys.path.insert(0, hub_s)
+        from tennis_page import build_tennis_results_payload  # type: ignore
+        from tennis_consensus import MODEL_ORDER, _agreements_from_finals  # type: ignore
+
+        payload = build_tennis_results_payload()
+        agreements = _agreements_from_finals(payload.get("finals") or [])
+    except Exception:
+        return {}
+    if not agreements:
+        return {}
+    cut = None
+    if past_days is not None:
+        cut = (today - timedelta(days=max(1, int(past_days)))).isoformat()
+    top = today.isoformat()
+    order = list(MODEL_ORDER)
+    out: dict[tuple[str, tuple[str, ...]], list[int]] = {}
+    for row in agreements:
+        day = str(row.get("game_date") or "")[:10]
+        if not day or day >= top:
+            continue
+        if cut and day < cut:
+            continue
+        dissent = tuple(n for n in order if n in set(row.get("dissent_models") or []))
+        agree_n = int(row.get("agree_n") or 0)
+        if agree_n >= 6 and not dissent:
+            key: tuple[str, tuple[str, ...]] = ("unanimous", ())
+        elif dissent:
+            key = ("majority", dissent)
+        else:
+            continue
+        grade = str(row.get("grade") or "").upper()
+        if grade not in ("WIN", "LOSS"):
+            continue
+        rec = out.setdefault(key, [0, 0])
+        rec[0 if grade == "WIN" else 1] += 1
+    return out
+
+
 def _tennis_consensus_history() -> dict[tuple[str, tuple[str, ...]], list[int]]:
     """Season W-L for each agreement pattern, from graded results cards."""
     path = _tennis_results_cache_path()
@@ -810,37 +861,38 @@ def _tennis_consensus_history() -> dict[tuple[str, tuple[str, ...]], list[int]]:
         page = path.read_text(encoding="utf-8") if path.is_file() else ""
     except Exception:
         page = ""
-    if not page:
-        return {}
-    try:
-        from zoneinfo import ZoneInfo
+    if page:
+        try:
+            from zoneinfo import ZoneInfo
 
-        today = datetime.now(ZoneInfo("America/New_York")).date()
-    except Exception:
-        today = datetime.now().date()
-    from season_records import season_start_iso
+            today = datetime.now(ZoneInfo("America/New_York")).date()
+        except Exception:
+            today = datetime.now().date()
+        from season_records import season_start_iso
 
-    cut = season_start_iso("TENNIS")
-    top = today.isoformat()
-    out: dict[tuple[str, tuple[str, ...]], list[int]] = {}
-    for card in re.split(r"(?=<div class=\"game-card-stack\b)", page)[1:]:
-        dm = re.search(r'class="game-time">[^<]*FINAL[^<]*?(20\d\d-\d\d-\d\d)', card)
-        if not dm or not (cut <= dm.group(1) <= top):
-            continue
-        hm = re.search(r'data-home="([^"]*)"', card[:2000])
-        wm = re.search(
-            r'<div class="team-name">([^<]*)</div>\s*<div class="final-score score-winner">',
-            card,
-        )
-        if not hm or not wm:
-            continue
-        pat = _consensus_pattern(_card_model_sides(card))
-        if not pat or pat[0] == "split":
-            continue
-        winner = "HOME" if wm.group(1).strip() == hm.group(1).strip() else "AWAY"
-        rec = out.setdefault((pat[0], pat[2]), [0, 0])
-        rec[0 if winner == pat[1] else 1] += 1
-    return out
+        cut = season_start_iso("TENNIS")
+        top = today.isoformat()
+        out: dict[tuple[str, tuple[str, ...]], list[int]] = {}
+        for card in re.split(r"(?=<div class=\"game-card-stack\b)", page)[1:]:
+            dm = re.search(r'class="game-time">[^<]*FINAL[^<]*?(20\d\d-\d\d-\d\d)', card)
+            if not dm or not (cut <= dm.group(1) <= top):
+                continue
+            hm = re.search(r'data-home="([^"]*)"', card[:2000])
+            wm = re.search(
+                r'<div class="team-name">([^<]*)</div>\s*<div class="final-score score-winner">',
+                card,
+            )
+            if not hm or not wm:
+                continue
+            pat = _consensus_pattern(_card_model_sides(card))
+            if not pat or pat[0] == "split":
+                continue
+            winner = "HOME" if wm.group(1).strip() == hm.group(1).strip() else "AWAY"
+            rec = out.setdefault((pat[0], pat[2]), [0, 0])
+            rec[0 if winner == pat[1] else 1] += 1
+        if out:
+            return out
+    return _tennis_history_from_finals(past_days=None)
 
 
 def _paid_card_lookup() -> dict[str, str]:
@@ -862,7 +914,7 @@ def _inject_tennis_consensus_hist(html: str) -> str:
     """Face Consensus Historical Record chip, same box as UFC."""
     if not html or "data-pick-card" not in html:
         return html
-    history = _tennis_consensus_history()
+    history = _tennis_history_from_finals(past_days=30) or _tennis_consensus_history()
     paid_cards: dict[str, str] | None = None
     parts = re.split(r"(?=<div class=\"game-card-stack\b)", html)
     out = [parts[0]]
@@ -886,6 +938,9 @@ def _inject_tennis_consensus_hist(html: str) -> str:
             label = "Split: —"
         else:
             w, l = history.get((pat[0], pat[2]), [0, 0])
+            if w + l == 0:
+                season = _tennis_history_from_finals(past_days=None)
+                w, l = season.get((pat[0], pat[2]), [0, 0])
             who = "Unanimous" if pat[0] == "unanimous" else "All but " + " and ".join(pat[2])
             label = f"{who}: {w}-{l}"
         chip = (

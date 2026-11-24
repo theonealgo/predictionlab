@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useCardPages from '../hooks/useCardPages.js';
 import { CONFERENCES } from '../data/conferences.js';
 import { DEFAULT_NAV, SPORT_NAV } from '../data/sportNav.js';
@@ -112,18 +112,41 @@ export default function SportPage({ slug }) {
   const [todayIso, setTodayIso] = useState(() => todayET());
   const [tab, setTab] = useState(nav.tabs[0]);
   const [extraDays, setExtraDays] = useState(0);
-  const { payload, error, loadingMore, loadMore, ready: cardsReady } = useCardPages(slug, !isGolf, extraDays);
-  const cards = payload?.cards || [];
-  const moreGames = useRef(null);
-  // Phones show one column at a time; this switch flips between the games and the results.
-  const [mobilePane, setMobilePane] = useState('predictions');
-  // Results wait for the live cards fetch (not a cached peek) so cards own the worker first.
-  const resultsEnabled = isGolf || cardsReady || mobilePane === 'results';
   const [filter, setFilter] = useState(() => {
     const league = new URLSearchParams(window.location.search).get('league');
     if (league && sport === 'TENNIS') return league;
-    return league && nav.filters && nav.filters.includes(league) ? league : 'All';
+    if (!league || !nav.filters) return 'All';
+    // Soccer Load / SEO links use hyphen slugs (?league=english-premier-league);
+    // the filter chips are display names ("English Premier League").
+    if (nav.filters.includes(league)) return league;
+    if (sport === 'SOCCER') {
+      const slug = league.toLowerCase();
+      const hit = nav.filters.find(
+        (label) => label !== 'All'
+          && label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') === slug,
+      );
+      if (hit) return hit;
+    }
+    return 'All';
   });
+  // Soccer: pass the active league so the API returns that league's first 10
+  // (mixed all-leagues paging left EPL empty until several "Load more" clicks).
+  const cardsLeague = sport === 'SOCCER' && filter && filter !== 'All' ? filter : null;
+  const { payload, error, loadingMore, loadMore, ready: cardsReady } = useCardPages(
+    slug, !isGolf, extraDays, cardsLeague,
+  );
+  const cards = payload?.cards || [];
+  // Phones show one column at a time; this switch flips between the games and the results.
+  const [mobilePane, setMobilePane] = useState('predictions');
+  // Do not hold results behind a multi-minute cards build (tennis cold start).
+  // Start the results iframe after a short pause even if cards are still warming.
+  const [resultsGo, setResultsGo] = useState(false);
+  useEffect(() => {
+    setResultsGo(false);
+    const timer = window.setTimeout(() => setResultsGo(true), 1200);
+    return () => window.clearTimeout(timer);
+  }, [slug]);
+  const resultsEnabled = isGolf || cardsReady || resultsGo || mobilePane === 'results';
   // Tennis left-nav tournament links use ?league=…; free cards often have no Event row, so a
   // dead filter would show an empty slate. Fall back to All when nothing matches.
   useEffect(() => {
@@ -146,14 +169,8 @@ export default function SportPage({ slug }) {
     if (!cardsReady || error || extraDays !== 0 || isGolf) return;
     if (payload && (payload.cards || []).length === 0) setExtraDays(2);
   }, [cardsReady, error, extraDays, isGolf, payload]);
-  useEffect(() => {
-    if (!payload?.hasMore || loadingMore || !moreGames.current) return undefined;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting) && document.visibilityState !== 'hidden') loadMore();
-    }, { rootMargin: '250px' });
-    observer.observe(moreGames.current);
-    return () => observer.disconnect();
-  }, [payload, loadingMore, loadMore]);
+  // Load more is click-only (first 10 cards stay fast). Still auto-fetch when a
+  // deep link (?game= / ?team=) needs a card that is not in the first page yet.
   useEffect(() => {
     if (!payload?.hasMore || loadingMore) return;
     const missingTarget = gameParam && !target;
@@ -400,12 +417,13 @@ export default function SportPage({ slug }) {
                 Show the next two days
               </button>
             )}
+            {extraDays > 0 && payload?.refreshing && (
+              <p className="pl-empty">Loading the next two days…</p>
+            )}
             {payload?.hasMore && (
-              <div ref={moreGames}>
-                <button type="button" className="pl-show-more" disabled={loadingMore} onClick={loadMore}>
-                  {loadingMore ? `Loading more ${slateWord}…` : `Load more ${slateWord}`}
-                </button>
-              </div>
+              <button type="button" className="pl-show-more" disabled={loadingMore} onClick={loadMore}>
+                {loadingMore ? `Loading more ${slateWord}…` : `Load more ${slateWord}`}
+              </button>
             )}
           </>
         )}
@@ -418,7 +436,7 @@ export default function SportPage({ slug }) {
         <div className="pl-right-title">Results</div>
         <ResultsPanel
           // Predictions first. Results wait until the live cards fetch finishes
-          // (or the visitor opens Results on mobile). Then ~2s delay + 15s cap.
+          // (or the visitor opens Results on mobile), then the results page loads.
           enabled={resultsEnabled}
           src={`/${slug.replace('-picks', '-results')}`}
           picksPath={`/${slug.replace('-projections', '-picks')}`}

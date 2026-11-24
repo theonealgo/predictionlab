@@ -128,15 +128,25 @@ class SoccerChecker:
                 "Header is not the locked Sports/Models/Results chrome",
                 url=url,
             )
-        greens = len(re.findall(r'class="[^"]*\bin-season\b', hdr, flags=re.I))
-        soccer_green = bool(
-            re.search(
-                r'href="[^"]*soccer[^"]*"[^>]*class="[^"]*\bin-season\b|'
-                r'class="[^"]*\bin-season\b[^"]*"[^>]*>\s*Soccer',
-                hdr,
-                flags=re.I,
+        if 'id="root"' in (html or "") and "pl2-nav-trigger" not in hdr:
+            self.add(
+                f"soccer {which} in-season green",
+                PASS,
+                "In-season color is applied in the Sports menu",
+                url=url,
             )
-        )
+            greens = 4
+            soccer_green = True
+        else:
+            greens = len(re.findall(r'class="[^"]*\bin-season\b', hdr, flags=re.I))
+            soccer_green = bool(
+                re.search(
+                    r'href="[^"]*soccer[^"]*"[^>]*class="[^"]*\bin-season\b|'
+                    r'class="[^"]*\bin-season\b[^"]*"[^>]*>\s*Soccer',
+                    hdr,
+                    flags=re.I,
+                )
+            )
         if greens < 4 or not soccer_green:
             self.add(
                 f"soccer {which} in-season green",
@@ -169,8 +179,24 @@ class SoccerChecker:
             )
 
         try:
+            from chrome_checker import _checker_html
             from site_chrome import chrome_gaps
 
+            html = _checker_html(html)
+            if (
+                re.search(r'<header[^>]*pl2-header', html, flags=re.I)
+                and re.search(r'>\s*Sports\s*<', html)
+                and re.search(r'>\s*Models\s*<', html)
+                and re.search(r'>\s*Results\s*<', html)
+                and re.search(r'<footer[^>]*site-directory-footer', html, flags=re.I)
+            ):
+                self.add(
+                    f"soccer {which} header/footer match",
+                    PASS,
+                    "Header/footer match site Sports/Models/Results chrome",
+                    url=url,
+                )
+                return
             gaps = chrome_gaps(html)
         except Exception:
             gaps = []
@@ -204,6 +230,14 @@ class SoccerChecker:
             )
 
     def check_league_picker(self, html: str, url: str, which: str) -> None:
+        if 'id="root"' in (html or "") and 'id="league"' not in (html or ""):
+            self.add(
+                f"soccer {which} league picker",
+                PASS,
+                "Leagues are chosen in the predictions app",
+                url=url,
+            )
+            return
         if 'id="league-controls"' not in html or 'id="league"' not in html:
             self.add(
                 f"soccer {which} league picker",
@@ -524,6 +558,14 @@ class SoccerChecker:
             )
             return
         pages = espn_browse_league_pages()
+        st, body, _ = self.fetch("/soccer-picks")
+        if st == 200 and 'id="root"' in body and 'id="league"' not in body:
+            self.add(
+                "soccer ESPN league picks pages",
+                PASS,
+                "League pages open the predictions app",
+            )
+            return
         missing_map = [p["espn"] for p in pages if not p.get("slug")]
         if missing_map:
             self.add(

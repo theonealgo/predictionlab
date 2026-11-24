@@ -35,7 +35,7 @@ export default function PropsPage() {
   const [streaks, setStreaks] = useState(null);
   const [resultsError, setResultsError] = useState('');
   // Empty until the API names the latest night with records — calendar yesterday is often all N/A.
-  const [day, setDay] = useState(() => new URLSearchParams(window.location.search).get('results_date') || shiftET(-1));
+  const [day, setDay] = useState(() => new URLSearchParams(window.location.search).get('results_date') || '');
   const [resultWindow, setResultWindow] = useState(() => new URLSearchParams(window.location.search).get('results_window') || 'night');
   const [propsDay, setPropsDay] = useState(() => opening.get('date') || todayET());
   const [market, setMarket] = useState('all');
@@ -56,11 +56,12 @@ export default function PropsPage() {
     setItemsReady(false);
   }, [day, resultWindow, league, model, resultSide]);
 
-  // Choosing a sport or a results date loads that night. The props board is separate.
+  // Choosing a sport loads the latest night with records (API picks the day when
+  // results_date was not set). An explicit date always wins.
   useEffect(() => {
-    if (!league || !day) return undefined;
+    if (!league) return undefined;
     setResultsError('');
-    setResultsQuery({ league, day, window: resultWindow, n: Date.now() });
+    setResultsQuery({ league, day: day || null, window: resultWindow, n: Date.now() });
     return undefined;
   }, [league, day, resultWindow]);
 
@@ -133,6 +134,13 @@ export default function PropsPage() {
       setResults(data);
       setItemsReady(true);
       setResultsError('');
+      // Fill the date picker from the newest recorded night when we did not ask
+      // for a date. Prefer dates[] so a stale server default (calendar yesterday)
+      // cannot strand Results on an empty pre-tracking night.
+      if (!resultsQuery.day) {
+        const newest = (data?.dates || []).find(Boolean) || data?.result_date;
+        if (newest) setDay(newest);
+      }
     }).catch(() => { if (alive) setResultsError('Could not load recorded results. Please retry.'); });
     return () => { alive = false; };
   }, [me, resultsQuery, retry, pane]);
@@ -171,12 +179,12 @@ export default function PropsPage() {
     if (!league) return;
     setFeedError('');
     setSelectedGame('');
-    setPropsQuery({ league, date: propsDay, limit: 3, n: Date.now() });
+    setPropsQuery({ league, date: propsDay, limit: 'all', n: Date.now() });
   }
 
   function pressLoadResults() {
     setResultsError('');
-    setResultsQuery({ league, day, window: resultWindow, n: Date.now() });
+    setResultsQuery({ league, day: day || null, window: resultWindow, n: Date.now() });
   }
 
   const gate = identityError ? (

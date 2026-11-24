@@ -4,12 +4,20 @@ Does not change /{sport}-results. Cached so picks stay fast.
 """
 from __future__ import annotations
 
+import json
+import logging
+import os
 import time
 from datetime import datetime, timedelta
 from html import escape
+from pathlib import Path
 
 _CACHE: dict[str, tuple[float, str, str]] = {}
 _TTL = 180.0
+# After a worker HUP the in-memory cache is empty; rebuilding NCAAB recent tallies
+# can take 30–50s and starves search + first paint. Keep a disk copy.
+_DISK_TTL = 6 * 3600.0
+_DISK_DIR = Path(os.environ.get("PL_CACHE_DIR") or os.environ.get("CACHE_DIR") or "/data/.cache") / "picks_recent"
 
 _MODELS = (
     ("glicko2", "Grinder2"),
@@ -359,16 +367,53 @@ def _build_block(sport: str) -> tuple[str, str]:
     return block, chart
 
 
+def _disk_path(sport_u: str) -> Path:
+    return _DISK_DIR / f"{sport_u}.json"
+
+
+def _load_disk(sport_u: str) -> tuple[str, str] | None:
+    path = _disk_path(sport_u)
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        if time.time() - float(raw.get("ts") or 0) > _DISK_TTL:
+            return None
+        block, chart = raw.get("block") or "", raw.get("chart") or ""
+        if not block:
+            return None
+        return block, chart
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def _save_disk(sport_u: str, block: str, chart: str) -> None:
+    try:
+        _DISK_DIR.mkdir(parents=True, exist_ok=True)
+        path = _disk_path(sport_u)
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(
+            json.dumps({"ts": time.time(), "block": block, "chart": chart}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        tmp.replace(path)
+    except OSError:
+        logging.getLogger(__name__).exception("[picks-recent] disk save failed for %s", sport_u)
+
+
 def _cached_recent(sport_u: str) -> tuple[str, str] | None:
     now = time.time()
     hit = _CACHE.get(sport_u)
     if hit and now - hit[0] < _TTL and len(hit) >= 3:
         return hit[1], hit[2]
+    disk = _load_disk(sport_u)
+    if disk:
+        _CACHE[sport_u] = (now, disk[0], disk[1])
+        return disk
     try:
         block, chart = _build_block(sport_u)
     except Exception:
         return None
     _CACHE[sport_u] = (now, block, chart)
+    _save_disk(sport_u, block, chart)
     return block, chart
 
 

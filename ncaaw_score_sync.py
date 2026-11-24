@@ -123,16 +123,24 @@ def invalidate_site(site):
         source.pop("NCAAW", None)
     from served_cache import cache_dir
     directory = cache_dir()
+    # Keep web_cards on disk: wiping them on every score-sync signature left
+    # /ncaaw-picks empty (202 building) until a multi-minute SSR finished.
+    # Memory was already cleared above; a background rebuild refreshes the feed.
     paths = list(directory.glob("served_NCAAW*.html")) + [
         directory / "chart_src_NCAAW.html", directory / "results_summary/NCAAW.json",
         directory / "served_picks_NCAAW.html",
     ]
-    paths.extend((directory / "web_cards").glob("ncaaw-picks.*.v2.json.gz"))
     for path in paths:
         try:
             path.unlink(missing_ok=True)
         except OSError:
             site.app.logger.warning("NCAAW derived page cache could not be invalidated")
+    try:
+        app = getattr(site, "app", None)
+        if app is not None:
+            web_api._start_full_cards("ncaaw-picks", "guest", app)
+    except Exception:
+        pass
     # Public response snapshots are another derived cache; keep other sports intact.
     pending, visited = [site.app.wsgi_app], set()
     while pending:
@@ -170,8 +178,11 @@ def start_worker(app, database, changed_callback):
                 days = [(today - timedelta(days=n)).isoformat() for n in range(8 if first else 2)]
                 result = sync_scores(database, days)
                 if result["signature"] != previous_signature:
-                    with app.app_context():
-                        changed_callback()
+                    # First boot always sees a new signature; do not wipe caches when
+                    # no finals changed — that deleted warm NCAAW card feeds every restart.
+                    if previous_signature is not None or int(result.get("changed") or 0) > 0:
+                        with app.app_context():
+                            changed_callback()
                     previous_signature = result["signature"]
                 first = False
                 app.logger.info("NCAAW score sync: %s", result)

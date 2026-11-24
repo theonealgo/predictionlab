@@ -1,0 +1,39 @@
+---
+description: Guard — only edit the sport/surface the owner named in this message
+alwaysApply: true
+---
+
+# AI sport-edit guard
+
+## Default
+
+Every sport picks/results/chart surface is **locked**. Do not edit a sport the
+owner did not name in **this** message.
+
+## When the owner asks
+
+Owner ask = unlocked for **only** what they named (sport + miss). Do not ask
+for the UNLOCK phrase. Do not touch other sports, chrome, paywall, or shared
+branches “while you are here.”
+
+## One surface
+
+- One named sport (or chrome/surface) per miss.
+- A checker fail, hang, or blank page on sport A is **not** an unlock for sport B.
+- Do not edit locked-sport branches inside `NHL77FINAL.py`,
+  `team_results_charts.py`, or sport-named modules for a sport that was not named.
+
+## Session sticky (recommended)
+
+When unlocked, keep a one-line note of the open surface (sport + miss). When
+the miss is done, treat that sport as locked again the same day. Do not leave
+a sport open overnight.
+
+## Props / chrome / account
+
+PROPS, HEADER, FOOTER, HAMBURGER, paywall, account, and Google tag stay locked
+unless the owner names that surface in the same message.
+
+## If unclear
+
+Stop and ask which sport/surface to edit. Do not guess and switch tasks.

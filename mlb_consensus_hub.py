@@ -2032,17 +2032,19 @@ def _consensus_directional_slices(
 def _pl_vs_books_slices(
     items: list[dict[str, Any]],
 ) -> dict[str, list[str | None]]:
-    """Books / PL / agree / disagree grade lists (no consensus majority)."""
+    """Books / PL / agree / disagree grade lists (no consensus majority).
+
+    PL favorite only includes games that also have a Books side so
+    agree + disagree always partitions the PL row (checker contract).
+    """
     books = [
         a.get("book_grade")
         for a in items
         if a.get("book_grade") in ("WIN", "LOSS", "PUSH")
     ]
-    pl = [
-        a.get("pl_grade") for a in items if a.get("pl_grade") in ("WIN", "LOSS", "PUSH")
-    ]
     agree: list[str | None] = []
     disagree: list[str | None] = []
+    pl: list[str | None] = []
     for a in items:
         b, p = a.get("book_side"), a.get("pl_side")
         if b not in ("HOME", "AWAY") or p not in ("HOME", "AWAY"):
@@ -2051,11 +2053,14 @@ def _pl_vs_books_slices(
             g = a.get("book_grade")
             if g in ("WIN", "LOSS", "PUSH"):
                 agree.append(g)
+                # Same side → book grade equals PL grade.
+                pl.append(g)
         else:
             # When they split, grade the PL favorite (can PL beat the book?).
             g = a.get("pl_grade")
             if g in ("WIN", "LOSS", "PUSH"):
                 disagree.append(g)
+                pl.append(g)
     return {
         "books": books,
         "pl": pl,

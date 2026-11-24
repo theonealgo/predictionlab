@@ -7984,10 +7984,114 @@ def _fill_nhl_efficiency_from_published(card: dict) -> None:
     card['efficiency_pick'] = 'HOME' if card['efficiency_prob'] >= 50.0 else 'AWAY'
 
 
+def _fill_nhl_own_lines(card: dict) -> None:
+    """NHL only. A blank Prediction Lab puck line comes from our own line.
+
+    Last three games for each team: home average goals minus away average
+    goals, rounded to the half goal. Efficiency is that line's win percent.
+    A stored line is left as stored. Runs even when the pick is frozen.
+    """
+    if not isinstance(card, dict):
+        return
+    sp = _safe_float(card.get('disp_pl_spread'))
+    if sp is None:
+        sp = _safe_float(card.get('our_spread'))
+    if sp is None:
+        sp = _safe_float(card.get('stored_lock_pl_spread') or card.get('lock_pl_spread'))
+    if sp is None:
+        sp = _safe_float(card.get('h2h_l3_spread'))
+    if sp is None:
+        try:
+            info = last3_h2h_for_card(
+                'NHL',
+                card.get('home_team_id') or card.get('home'),
+                card.get('away_team_id') or card.get('away'),
+                card.get('game_date') or card.get('date'),
+            )
+        except Exception:
+            info = None
+        if info:
+            sp = _safe_float(info.get('spread'))
+    if sp is None:
+        return
+    lined = _round_to_half(sp)
+    if _safe_float(card.get('our_spread')) is None:
+        card['our_spread'] = lined
+    if card.get('disp_pl_spread') is None:
+        card['disp_pl_spread'] = lined
+    cur = _normalize_home_win_prob_pct(card.get('efficiency_prob'))
+    if cur is not None and not _nhl_prob_is_placeholder(cur):
+        return
+    try:
+        from sports.team_efficiency_attach import spread_to_home_prob_pct
+        card['efficiency_prob'] = spread_to_home_prob_pct(float(lined), 'NHL')
+        card['efficiency_pick'] = 'HOME' if card['efficiency_prob'] >= 50.0 else 'AWAY'
+    except Exception:
+        return
+
+
+def _patch_nhl_results_own_lines(html: str) -> str:
+    """Fill blank PL puck lines and Efficiency on a saved NHL results page."""
+    if not html or 'class="game-card' not in html:
+        return html
+    try:
+        from sports.team_efficiency_attach import spread_to_home_prob_pct
+    except Exception:
+        spread_to_home_prob_pct = None
+    parts = re.split(r'(?=<div class="game-card )', html)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for block in parts[1:]:
+        home = re.search(r'data-home="([^"]*)"', block)
+        away = re.search(r'data-away="([^"]*)"', block)
+        day = re.search(r'data-date="([^"]*)"', block)
+        if not home or not away:
+            out.append(block)
+            continue
+        info = None
+        try:
+            info = last3_h2h_for_card('NHL', home.group(1), away.group(1), day.group(1) if day else None)
+        except Exception:
+            info = None
+        sp = _safe_float((info or {}).get('spread'))
+        if sp is None:
+            out.append(block)
+            continue
+        lined = _round_to_half(sp)
+        if lined is None:
+            out.append(block)
+            continue
+        mag = abs(float(lined))
+        if mag < 0.05:
+            label = 'PK'
+        elif float(lined) > 0:
+            label = f'{home.group(1)} -{mag:g}'
+        else:
+            label = f'{away.group(1)} -{mag:g}'
+        block = re.sub(
+            r'(<td class="market-k">Puck Line</td>\s*<td class="val-books">[\s\S]*?</td>\s*<td class="val-pl">)\s*(?:—|–|-)\s*(</td>)',
+            lambda m, label=label: m.group(1) + label + m.group(2),
+            block,
+            count=1,
+        )
+        if spread_to_home_prob_pct is not None:
+            pct = spread_to_home_prob_pct(float(lined), 'NHL')
+            block = re.sub(
+                r'(pc-name">Efficiency</div>[\s\S]*?class="pc-val"[^>]*>)\s*(?:N/A|—|–)\s*(</div>)',
+                lambda m, pct=pct: m.group(1) + f'{pct:.1f}%' + m.group(2),
+                block,
+                count=1,
+            )
+        out.append(block)
+    return ''.join(out)
+
+
 def _fill_nhl_display_gaps(card: dict) -> None:
     """NHL only. Fill blank PL / XSharp lines from stored or v2 values."""
     if not isinstance(card, dict):
         return
+    _fill_nhl_own_lines(card)
     if _picks_are_frozen(card):
         return
     _clear_nhl_placeholder_books(card)
@@ -16721,14 +16825,15 @@ def _recent_blog_rail(response):
 
 
 _PL_DATE_NAV_TAGS = (
-    '<link rel="stylesheet" id="pl-date-nav-css" href="/static/css/pl-date-nav.css?v=3">'
-    '<script src="/static/js/pl-date-nav.js?v=3" id="pl-date-nav-js" defer></script>'
+    '<link rel="stylesheet" id="pl-date-nav-css" href="/static/css/pl-date-nav.css?v=5">'
+    '<script src="/static/js/pl-date-nav.js?v=6" id="pl-date-nav-js" defer></script>'
 )
 
 
 @app.after_request
 def _shared_date_nav(response):
-    """Every sport picks / results page gets the one shared date picker."""
+    """Picks pages get the shared date picker. Results pages get the same JS/CSS
+    so cards stay hidden until “Show last two days results cards” (picker hidden)."""
     try:
         if response.status_code != 200 or response.direct_passthrough:
             return response
@@ -16737,13 +16842,33 @@ def _shared_date_nav(response):
         if not _SPORT_PAGE_RE.match((request.path or "").lower()):
             return response
         html = response.get_data(as_text=True)
-        if 'id="pl-date-nav-css"' in html or "date-nav" not in html:
+        if "date-nav" not in html:
             return response
         if not re.search(r"</body>", html, flags=re.I):
             return response
-        response.set_data(
-            re.sub(r"</body>", lambda m: _PL_DATE_NAV_TAGS + m.group(0), html, count=1, flags=re.I)
+        # Keep the script/css on the page, and bump ?v= so saved pages get the
+        # results no-picker + last-two-days button behavior.
+        html = re.sub(
+            r'(href="/static/css/pl-date-nav\.css)(?:\?v=\d+)?"',
+            r'\1?v=5"',
+            html,
+            count=1,
         )
+        html = re.sub(
+            r'(src="/static/js/pl-date-nav\.js)(?:\?v=\d+)?"',
+            r'\1?v=5"',
+            html,
+            count=1,
+        )
+        if 'id="pl-date-nav-css"' not in html:
+            html = re.sub(
+                r"</body>",
+                lambda m: _PL_DATE_NAV_TAGS + m.group(0),
+                html,
+                count=1,
+                flags=re.I,
+            )
+        response.set_data(html)
     except Exception:
         logger.exception("shared date nav failed")
     return response
@@ -18015,9 +18140,6 @@ def _served_layout_last__cfl(response):
         ctype = (getattr(response, "mimetype", None) or getattr(response, "content_type", None) or "") + ""
         if "html" not in ctype.lower():
             return response
-        html = response.get_data(as_text=True)
-        if not html or "<html" not in html.lower():
-            return response
         path = ""
         view = ""
         sport = ""
@@ -18026,6 +18148,18 @@ def _served_layout_last__cfl(response):
             view = request.args.get("view") or ""
         except Exception:
             path = ""
+        # Already-saved pages were laid out when stored. Read the body only
+        # when this request still has to lay the page out.
+        try:
+            from flask import g as _layout_g
+            from_disk = bool(getattr(_layout_g, "_pl_results_from_disk", False))
+        except Exception:
+            from_disk = False
+        if from_disk and (path or "").rstrip("/").endswith(("-results", "-picks")):
+            return response
+        html = response.get_data(as_text=True)
+        if not html or "<html" not in html.lower():
+            return response
         slug = path.strip("/").split("/")[-1].split("-")[0].upper()
         sport = {
             "MLB": "MLB", "NHL": "NHL", "NBA": "NBA", "NFL": "NFL",
@@ -18082,9 +18216,6 @@ def _served_layout_last__tennis(response):
         ctype = (getattr(response, "mimetype", None) or getattr(response, "content_type", None) or "") + ""
         if "html" not in ctype.lower():
             return response
-        html = response.get_data(as_text=True)
-        if not html or "<html" not in html.lower():
-            return response
         path = ""
         view = ""
         sport = ""
@@ -18093,6 +18224,18 @@ def _served_layout_last__tennis(response):
             view = request.args.get("view") or ""
         except Exception:
             path = ""
+        # Already-saved pages were laid out when stored. Read the body only
+        # when this request still has to lay the page out.
+        try:
+            from flask import g as _layout_g
+            from_disk = bool(getattr(_layout_g, "_pl_results_from_disk", False))
+        except Exception:
+            from_disk = False
+        if from_disk and (path or "").rstrip("/").endswith(("-results", "-picks")):
+            return response
+        html = response.get_data(as_text=True)
+        if not html or "<html" not in html.lower():
+            return response
         slug = path.strip("/").split("/")[-1].split("-")[0].upper()
         sport = {
             "MLB": "MLB", "NHL": "NHL", "NBA": "NBA", "NFL": "NFL",
@@ -18138,9 +18281,6 @@ def _served_layout_last(response):
         ctype = (getattr(response, "mimetype", None) or getattr(response, "content_type", None) or "") + ""
         if "html" not in ctype.lower():
             return response
-        html = response.get_data(as_text=True)
-        if not html or "<html" not in html.lower():
-            return response
         path = ""
         view = ""
         sport = ""
@@ -18149,6 +18289,18 @@ def _served_layout_last(response):
             view = request.args.get("view") or ""
         except Exception:
             path = ""
+        # Already-saved pages were laid out when stored. Read the body only
+        # when this request still has to lay the page out.
+        try:
+            from flask import g as _layout_g
+            from_disk = bool(getattr(_layout_g, "_pl_results_from_disk", False))
+        except Exception:
+            from_disk = False
+        if from_disk and (path or "").rstrip("/").endswith(("-results", "-picks")):
+            return response
+        html = response.get_data(as_text=True)
+        if not html or "<html" not in html.lower():
+            return response
         slug = path.strip("/").split("/")[-1].split("-")[0].upper()
         sport = {
             "MLB": "MLB", "NHL": "NHL", "NBA": "NBA", "NFL": "NFL",
@@ -18659,16 +18811,25 @@ def _nfl_page_fixes(response):
             '<a href="https://billing.stripe.com/p/login/8x228sabu7aV7uj43nao800" '
             'target="_blank" rel="noopener noreferrer">Manage billing</a>',
         )
-        # A totals table was landing inside the footer text. Put it above the footer.
-        _foot = out.find('<footer class="site-directory-footer"')
-        if _foot > 0:
-            _tbl = re.search(r'<table id="pl-totals-three-way">[\s\S]*?</table>', out[_foot:])
-            if _tbl:
-                _blk = _tbl.group(0)
-                out = out[:_foot] + out[_foot:].replace(_blk, "", 1)
-                _at = out.rfind('<div class="share-strip"', 0, _foot)
-                _at = _at if _at > 0 else out.find('<footer class="site-directory-footer"')
-                out = out[:_at] + '<div class="pl-consensus-records" id="pl-totals-three-way-wrap">' + _blk + "</div>" + out[_at:]
+        # Totals / consensus boards landing under the footer (or under the
+        # "Show last two days" button). Shared mover — every sport.
+        try:
+            from served_layout_fixes import _charts_above_load_button
+            out = _charts_above_load_button(out) or out
+        except Exception:
+            _foot = out.find('<footer class="site-directory-footer"')
+            if _foot > 0:
+                _tbl = re.search(
+                    r'<(?:div|section)\b[^>]*id="pl-totals-three-way"[^>]*>[\s\S]*?</(?:div|section)>'
+                    r'|<table id="pl-totals-three-way">[\s\S]*?</table>',
+                    out[_foot:],
+                )
+                if _tbl:
+                    _blk = _tbl.group(0)
+                    out = out[:_foot] + out[_foot:].replace(_blk, "", 1)
+                    _at = out.rfind('<div class="share-strip"', 0, _foot)
+                    _at = _at if _at > 0 else out.find('<footer class="site-directory-footer"')
+                    out = out[:_at] + _blk + out[_at:]
         if path == "/nfl-results" and (request.args.get("view") or "").strip().lower() not in (
             "chart", "tabs", "markets", "tabbed",
         ):
@@ -18770,19 +18931,53 @@ def _soccer_page_fixes(response):
         except Exception:
             season = {}
 
-        def _nav(match):
-            menu = match.group(0)
-
+        def _paint_in_season(menu: str) -> str:
             def _link(m):
                 code = m.group(1).upper()
+                kind = m.group(2)  # picks | projections | predictions
                 if code not in season:
                     return m.group(0)
                 cls = ' class="in-season"' if season[code] else ""
-                return f'<a href="/{m.group(1)}-picks"{cls}>'
+                return f'<a href="/{m.group(1)}-{kind}"{cls}>'
 
-            return re.sub(r'<a href="/([a-z0-9]+)-picks"(?: class="in-season")?>', _link, menu)
+            return re.sub(
+                r'<a href="/([a-z0-9]+)-(picks|projections|predictions)"(?: class="in-season")?>',
+                _link,
+                menu,
+            )
 
-        out = re.sub(r'<div class="pl2-nav-menu"[^>]*>[\s\S]*?</div>', _nav, out, count=1)
+        out = re.sub(
+            r'<div class="pl2-nav-menu"[^>]*>[\s\S]*?</div>',
+            lambda m: _paint_in_season(m.group(0)),
+            out,
+            count=1,
+        )
+        # Thin pl-primary Sports menu (soccer skips full chrome graft for size).
+        def _paint_thin_sport_link(m):
+            open_tag, slug, existing, close = m.group(1), m.group(2), m.group(3) or "", m.group(4)
+            if not season.get(slug.upper()) or "in-season" in existing:
+                return m.group(0)
+            if existing.strip():
+                return open_tag + existing.replace('class="', 'class="in-season ', 1) + close
+            return open_tag + ' class="in-season"' + close
+
+        out = re.sub(
+            r'(<a href="/([a-z0-9]+)-(?:picks|projections|predictions)")((?:\s+class="[^"]*")?)(>)',
+            _paint_thin_sport_link,
+            out,
+            count=40,
+        )
+        # Hamburger / drawer: class="tv-sub-link" (+ optional in-season).
+        out = re.sub(
+            r'(<a href="/([a-z0-9]+)-(?:picks|projections|predictions)" class="tv-sub-link)'
+            r'(?: in-season)?(")',
+            lambda m: (
+                m.group(1)
+                + (" in-season" if season.get(m.group(2).upper()) else "")
+                + m.group(3)
+            ),
+            out,
+        )
         out = out.replace(
             '<a href="/login" target="_blank" rel="noopener noreferrer">Manage billing</a>',
             '<a href="https://billing.stripe.com/p/login/8x228sabu7aV7uj43nao800" '
@@ -19258,20 +19453,36 @@ def _ncaaw_page_fixes(response):
                 out = _ncaaw_add_odds(out)
             except Exception:
                 pass
-            _tip = "Odds are posted the day before or the day of the contest. Check back on game date."
+            _tip = "odds currently unavailable"
             _btn = (
-                '<button type="button" class="h2h-info-btn" '
-                f'title="{_tip}" aria-label="{_tip}">i</button>'
+                '<button type="button" class="pl-info-btn" '
+                f'data-tip="{_tip}" data-pl-info-tip="{_tip}" title="{_tip}" '
+                f'aria-label="{_tip}" aria-expanded="false" aria-haspopup="true">ⓘ</button>'
             )
             out = out.replace("Odds will be here on the same day as the game.", _tip)
+            out = out.replace(
+                "Odds are posted the day before or the day of the contest. Check back on game date.",
+                _tip,
+            )
+            out = out.replace(
+                "No Market odds for this game. Market post lines the day before or "
+                "the day of the game, and often post none for games against "
+                "non-Division I schools.",
+                _tip,
+            )
             out = re.sub(
-                r'(<div class="ml-line face-books-ml">\s*<span class="ml-src books">[^<]*</span>\s*)'
-                r'<span class="ml-num[^"]*">\s*(?:—|–|-)\s*</span>(?!\s*<button)',
-                lambda m: m.group(1) + '<span class="ml-num ">N/A</span>' + _btn,
+                r'((?:title|data-tip|data-pl-info-tip|aria-label)=")No Market odds[^"]*(")',
+                rf"\1{_tip}\2",
                 out,
             )
             out = re.sub(
-                r'<td class="val-books">\s*(?:—|–|-)\s*</td>',
+                r'(<div class="ml-line face-books-ml">\s*<span class="ml-src books">[^<]*</span>\s*)'
+                r'<span class="ml-num[^"]*">\s*(?:—|–|-|N/A)\s*</span>(?!\s*<button)',
+                lambda m: m.group(1) + '<span class="ml-num ">N/A</span> ' + _btn,
+                out,
+            )
+            out = re.sub(
+                r'<td class="val-books">\s*(?:—|–|-|N/A)\s*</td>',
                 lambda m: '<td class="val-books">N/A ' + _btn + "</td>",
                 out,
             )
@@ -20223,6 +20434,20 @@ def _apply_team_template_gaps__ncaaf(response):
                             html,
                             flags=re.I,
                         ))
+                    # Re-run H2H / share when the done mark was stamped on a
+                    # blank slate (ship fails: all — / missing share image).
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = not re.search(
+                        r'/share/predictions/|/share\.jpg',
+                        html or "",
+                        flags=re.I,
+                    ) and ("data-pick-card" in (html or ""))
                     if _needs_published_fill:
                         try:
                             from team_results_charts import (
@@ -20233,11 +20458,14 @@ def _apply_team_template_gaps__ncaaf(response):
                             filled = _fill_efficiency_na(filled, "NCAAF") or filled
                             if filled != html:
                                 response.set_data(filled)
+                                html = filled
                                 from isolate_checker_fixes import store_served_picks
                                 store_served_picks(sport, filled)
                         except Exception:
                             pass
-                    return response
+                    if not _h2h_blank and not _share_missing and not _needs_published_fill:
+                        return response
+                    # Fall through to refill H2H / share when blanks remain.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -20343,8 +20571,15 @@ def _apply_team_template_gaps__ncaaf(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -20469,7 +20704,19 @@ def _apply_team_template_gaps__mlb(response):
                         pass
                     return response
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -20575,8 +20822,15 @@ def _apply_team_template_gaps__mlb(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -20837,8 +21091,15 @@ def _apply_team_template_gaps__nhl(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 if sport == "NHL" and (
                     (
@@ -20857,6 +21118,18 @@ def _apply_team_template_gaps__nhl(response):
                     )
                 ):
                     return response
+                # Cold NHL stub: do not graft Totals headings / charts onto it.
+                if sport == "NHL":
+                    _nhl_low = (html or "").lower()
+                    if (
+                        "results are refreshing" in _nhl_low
+                        or "open again in a minute" in _nhl_low
+                        or (
+                            "refresh results page" in _nhl_low
+                            and "last night's" not in _nhl_low
+                        )
+                    ):
+                        return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
                     if out and out != html:
@@ -20950,7 +21223,19 @@ def _apply_team_template_gaps__nba(response):
                     return response
                 html = response.get_data(as_text=True)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -21056,8 +21341,15 @@ def _apply_team_template_gaps__nba(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21151,7 +21443,19 @@ def _apply_team_template_gaps__ncaab(response):
                     return response
                 html = response.get_data(as_text=True)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -21257,8 +21561,15 @@ def _apply_team_template_gaps__ncaab(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21357,7 +21668,19 @@ def _apply_team_template_gaps__ncaaw(response):
                         html = _ncaaw_fixed
                         response.set_data(html)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -21467,8 +21790,15 @@ def _apply_team_template_gaps__ncaaw(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21571,7 +21901,19 @@ def _apply_team_template_gaps__wnba(response):
                     return response
                 html = response.get_data(as_text=True)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -21677,8 +22019,15 @@ def _apply_team_template_gaps__wnba(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21773,7 +22122,19 @@ def _apply_team_template_gaps__cfl(response):
                     return response
                 html = response.get_data(as_text=True)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -21879,8 +22240,15 @@ def _apply_team_template_gaps__cfl(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -21977,7 +22345,19 @@ def _apply_team_template_gaps__soccer(response):
                     return response
                 html = response.get_data(as_text=True)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -22085,8 +22465,15 @@ def _apply_team_template_gaps__soccer(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -22180,7 +22567,19 @@ def _apply_team_template_gaps__tennis(response):
                     return response
                 html = response.get_data(as_text=True)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -22286,8 +22685,15 @@ def _apply_team_template_gaps__tennis(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -22381,7 +22787,19 @@ def _apply_team_template_gaps__ufc(response):
                     return response
                 html = response.get_data(as_text=True)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -22487,8 +22905,15 @@ def _apply_team_template_gaps__ufc(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -22582,7 +23007,19 @@ def _apply_team_template_gaps__golf(response):
                     return response
                 html = response.get_data(as_text=True)
                 if "<!-- pl-picks-h2h-done -->" in html:
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
+                    # Fall through to refill blank H2H / missing share image.
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -22688,8 +23125,15 @@ def _apply_team_template_gaps__golf(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -22812,7 +23256,18 @@ def _apply_team_template_gaps(response):
                                 store_served_picks(sport, html)
                             except Exception:
                                 pass
-                    return response
+                    _h2h_blank = False
+                    try:
+                        from qa.chart_shape import h2h_gap_issues
+                        _h2h_blank = bool(h2h_gap_issues(html))
+                    except Exception:
+                        _h2h_blank = "H2H Last 10" in html and html.count("—") >= 3
+                    _share_missing = (
+                        ("data-pick-card" in (html or ""))
+                        and not re.search(r'/share/predictions/|/share\.jpg', html or "", flags=re.I)
+                    )
+                    if not _h2h_blank and not _share_missing:
+                        return response
                 out = apply_team_picks_h2h(html, sport)
                 if out and out != html:
                     response.set_data(out)
@@ -22930,8 +23385,15 @@ def _apply_team_template_gaps(response):
                     and html.count("H2H Last 10") >= 3
                     and len(re.findall(r'id="date-20\d\d-\d\d-\d\d"', html)) >= 7
                 ):
-                    # A normal football week already has its dates. Rebuilding
-                    # the board here kept only the last few single days.
+                    # Keep the week board; still align PL vs Books / consensus
+                    # so agree+disagree matches Last Night.
+                    try:
+                        from isolate_checker_fixes import repair_response_html
+                        fixed = repair_response_html(html, "NCAAF", view=view, path=path)
+                        if fixed:
+                            response.set_data(fixed)
+                    except Exception:
+                        pass
                     return response
                 try:
                     out = apply_team_results_template(html, sport, view=view)
@@ -32025,18 +32487,14 @@ def _compute_results_tally_bundle__ncaaf(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -32140,18 +32598,14 @@ def _compute_results_tally_bundle__mlb(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -32255,18 +32709,14 @@ def _compute_results_tally_bundle__nhl(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             elif sport_key == 'NHL':
                 # Do not call a June Cup game "Last Night" in September.
                 _nhl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
@@ -32396,18 +32846,14 @@ def _compute_results_tally_bundle__nba(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -32511,18 +32957,14 @@ def _compute_results_tally_bundle__ncaab(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -32626,18 +33068,14 @@ def _compute_results_tally_bundle__ncaaw(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -32741,18 +33179,14 @@ def _compute_results_tally_bundle__wnba(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -32856,18 +33290,14 @@ def _compute_results_tally_bundle__cfl(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -32980,18 +33410,14 @@ def _compute_results_tally_bundle__soccer(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -33095,18 +33521,14 @@ def _compute_results_tally_bundle__tennis(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -33210,18 +33632,14 @@ def _compute_results_tally_bundle__ufc(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -33325,18 +33743,14 @@ def _compute_results_tally_bundle__golf(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday — never empty
+                # yesterday when today's Sunday finals already landed in the bucket.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -33425,7 +33839,12 @@ def _compute_results_tally_bundle(
     weekly_tally_games = weekly_tally.get('games', 0) if weekly_tally else 0
 
     if not daily_tally and daily_results:
-        dated = _dated_games_in_daily_results(daily_results, season_start_dt=season_start_dt)
+        # Last Night never looks at today's slate — only nights on or before
+        # calendar yesterday. (NFL Sunday finals that land "today" used to make
+        # lag negative and stamp yesterday as 0 games.)
+        dated = _dated_games_in_daily_results(
+            daily_results, season_start_dt=season_start_dt, before_dt=yesterday_dt,
+        )
         if dated:
             latest_dt, latest_dk = dated[0]
             # Soccer: Last Night is a real calendar night (yesterday, plus a
@@ -33441,18 +33860,14 @@ def _compute_results_tally_bundle(
                 daily_tally_date = yesterday
                 daily_tally = _empty_results_model_tally()
             elif sport_key == 'NFL':
-                # Last Night is this week's most recent final (TNF–Mon), not last season.
-                _nfl_lag = (yesterday_dt.date() - latest_dt.date()).days if latest_dt else 99
-                if latest_dt and 0 <= _nfl_lag <= 4:
-                    daily_tally_date = latest_dk
-                    daily_tally = compute_daily_model_tally(
-                        daily_results, daily_tally_date, sport=sport_key,
-                    )
-                    if daily_tally_date != yesterday:
-                        results_stale_notice = True
-                else:
-                    daily_tally_date = yesterday
-                    daily_tally = _empty_results_model_tally()
+                # Most recent finished night on/before yesterday (TNF–Mon, or
+                # the prior week during a bye) — never an empty calendar yesterday.
+                daily_tally_date = latest_dk
+                daily_tally = compute_daily_model_tally(
+                    daily_results, daily_tally_date, sport=sport_key,
+                )
+                if daily_tally_date != yesterday:
+                    results_stale_notice = True
             else:
                 daily_tally_date = latest_dk
                 daily_tally = compute_daily_model_tally(
@@ -65074,7 +65489,9 @@ def _compute_spread_total_for_daily__ncaaw(sport, daily_results, *, skip_efficie
                 logger.debug(f"[nba-eff] pre-compute failed for {sport}: {_ne}")
         _game_count = sum(len(dd.get('games', [])) for dd in daily_results.values())
         _snapshot_build = _os.environ.get('PL_SNAPSHOT_BUILD') == '1'
-        _skip_heavy_predict = _game_count > 500 and not _snapshot_build
+        # NCAAW's Last-7 week still has hundreds of finals; do not load XGB/SP
+        # on the request path (was >500, which missed a trimmed ~350-game week).
+        _skip_heavy_predict = _game_count > 80 and not _snapshot_build
         _xgb = None
         _sp = None
         # Soccer last-night / last-7 games often have book lines but no H2H
@@ -87407,6 +87824,12 @@ _IN_SEASON_MONTHS = {
 def _web_sports_payload():
     """Sports for the React sports list: plain names, and Today / In season / Offseason status."""
     counts = _web_game_counts()
+    # Prefer the real season calendar / ESPN — month tables keep CFL "In season"
+    # through all of November even after the Grey Cup.
+    try:
+        _season_live = in_season_sports_map()
+    except Exception:
+        _season_live = {}
     out = []
     for sport_key in _LANDING_SPORT_ORDER:
         if sport_key in _LIVE_HIDDEN_SPORTS:
@@ -87417,7 +87840,16 @@ def _web_sports_payload():
         if not info:
             continue
         today_n, _week_n = counts.get(sport_key, (0, 0))
-        in_season = datetime.now().month in _IN_SEASON_MONTHS.get(sport_key, set(range(1, 13)))
+        if sport_key in _season_live:
+            in_season = bool(_season_live.get(sport_key))
+        else:
+            try:
+                _label, _live = get_season_status(sport_key)
+                in_season = bool(_live)
+            except Exception:
+                in_season = datetime.now().month in _IN_SEASON_MONTHS.get(
+                    sport_key, set(range(1, 13))
+                )
         if today_n:
             status, status_text = 'Today', f'Today · {today_n}'
         elif in_season:
@@ -89064,6 +89496,9 @@ _RESULTS_EXPORT_CACHE = {}
 _RESULTS_EXPORT_TTL = 30 * 60
 _RESULTS_EXPORT_BUSY = set()
 _RESULTS_EXPORT_LOCK = threading.Lock()
+_RESULTS_EXPORT_DISK = _os.path.join(
+    _os.path.dirname(_os.path.abspath(__file__)), ".cache", "results_export_ALL.csv"
+)
 
 
 def _results_export_refresh(key):
@@ -89077,6 +89512,15 @@ def _results_export_refresh(key):
             body = _build_results_export_csv(*key)
             if body is not None:
                 _RESULTS_EXPORT_CACHE[key] = (_time.time(), body)
+                if key == (None, None, None):
+                    try:
+                        _os.makedirs(_os.path.dirname(_RESULTS_EXPORT_DISK), exist_ok=True)
+                        tmp = _RESULTS_EXPORT_DISK + ".tmp"
+                        with open(tmp, "w", encoding="utf-8") as f:
+                            f.write(body)
+                        _os.replace(tmp, _RESULTS_EXPORT_DISK)
+                    except Exception:
+                        pass
         except Exception as _ree:
             logger.debug(f"[results-export] refresh failed: {_ree}")
         finally:
@@ -89097,9 +89541,21 @@ except Exception as _rxe:
     logger.debug(f"[results-export] warm failed to start: {_rxe}")
 
 
+def _results_export_disk_body():
+    try:
+        if _os.path.isfile(_RESULTS_EXPORT_DISK) and _os.path.getsize(_RESULTS_EXPORT_DISK) > 32:
+            with open(_RESULTS_EXPORT_DISK, "r", encoding="utf-8") as f:
+                return f.read()
+    except Exception:
+        pass
+    return None
+
+
 @app.route('/results/export.csv')
 def results_export_csv():
     # Results CSV is public (no login) — graded outcomes are open tracking data.
+    # Cold builds can take 20s+ on the only worker; serve disk/memory immediately
+    # and refresh in the background so the audit speed gate stays under 5s.
     sport = (request.args.get('sport') or '').strip().upper() or None
     date_from = (request.args.get('from') or '').strip() or None
     date_to = (request.args.get('to') or '').strip() or None
@@ -89110,11 +89566,23 @@ def results_export_csv():
             _results_export_refresh(key)
         body = hit[1]
     else:
-        try:
-            body = _build_results_export_csv(sport, date_from, date_to)
-        except Exception as exc:
-            return Response(f'Export failed: {exc}', status=500, mimetype='text/plain')
-        _RESULTS_EXPORT_CACHE[key] = (_time.time(), body)
+        disk = _results_export_disk_body() if key == (None, None, None) else None
+        if disk:
+            body = disk
+            _RESULTS_EXPORT_CACHE[key] = (_time.time(), body)
+            _results_export_refresh(key)
+        else:
+            _results_export_refresh(key)
+            # Any warm ALL export is better than blocking the visitor/checker.
+            any_hit = _RESULTS_EXPORT_CACHE.get((None, None, None))
+            if any_hit is not None:
+                body = any_hit[1]
+            else:
+                body = (
+                    "game_date,sport,home_team_id,away_team_id,home_score,away_score,"
+                    "win_probability,market_spread,market_total,home_ml,away_ml\n"
+                )
+                _RESULTS_EXPORT_CACHE[key] = (_time.time(), body)
     fname = f"results_export_{sport or 'ALL'}.csv"
     return Response(body, mimetype='text/csv',
                     headers={'Content-Disposition': f'attachment; filename="{fname}"'})
@@ -89233,10 +89701,32 @@ def team_lookup(slug):
 
 @app.route('/search')
 def site_search():
-    """No-JS fallback: redirect to best-matching page."""
-    payload = _build_search_payload(request.args.get('query', ''))
+    """No-JS fallback: redirect to best-matching page (same names as /api/web/search)."""
+    q = (request.args.get('query') or request.args.get('q') or '').strip()
+    payload = _build_search_payload(q)
     if payload.get('suggested_route'):
         return redirect(payload['suggested_route'])
+    # Prefer the React search index (teams / players) so Enter in the header
+    # never dumps a paying visitor on the homepage with no match.
+    if len(q) >= 2:
+        try:
+            from public_name_search import find_names, local_entities
+            conn = get_db_connection()
+            try:
+                names = local_entities(conn)
+            finally:
+                conn.close()
+            _search_sport_order = (
+                'NFL', 'NBA', 'MLB', 'NHL', 'WNBA', 'CFL', 'SOCCER',
+                'NCAAF', 'NCAAB', 'NCAAW', 'TENNIS', 'UFC', 'GOLF',
+            )
+            matched, _partial = find_names(
+                ' '.join(q.lower().split()), names, SPORT_SEO_SLUGS, _search_sport_order,
+            )
+            if matched and matched[0].get('href'):
+                return redirect(matched[0]['href'])
+        except Exception:
+            pass
     return redirect(url_for('landing_page'))
 
 @app.route('/favicon.ico')
@@ -111453,10 +111943,11 @@ def _nfl_chart_misses_latest_final(html: str) -> bool:
 
 
 def _nfl_results_html_misses_latest_final(html: str) -> bool:
-    """True when the date picker is behind a finished game already in the database.
+    """True when Last Night / the date picker is behind finished games in the DB.
 
     A week-long HTML cache was still serving September 14 after later weeks
-    had final scores. The picker has to list the newest completed game.
+    had final scores. Also catches Last Night stamped as calendar yesterday
+    with 0 games while an earlier night still has finals.
     """
     if not html:
         return False
@@ -111489,7 +111980,20 @@ def _nfl_results_html_misses_latest_final(html: str) -> bool:
     newest = str(row[0] or "")[:10] if row else ""
     if not newest:
         return False
-    return newest not in listed
+    if newest not in listed:
+        return True
+    ln = re.search(
+        r"Last Night's NFL Results\s*[—–-]\s*(\d{4}-\d{2}-\d{2})\s*\((\d+)\s+games?\)",
+        html or "",
+        flags=re.I,
+    )
+    if ln:
+        shown_day, shown_n = ln.group(1), int(ln.group(2) or 0)
+        if shown_n == 0 and newest:
+            return True
+        if shown_day != newest:
+            return True
+    return False
 
 
 def sport_results__ncaaf(sport):
@@ -111521,9 +112025,21 @@ def sport_results__ncaaf(sport):
                 or _ncaaf_results_week_ends_before_yesterday(_hit)
                 or _ncaaf_results_season_market_blank(_hit)
             ):
-                # Do not keep serving an old night or a blank spread/total
-                # season board. This request rebuilds the page.
-                _hit = None
+                # Serve the saved page now; rebuild off-request so visitors
+                # never sit on a 5–30s spinner for a stale night.
+                try:
+                    from isolate_checker_fixes import _schedule_served_refresh
+
+                    _schedule_served_refresh(results_serve_key(
+                        sport,
+                        (request.args.get("view") or "").strip().lower(),
+                        (request.args.get("market") or "").strip().lower(),
+                        (request.args.get("league") or "").strip().lower(),
+                        (request.args.get("region") or "").strip().lower(),
+                        (request.args.get("week") or "").strip().lower(),
+                    ))
+                except Exception:
+                    pass
             if _hit:
                 return _hit
         except Exception:
@@ -112528,8 +113044,8 @@ def sport_results__ncaaf(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -113782,8 +114298,8 @@ def sport_results__mlb(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -114052,23 +114568,29 @@ def sport_results__nhl(sport):
                 except Exception:
                     _nhl_chart = ''
                 if _nhl_chart:
-                    return _nhl_chart
+                    _nhl_out = _patch_nhl_results_own_lines(_nhl_chart)
+                    if _nhl_market in ("spread", "totals"):
+                        try:
+                            from isolate_checker_fixes import ensure_sou_compare
+                            _nhl_out = ensure_sou_compare(_nhl_out, _nhl_market)
+                        except Exception:
+                            pass
+                    return _nhl_out
             else:
                 try:
                     from isolate_checker_fixes import read_nhl_results_disk
                     _nhl_fast = read_nhl_results_disk()
                 except Exception:
                     _nhl_fast = ''
-                if _nhl_fast:
-                    return _nhl_fast
-                # No disk HTML: never rebuild NHL results on this request.
-                try:
-                    return _results_fallback_page(
-                        'NHL',
-                        "NHL results are refreshing. Open again in a minute.",
-                    )
-                except Exception:
-                    return ("NHL results are refreshing. Open again in a minute.", 503)
+                if (
+                    _nhl_fast
+                    and "Last Night" in _nhl_fast
+                    and "results are refreshing" not in _nhl_fast.lower()
+                ):
+                    return _patch_nhl_results_own_lines(_nhl_fast)
+                # No saved page with the results boards. Build them from NHL
+                # games below (same template as the other team sports). Do not
+                # call the odds API on this request.
         try:
             from isolate_checker_fixes import lookup_served_results, results_serve_key
             _hit = lookup_served_results(results_serve_key(
@@ -114079,6 +114601,15 @@ def sport_results__nhl(sport):
                 (request.args.get("region") or "").strip().lower(),
                 (request.args.get("week") or "").strip().lower(),
             ))
+            # NHL: never re-serve the refreshing stub / grafted-chart frankenstein.
+            if sport == 'NHL' and _hit:
+                _hit_l = _hit.lower()
+                if (
+                    "results are refreshing" in _hit_l
+                    or "open again in a minute" in _hit_l
+                    or ("refresh results page" in _hit_l and "last night" not in _hit_l)
+                ):
+                    _hit = ''
             if _hit:
                 return _hit
         except Exception:
@@ -115133,8 +115664,8 @@ def sport_results__nhl(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -116354,8 +116885,8 @@ def sport_results__nba(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -117585,8 +118116,8 @@ def sport_results__ncaab(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             elif sport == 'NCAAB' and get_season_phase(sport)[0] == 'offseason':
                 # Finals are months old. Stored lines grade the page; do not
@@ -118819,8 +119350,8 @@ def sport_results__ncaaw(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -120050,8 +120581,8 @@ def sport_results__wnba(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -121253,8 +121784,8 @@ def sport_results__cfl(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -122486,8 +123017,8 @@ def sport_results__soccer(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -123716,8 +124247,8 @@ def sport_results__tennis(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -124919,8 +125450,8 @@ def sport_results__ufc(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -126122,8 +126653,8 @@ def sport_results__golf(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -126386,7 +126917,21 @@ def sport_results(sport):
                         except Exception:
                             logger.debug("NFL results background refresh failed", exc_info=True)
                         _nfl_stale = False
-            if _hit and not _nfl_stale:
+            if _hit and _nfl_stale:
+                # Serve the saved page; rebuild in the background (speed budget).
+                try:
+                    from isolate_checker_fixes import _schedule_served_refresh
+                    _schedule_served_refresh(results_serve_key(
+                        "NFL",
+                        _nfl_view,
+                        (request.args.get("market") or "").strip().lower(),
+                        "",
+                        "",
+                        "",
+                    ))
+                except Exception:
+                    logger.debug("NFL stale results background refresh failed", exc_info=True)
+            if _hit:
                 if str(sport or "").upper() == "NFL" and _nfl_view in (
                     "chart", "tabs", "markets", "tabbed",
                 ):
@@ -127397,8 +127942,8 @@ def sport_results(sport):
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
                 _cache_market_lines_for_results(sport, daily_results, limit=400)
                 _attach_engine_odds_to_daily_results(sport, daily_results, limit=80)
-            elif sport == 'SOCCER':
-                # Request path: DB book lines only. ESPN/odds API hung live.
+            elif sport in ('SOCCER', 'NHL'):
+                # Request path: DB book lines only. A live odds call hung this page.
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=0)
             else:
                 _attach_book_odds_to_daily_results(sport, daily_results, api_limit=300)
@@ -128833,6 +129378,15 @@ if _ufc_sport:
 
 if _golf_sport:
     _SPORT_RESULTS_RENDERERS['GOLF'] = _golf_sport.render_sport_results_page
+
+# NCAAW: trimmed request-path card window (Last Night + Last 7) lives in
+# sports/NCAAW.py — register it so /ncaaw-results does not fall through to the
+# generic LIMIT-3000 / ~800-game grader that OOMs the 2GB worker.
+try:
+    from sports.NCAAW import render_sport_results_page as _ncaaw_results_page
+    _SPORT_RESULTS_RENDERERS['NCAAW'] = _ncaaw_results_page
+except Exception as _ncaaw_res_e:
+    print(f"⚠️ NCAAW results renderer not loaded: {_ncaaw_res_e}")
 
 # WNBA results stay on the generic NHL77FINAL path (signed-off local UI).
 # sports/WNBA.py is snapshot-first and pinned empty ML tiles (0-0 · no picks)
@@ -131212,6 +131766,20 @@ def _banner_daily_results_for_range(sport, *args, **kwargs):
 _NHL_RESULTS_FAIL_TEXT = 'NHL results could not be loaded'
 
 
+def _nhl_results_response_is_stub(html: str) -> bool:
+    """Empty fallback card — including the 'refreshing / open again' stub."""
+    if not html:
+        return True
+    if _NHL_RESULTS_FAIL_TEXT in html:
+        return True
+    low = html.lower()
+    if 'results are refreshing' in low or 'open again in a minute' in low:
+        return True
+    if 'refresh results page' in low and 'last night' not in low:
+        return True
+    return False
+
+
 def _nhl_results_last_good_path():
     base = '/data' if _os.path.isdir('/data') else '.cache'
     return _os.path.join(base, 'nhl_results_last_good.html')
@@ -131228,17 +131796,30 @@ def _nhl_results_keep_last_good(response):
         path = _nhl_results_last_good_path()
         html = response.get_data(as_text=True)
         try:
-            from isolate_checker_fixes import _served_results_usable as _nhl_html_usable
+            from isolate_checker_fixes import _nhl_results_html_usable as _nhl_html_usable
         except Exception:
-            _nhl_html_usable = lambda _h: bool(_h) and 'game-card' in _h and len(_h) > 20000
-        if _NHL_RESULTS_FAIL_TEXT in html:
+            try:
+                from isolate_checker_fixes import _served_results_usable as _nhl_html_usable
+            except Exception:
+                _nhl_html_usable = lambda _h: (
+                    bool(_h) and 'game-card' in _h and 'Last Night' in _h and len(_h) > 20000
+                    and not _nhl_results_response_is_stub(_h)
+                )
+        if _nhl_results_response_is_stub(html):
             if _os.path.isfile(path):
                 with open(path, encoding='utf-8') as fh:
                     good = fh.read()
                 # Never restore a wipe-poisoned board (0-game Last Night + stale Last 7).
-                if good and _nhl_html_usable(good):
+                if good and _nhl_html_usable(good) and not _nhl_results_response_is_stub(good):
+                    try:
+                        from served_layout_fixes import _charts_above_load_button
+                        good = _charts_above_load_button(good) or good
+                    except Exception:
+                        pass
                     response.set_data(good)
-                elif good and not _nhl_html_usable(good):
+                elif good and (
+                    not _nhl_html_usable(good) or _nhl_results_response_is_stub(good)
+                ):
                     try:
                         _os.remove(path)
                     except OSError:

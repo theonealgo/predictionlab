@@ -98,6 +98,12 @@ pat_l7 = re.compile(
 )
 
 def poisoned(text: str) -> bool:
+    low = (text or "").lower()
+    # Cold-disk "NHL results are refreshing…" stub (often with grafted Totals scraps).
+    if "results are refreshing" in low or "open again in a minute" in low:
+        return True
+    if "refresh results page" in low and "last night's" not in low:
+        return True
     ln, l7 = pat_ln.search(text or ""), pat_l7.search(text or "")
     if not ln or int(ln.group(2) or 0) != 0:
         return False

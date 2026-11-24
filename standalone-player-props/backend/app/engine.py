@@ -31,9 +31,11 @@ from .data_sources import (
     enrich_mlb_players_with_metrics,
     fetch_prop_lines,
     fetch_schedule_and_teams,
+    fetch_unavailable_prop_names,
     implied_prob,
     normal_cdf,
     poisson_cdf,
+    _norm_name,
 )
 from .player_eligibility import (
     filter_props_by_eligibility,
@@ -429,14 +431,21 @@ def _pl_forecast_row(league, player, prop, schedule):
                (str(g.get("home_team_id") or ""), str(g.get("away_team_id") or ""))]
     if not game and len(matches) == 1:
         game = {"event_id": str(matches[0].get("event_id") or ""), "start_time": matches[0].get("start_time")}
+    event_id = prop.get("event_id") or game.get("event_id")
+    event_start = prop.get("event_start") or game.get("start_time")
+    if not event_start and event_id:
+        for g in schedule:
+            if str(g.get("event_id") or "") == str(event_id):
+                event_start = g.get("start_time")
+                break
     probs, forecasts = result["probabilities"], result["model_forecasts"]
     return {"player_id": player["player_id"], "player_name": player["name"], "team": player.get("team"),
             "league": league, "position": player.get("position"), "role": player.get("role"),
             "depth_rank": player.get("depth_rank"), "prop_type": prop["prop_type"],
             "line": float(prop["line"]), "_calc_line": float(prop["line"]),
             "line_source": prop["line_source"], "line_type": "pl" if prop["line_source"] == "pl_model" else "market",
-            "event_id": prop.get("event_id") or game.get("event_id"),
-            "event_start": prop.get("event_start") or game.get("start_time"),
+            "event_id": event_id,
+            "event_start": event_start,
             "odds_over": prop.get("odds_over"), "odds_under": prop.get("odds_under"),
             "projection": round(result["projection"], 2), "pl_line": result["fair_line"],
             "over_probability": 100*probs["over"], "under_probability": 100*probs["under"],
@@ -465,7 +474,8 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
     markets = _LEAGUE_PROP_TYPES.get(league, [])
     leader_slate = False
     if league in ("NBA", "WNBA", "NCAAB", "NCAAW", "NHL", "NFL", "NCAAF"):
-        players, pool_audit = playing_leaders(league, schedule, markets, per_market=10, board=200)
+        # Top 100 season leaders on today's slate, per market (injury-filtered).
+        players, pool_audit = playing_leaders(league, schedule, markets, per_market=100, board=200)
         leader_slate = bool(players)
     if not leader_slate:
         players = build_top_players(league, schedule)
@@ -478,6 +488,25 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
             r = p.get("role") or ""
             pool_audit.setdefault("roles", {})
             pool_audit["roles"][r] = pool_audit["roles"].get(r, 0) + 1
+    # Safety net for roster/fallback pools: drop confirmed-unavailable names.
+    unavailable_names = fetch_unavailable_prop_names(league)
+    if unavailable_names:
+        kept, dropped = [], 0
+        for player in players:
+            if _norm_name(player.get("name") or "") in unavailable_names:
+                dropped += 1
+                excluded.append({
+                    "player_id": player.get("player_id"),
+                    "name": player.get("name"),
+                    "team_id": player.get("team_id"),
+                    "reasons": ["injury_or_not_available"],
+                })
+                continue
+            kept.append(player)
+        players = kept
+        pool_audit = dict(pool_audit or {})
+        pool_audit["excluded_unavailable"] = int(pool_audit.get("excluded_unavailable") or 0) + dropped
+        pool_audit["eligible_players"] = len(players)
     def ranking_allowed(player, prop_type):
         return market_allowed(league, player.get("role") or position_to_role(league, player.get("position")),
                               prop_type, line_source="espn_props")
@@ -554,13 +583,20 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         # A market can exist without a supported forecast. Never turn missing
         # observations into a minutes proxy or named-model confidence offsets.
         game = p.get("next_game") or {}
+        event_id = prop.get("event_id") or game.get("event_id")
+        event_start = prop.get("event_start") or game.get("start_time")
+        if not event_start and event_id:
+            for g in schedule:
+                if str(g.get("event_id") or "") == str(event_id):
+                    event_start = g.get("start_time")
+                    break
         projections.append({
             "player_id": p["player_id"], "player_name": p["name"], "team": p.get("team"),
             "league": league, "position": p.get("position"), "role": p.get("role"),
             "prop_type": prop["prop_type"], "line": float(prop["line"]),
             "line_source": prop.get("line_source"), "line_type": "pl" if prop.get("line_source") == "pl_model" else "market",
-            "event_id": prop.get("event_id") or game.get("event_id"),
-            "event_start": prop.get("event_start") or game.get("start_time"),
+            "event_id": event_id,
+            "event_start": event_start,
             "odds_over": prop.get("odds_over"), "odds_under": prop.get("odds_under"),
             "projection": None, "picked_side": None, "pick_probability": None,
             "strong_pick": False, "model_forecasts": [], "model_confidence": {},
@@ -582,11 +618,32 @@ def _build_league_payload(league: str, schedule_override: Optional[List[Dict]] =
         projections, by_id, league=league
     )
     for row in projections:
-        row["category_ranking"] = by_id[row["player_id"]]["market_rankings"][row["prop_type"]]
+        raw_rank = (by_id.get(row["player_id"]) or {}).get("market_rankings", {}).get(
+            row["prop_type"]
+        )
+        # Pool code stores an int rank; older paths used {"rank": N}.
+        if isinstance(raw_rank, dict):
+            row["category_ranking"] = raw_rank
+        elif isinstance(raw_rank, (int, float)):
+            row["category_ranking"] = {"rank": int(raw_rank)}
+        else:
+            row["category_ranking"] = {"rank": 101}
     for market, coverage in (pool_audit.get("by_market") or {}).items():
         coverage["published_players"] = len({str(row["player_id"]) for row in projections if row["prop_type"] == market})
+
+    def _category_rank(row: dict) -> int:
+        ranking = row.get("category_ranking")
+        if isinstance(ranking, dict):
+            try:
+                return int(ranking.get("rank") or 101)
+            except (TypeError, ValueError):
+                return 101
+        if isinstance(ranking, (int, float)):
+            return int(ranking)
+        return 101
+
     projections.sort(key=lambda row: (
-        row["prop_type"], row["category_ranking"]["rank"],
+        row["prop_type"], _category_rank(row),
         row.get("player_name") or "", str(row.get("event_id") or ""),
     ))
     payload = {
@@ -984,7 +1041,18 @@ def filter_props(
         )
     )
     if any(row.get("category_ranking") for row in out):
-        out.sort(key=lambda row: (row["prop_type"], (row.get("category_ranking") or {}).get("rank", 101),
+        def _rank(row: dict) -> int:
+            ranking = row.get("category_ranking")
+            if isinstance(ranking, dict):
+                try:
+                    return int(ranking.get("rank") or 101)
+                except (TypeError, ValueError):
+                    return 101
+            if isinstance(ranking, (int, float)):
+                return int(ranking)
+            return 101
+
+        out.sort(key=lambda row: (row["prop_type"], _rank(row),
                                   str(row.get("player_id") or "")))
     return [{key: value for key, value in row.items()
              if key not in ("input_values", "input_hash", "model_validation")} for row in out]

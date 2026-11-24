@@ -534,25 +534,31 @@ def api_search():
     """Public names across teams and players, independent of today's props slate."""
     q = ' '.join((request.args.get('q') or '').lower().split())
     if len(q) < 2:
-        return jsonify({'results': []})
-    from NHL77FINAL import SPORT_SEO_SLUGS as slug_of
-    results = [
-        {'label': f'{sport.title() if sport in ("SOCCER", "TENNIS", "GOLF") else sport} Predictions',
-         'sport': sport, 'href': '/' + slug_of[sport].replace('-picks', '-predictions')}
-        for sport in _SPORT_ORDER if sport in slug_of and q in sport.lower()
-    ]
-    if 'props' in q or 'player' in q:
-        results.append({'label': 'Player Props', 'sport': 'PROPS', 'href': '/player-props'})
-
-    from NHL77FINAL import get_db_connection
-    from public_name_search import find_names, local_entities
-    connection = get_db_connection()
+        return jsonify({'results': [], 'partial': False})
     try:
-        names = local_entities(connection)
-    finally:
-        connection.close()
-    matched, partial = find_names(q, names, slug_of, _SPORT_ORDER)
-    return jsonify({'results': (results + matched)[:20], 'partial': partial})
+        from NHL77FINAL import SPORT_SEO_SLUGS as slug_of
+        results = [
+            {'label': f'{sport.title() if sport in ("SOCCER", "TENNIS", "GOLF") else sport} Predictions',
+             'sport': sport, 'href': '/' + slug_of[sport].replace('-picks', '-predictions')}
+            for sport in _SPORT_ORDER if sport in slug_of and q in sport.lower()
+        ]
+        if 'props' in q or 'player' in q:
+            results.append({'label': 'Player Props', 'sport': 'PROPS', 'href': '/player-props'})
+
+        from NHL77FINAL import get_db_connection
+        from public_name_search import find_names, local_entities
+        connection = get_db_connection()
+        try:
+            names = local_entities(connection)
+        finally:
+            connection.close()
+        matched, partial = find_names(q, names, slug_of, _SPORT_ORDER)
+        out = (results + matched)[:20]
+        # Matches already answer the box — never show "directory unavailable".
+        return jsonify({'results': out, 'partial': bool(partial) and not out})
+    except Exception:
+        logging.getLogger(__name__).exception('[search] failed for %r', q)
+        return jsonify({'results': [], 'partial': True})
 
 
 @api.route('/api/web/all-sports')
@@ -966,8 +972,14 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
     from unittest.mock import patch
     with ExitStack() as stack:
         if tier == 'member':
+            # paywall imports is_premium_user by name at load time — patch that
+            # binding too or member feeds bake "Members only · Join Premium".
             stack.enter_context(patch('auth_system.is_premium_user', return_value=True))
             stack.enter_context(patch('NHL77FINAL.is_premium_user', return_value=True))
+            try:
+                stack.enter_context(patch('paywall.is_premium_user', return_value=True))
+            except Exception:
+                pass
         if limit is None:
             html = _page_html(path, app, host, cookie)
             page = None
@@ -1046,6 +1058,16 @@ def _build_cards(slug, tier, app, host, cookie, offset=0, limit=None):
 
 def _cards_file(slug, tier):
     return _CARDS_DIR / f'{slug}.{tier}.v2.json.gz'
+
+
+def _cards_ok_file(slug):
+    """Last known-good unlocked member feed (safeguard against poisoned rebuilds)."""
+    return _CARDS_DIR / f'{slug}.member.ok.v2.json.gz'
+
+
+def _cards_head_file(slug, tier):
+    """First-10 slice for instant paint while a full rebuild runs."""
+    return _CARDS_DIR / f'{slug}.{tier}.head10.v2.json.gz'
 
 
 def _read_cards_file(path):
@@ -1202,11 +1224,26 @@ def _restamp_consensus_hist_on_payload(payload, sport):
     return dict(payload, cards=out_cards)
 
 
+def _payload_has_locked_member_chips(payload) -> bool:
+    """True when Consensus / PL-vs-Books chips still say Members only."""
+    cards = (payload or {}).get('cards') or []
+    if not cards:
+        return False
+    locked = sum(1 for c in cards if 'Members only' in ((c or {}).get('html') or ''))
+    return locked >= max(1, len(cards) // 2)
+
+
 def _save_cards(slug, tier, payload, allow_empty=False):
     from slate_freshness import current_payload
     payload = current_payload(payload)
     if not payload['cards'] and not allow_empty:
         return  # an empty page (a failed build) never replaces a good saved feed
+    # Never persist a "member" feed that still shows Join Premium on the chips.
+    if tier == 'member' and _payload_has_locked_member_chips(payload):
+        logging.getLogger(__name__).warning(
+            '[web cards] refusing to save locked member feed for %s', slug,
+        )
+        return
     # Never replace a feed that already has upcoming cards with a past-only rebuild.
     if slug.endswith('-picks') and payload.get('cards') and not _feed_has_upcoming(payload):
         existing = _CARDS.get((slug, tier)) or _saved_cards(slug, tier)
@@ -1224,9 +1261,28 @@ def _save_cards(slug, tier, payload, allow_empty=False):
     _CARDS[(slug, tier)] = (time.time(), payload)
     try:
         _CARDS_DIR.mkdir(parents=True, exist_ok=True)
+        blob = gzip.compress(json.dumps(payload).encode(), compresslevel=5)
         tmp = _cards_file(slug, tier).with_suffix('.tmp')
-        tmp.write_bytes(gzip.compress(json.dumps(payload).encode(), compresslevel=5))
+        tmp.write_bytes(blob)
         tmp.replace(_cards_file(slug, tier))
+        # First 10 cards always on disk so NCAAB (and large slates) paint instantly.
+        if slug.endswith('-picks') and payload.get('cards'):
+            head = dict(
+                payload,
+                cards=list(payload.get('cards') or [])[:10],
+                total=len(payload.get('cards') or []),
+                offset=0,
+                nextOffset=10 if len(payload.get('cards') or []) > 10 else None,
+                hasMore=len(payload.get('cards') or []) > 10,
+            )
+            head_tmp = _cards_head_file(slug, tier).with_suffix('.tmp')
+            head_tmp.write_bytes(gzip.compress(json.dumps(head).encode(), compresslevel=5))
+            head_tmp.replace(_cards_head_file(slug, tier))
+        # Keep an unlocked member backup — never lose a good feed to a bad rebuild.
+        if tier == 'member' and not _payload_has_locked_member_chips(payload):
+            ok_tmp = _cards_ok_file(slug).with_suffix('.tmp')
+            ok_tmp.write_bytes(blob)
+            ok_tmp.replace(_cards_ok_file(slug))
         if tier == 'member':
             _fill_missing_locked_feeds(slug, payload)
             # Refresh guest/free from member when the member feed has upcoming games,
@@ -1351,14 +1407,52 @@ _CARD_ERRORS = {}
 def _cards_for_tier(slug, tier):
     """Guest/free share the locked feed; never hand a member feed to a free visitor."""
     saved = _saved_cards(slug, tier)
+    # A member feed that still says "Join Premium" is unusable — restore .ok or rebuild.
+    if (
+        tier == 'member'
+        and saved
+        and _usable_cards(saved[1])
+        and _payload_has_locked_member_chips(saved[1])
+    ):
+        _CARDS.pop((slug, 'member'), None)
+        restored = None
+        try:
+            ok = _cards_ok_file(slug)
+            if ok.is_file():
+                payload = _read_cards_file(ok)
+                if _usable_cards(payload) and not _payload_has_locked_member_chips(payload):
+                    restored = (time.time(), payload)
+                    _CARDS[(slug, 'member')] = restored
+                    # Put the good feed back on the live path.
+                    tmp = _cards_file(slug, 'member').with_suffix('.tmp')
+                    tmp.write_bytes(ok.read_bytes())
+                    tmp.replace(_cards_file(slug, 'member'))
+            path = _cards_file(slug, 'member')
+            if restored is None and path.is_file():
+                path.unlink()
+        except OSError:
+            pass
+        saved = restored
     if saved and _usable_cards(saved[1]):
         return saved
+    # Instant first paint from head10 while a full rebuild is still running.
+    if slug.endswith('-picks'):
+        try:
+            head_path = _cards_head_file(slug, tier)
+            if head_path.is_file():
+                head = _read_cards_file(head_path)
+                if _usable_cards(head) and (
+                    tier != 'member' or not _payload_has_locked_member_chips(head)
+                ):
+                    return (time.time(), head)
+        except (OSError, ValueError, TypeError):
+            pass
     if tier in ('guest', 'free'):
         saved = _saved_cards(slug, 'free' if tier == 'guest' else 'guest')
         if saved and _usable_cards(saved[1]):
             return saved
         member = _saved_cards(slug, 'member')
-        if member and _usable_cards(member[1]):
+        if member and _usable_cards(member[1]) and not _payload_has_locked_member_chips(member[1]):
             locked = _locked_from_member(member[1])
             _save_cards(slug, 'guest', locked, allow_empty=True)
             _save_cards(slug, 'free', locked, allow_empty=True)
@@ -1491,6 +1585,42 @@ def _feed_has_upcoming(payload, today_only: bool = False) -> bool:
     return False
 
 
+def _feed_max_upcoming_date(payload):
+    """Latest non-final card date on/after today (ET), or None."""
+    today = datetime.now(ZoneInfo('America/New_York')).date()
+    latest = None
+    for card in (payload or {}).get('cards') or []:
+        if (card or {}).get('isFinal') is True:
+            continue
+        raw = str((card or {}).get('date') or '')[:10]
+        if not raw:
+            continue
+        try:
+            day = datetime.strptime(raw, '%Y-%m-%d').date()
+        except ValueError:
+            continue
+        if day < today:
+            continue
+        if latest is None or day > latest:
+            latest = day
+    return latest
+
+
+def _feed_missing_near_slate(payload, span: int = 2) -> bool:
+    """True when the feed stops before today+span — 'Show next two days' would no-op.
+
+    NHL (and other team sports) often publish tomorrow's slate while today's
+    feed still only holds tonight. Force a rebuild so the button can reveal them.
+    """
+    if span is None or int(span) <= 0:
+        return False
+    latest = _feed_max_upcoming_date(payload)
+    if latest is None:
+        return False
+    today = datetime.now(ZoneInfo('America/New_York')).date()
+    return latest < today + timedelta(days=int(span))
+
+
 def _sport_in_season_for_cards(sport: str) -> bool:
     if not sport:
         return False
@@ -1543,7 +1673,33 @@ def _next_available_cards(cards, span: int):
     return [card for day, card in upcoming if first <= day <= end]
 
 
-def _card_page(slug, tier, app, offset, limit, span=None):
+def _league_slug(text: str) -> str:
+    return re.sub(r'[^a-z0-9]+', '-', (text or '').strip().lower()).strip('-')
+
+
+def _card_league_label(card: dict) -> str:
+    html = (card or {}).get('html') or ''
+    m = re.search(r'\bdata-league="([^"]*)"', html, flags=re.I)
+    return (m.group(1) if m else '').strip()
+
+
+def _filter_cards_by_league(cards, league: str | None):
+    """Soccer (and similar): page within one league so the first 10 are that league."""
+    raw = (league or '').strip()
+    if not raw or raw.lower() in {'all', '*'}:
+        return list(cards or [])
+    want = _league_slug(raw)
+    out = []
+    for card in cards or []:
+        label = _card_league_label(card)
+        if not label:
+            continue
+        if label == raw or _league_slug(label) == want:
+            out.append(card)
+    return out
+
+
+def _card_page(slug, tier, app, offset, limit, span=None, league=None):
     from slate_freshness import current_payload
     saved = _cards_for_tier(slug, tier)
     if saved and time.time()-saved[0] < _CARDS_KEEP:
@@ -1554,39 +1710,44 @@ def _card_page(slug, tier, app, offset, limit, span=None):
         needs_rebuild = (
             slug.endswith('-picks')
             and _sport_in_season_for_cards(sport)
-            and not _feed_has_upcoming(saved[1])
+            and (
+                not _feed_has_upcoming(saved[1])
+                or (span is not None and int(span) >= 2 and _feed_missing_near_slate(saved[1], span))
+            )
         )
         if needs_rebuild:
-            _invalidate_sport_card_feeds(slug)
-            saved = None
-        else:
-            payload = _ensure_live_share_image(current_payload(saved[1]), slug)
-            if payload is not saved[1] and payload.get('shareImage') != (saved[1] or {}).get('shareImage'):
-                _save_cards(slug, tier, payload, allow_empty=True)
-            source = payload['cards']
-            used_next = False
-            if span is not None:
-                spanned = [card for card in source if _card_in_span(card, span)]
-                if spanned:
-                    source = spanned
-                elif _sport_in_season_for_cards(sport):
-                    # No games in today..today+span — show the next available slate.
-                    nxt = _next_available_cards(source, span)
-                    if nxt:
-                        source = nxt
-                        used_next = True
-                    else:
-                        source = spanned
+            # Keep serving current cards; rebuild in the background so "Show the
+            # next two days" can reveal tomorrow once the classic slate is ready.
+            _start_full_cards(slug, tier, app)
+        payload = _ensure_live_share_image(current_payload(saved[1]), slug)
+        if payload is not saved[1] and payload.get('shareImage') != (saved[1] or {}).get('shareImage'):
+            _save_cards(slug, tier, payload, allow_empty=True)
+        source = payload['cards']
+        used_next = False
+        if span is not None:
+            spanned = [card for card in source if _card_in_span(card, span)]
+            if spanned:
+                source = spanned
+            elif _sport_in_season_for_cards(sport):
+                # No games in today..today+span — show the next available slate.
+                nxt = _next_available_cards(source, span)
+                if nxt:
+                    source = nxt
+                    used_next = True
                 else:
                     source = spanned
-            total = len(source)
-            cards = source[offset:offset+limit]
-            next_offset = offset+len(cards) if offset+len(cards) < total else None
-            # Never flag refreshing when cards are already on hand — the client skips
-            # caching refreshing payloads and the homepage would refetch every sport.
-            return {**payload, 'cards': cards, 'total': total, 'offset': offset,
-                    'nextOffset': next_offset, 'hasMore': next_offset is not None,
-                    'refreshing': False, 'nextAvailable': used_next}, 200
+            else:
+                source = spanned
+        if league:
+            source = _filter_cards_by_league(source, league)
+        total = len(source)
+        cards = source[offset:offset+limit]
+        next_offset = offset+len(cards) if offset+len(cards) < total else None
+        # Never flag refreshing when cards are already on hand — the client skips
+        # caching refreshing payloads and the homepage would refetch every sport.
+        return {**payload, 'cards': cards, 'total': total, 'offset': offset,
+                'nextOffset': next_offset, 'hasMore': next_offset is not None,
+                'refreshing': bool(needs_rebuild), 'nextAvailable': used_next}, 200
     if time.time()-_CARD_ERRORS.get((slug, tier), 0) < 15:
         return {'error': 'Games could not be loaded. Please retry.', 'cards': []}, 503
     # One cold build at a time (semaphore inside _start_full_cards). Homepage stays
@@ -1621,6 +1782,9 @@ def api_cards(slug):
             span = None if span is None else int(span)
             if span not in (None, 0, 2):
                 raise ValueError
+            league = (request.args.get('league') or '').strip() or None
+            if league and len(league) > 80:
+                raise ValueError
         except (ValueError, TypeError):
             return jsonify(error='Choose a valid game page.'), 400
         if request.args.get('cached') == '1':
@@ -1650,7 +1814,9 @@ def api_cards(slug):
             response.headers['Cache-Control'] = 'private, max-age=30'
             response.vary.add('Cookie')
             return response
-        payload, status = _card_page(slug, tier, app, offset, limit, span)
+        payload, status = _card_page(
+            slug, tier, app, offset, limit, span, league=league,
+        )
         sport = _sport_for(slug)
         # limit/offset responses are one page of the saved feed. Never write that
         # slice back to disk — that shrank NCAAB/NBA feeds to 10 cards and hid

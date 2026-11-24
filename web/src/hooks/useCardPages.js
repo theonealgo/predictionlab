@@ -21,8 +21,18 @@ function cardDay(card) {
 }
 
 // Middle column for every sport: today through the requested span. Finished and older cards stay out.
-function predictionCards(cards, span) {
+// When the API already advanced to the next available slate (in-season, quiet week),
+// keep those cards even if they sit past today+span.
+function predictionCards(cards, span, nextAvailable = false) {
   const today = todayET();
+  if (nextAvailable) {
+    return (cards || []).flatMap((card) => {
+      if (cardIsFinal(card)) return [];
+      const day = cardDay(card);
+      if (!day || day < today) return [];
+      return [String(card.date || '').slice(0, 10) === day ? card : { ...card, date: day }];
+    });
+  }
   const end = plusDays(today, span);
   return (cards || []).flatMap((card) => {
     if (cardIsFinal(card)) return [];
@@ -39,11 +49,21 @@ const pause = (seconds = 1) => new Promise((resolve) => {
 const identity = (card) => /data-game-id="([^"]+)"/.exec(card.html || '')?.[1]
   || `${card.date}|${card.away}|${card.home}`;
 
-export default function useCardPages(slug, enabled = true, span = 0) {
-  const path = `/api/web/sports/${slug}/cards?limit=50&span=${span}`;
+// First paint: 10 cards. Each "Load more" click asks for the next 10.
+// Large slates (NCAAB) stay fast on live; the API already slices by limit/offset.
+// Soccer passes league= so the first 10 are that league (not a mixed global page).
+export const CARDS_PAGE_SIZE = 10;
+
+export default function useCardPages(slug, enabled = true, span = 0, league = null) {
+  const leagueQ = league && league !== 'All'
+    ? `&league=${encodeURIComponent(league)}`
+    : '';
+  const path = `/api/web/sports/${slug}/cards?limit=${CARDS_PAGE_SIZE}&span=${span}${leagueQ}`;
   const [payload, setPayload] = useState(() => {
     const saved = enabled ? peekJson(path) : null;
-    return saved ? { ...saved, cards: predictionCards(saved.cards, span) } : saved;
+    return saved
+      ? { ...saved, cards: predictionCards(saved.cards, span, Boolean(saved.nextAvailable)) }
+      : saved;
   });
   const [error, setError] = useState(null);
   // True after the first live cards fetch finishes (ok or fail). Cached peek alone
@@ -67,7 +87,12 @@ export default function useCardPages(slug, enabled = true, span = 0) {
       if (Date.now() > deadline) break;
       try {
         const data = await getJson(offset ? `${path}&offset=${offset}` : path, { maxAge: 0 });
-        if (!data.building) return { ...data, cards: predictionCards(data.cards, span) };
+        if (!data.building) {
+          return {
+            ...data,
+            cards: predictionCards(data.cards, span, Boolean(data.nextAvailable)),
+          };
+        }
         const wait = Math.min(2, Number(data.retryAfter) || 2);
         await pause(wait);
         continue;
@@ -86,7 +111,9 @@ export default function useCardPages(slug, enabled = true, span = 0) {
     setReady(false);
     if (!enabled) return undefined;
     const kept = peekJson(path);
-    const slate = kept ? { ...kept, cards: predictionCards(kept.cards, span) } : kept;
+    const slate = kept
+      ? { ...kept, cards: predictionCards(kept.cards, span, Boolean(kept.nextAvailable)) }
+      : kept;
     current.current = slate;
     setPayload(slate);
     if (kept) applyCardStyles(kept.css);

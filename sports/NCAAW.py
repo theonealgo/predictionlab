@@ -78,40 +78,56 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
     # ── background score sync ────────────────────────────────────
     m._start_background_score_sync(sport)
 
+    # Request-path card window: Last Night + Last 7 only.
+    # Early-season NCAAW used to load ~30 days / ~800 finals into
+    # _compute_spread_total_for_daily on every /ncaaw-results hit (OOM risk).
+    # Season boards come from the season snapshot when present; older nights
+    # load when the visitor picks another date (saved page / date query).
+    _CARD_LOOKBACK_DAYS = 7
+    _CARD_NIGHT_LIMIT = 14
+
     # ── DB query for completed games ─────────────────────────────
     conn = m.get_db_connection()
     prob_sql = m._predictions_prob_select_sql(conn)
     season_start_dt, season_end_dt = m._results_season_bounds(sport, datetime.now())
-    season_end_sql = season_end_dt.strftime('%Y-%m-%d') if season_end_dt else None
-    season_start_sql = season_start_dt.strftime('%Y-%m-%d') if season_start_dt else None
+    yesterday_dt = datetime.now() - timedelta(days=1)
+    card_start_dt = yesterday_dt - timedelta(days=_CARD_LOOKBACK_DAYS - 1)
+    card_end_dt = yesterday_dt
+    # Older night via ?date= — pull that calendar day only (plus the recent
+    # window), not the whole season.
+    _req_date = None
+    try:
+        from flask import has_request_context, request as _req
+        if has_request_context():
+            _raw = (_req.args.get('date') or '').strip()[:10]
+            if len(_raw) == 10 and _raw[4] == '-' and _raw[7] == '-':
+                _req_date = datetime.strptime(_raw, '%Y-%m-%d')
+    except Exception:
+        _req_date = None
+    if _req_date is not None:
+        if _req_date < card_start_dt:
+            card_start_dt = _req_date
+        if _req_date > card_end_dt:
+            card_end_dt = _req_date
+    if season_start_dt and card_start_dt < season_start_dt:
+        card_start_dt = season_start_dt
 
-    if snapshot_stats:
-        card_start = max(
-            season_start_dt or (datetime.now() - timedelta(days=30)),
-            datetime.now() - timedelta(days=30),
-        )
-        season_start_sql = card_start.strftime('%Y-%m-%d')
-        season_end_sql = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-
-    # Non-MLB/non-SOCCER: LIMIT 3000, filter in Python
+    # Cap the SQL pull — do not haul 3000 season rows into memory to grade.
     completed_games = conn.execute(f'''
         SELECT g.*,
                {prob_sql}
         FROM games g
         LEFT JOIN predictions p ON g.game_id = p.game_id AND +p.sport = ?
         WHERE g.sport = ? AND g.home_score IS NOT NULL
+          AND date(g.game_date) >= date(?)
+          AND date(g.game_date) <= date(?)
         ORDER BY g.game_date DESC
-        LIMIT 3000
-    ''', (sport, sport)).fetchall()
-
-    if season_start_dt and season_end_dt:
-        completed_games = [
-            g for g in completed_games
-            if m._date_in_range(
-                m._normalize_game_date_key(g['game_date']),
-                season_start_dt, season_end_dt,
-            )
-        ]
+        LIMIT 500
+    ''', (
+        sport, sport,
+        card_start_dt.strftime('%Y-%m-%d'),
+        card_end_dt.strftime('%Y-%m-%d'),
+    )).fetchall()
 
     completed_games = m._sort_game_rows_by_date_desc(completed_games)
     conn.close()
@@ -188,9 +204,13 @@ def render_sport_results_page(sport: str, *, season_start_dt=None):
             continue
 
     # ── sorted dates & stats ─────────────────────────────────────
-    yesterday_dt = datetime.now() - timedelta(days=1)
     yesterday = yesterday_dt.strftime('%Y-%m-%d')
-    sorted_dates = m._recent_result_dates(daily_results, yesterday=yesterday, limit=30)
+    sorted_dates = m._recent_result_dates(
+        daily_results,
+        yesterday=yesterday,
+        limit=_CARD_NIGHT_LIMIT,
+        recent_window_days=_CARD_LOOKBACK_DAYS,
+    )
 
     if snapshot_stats:
         _ov = snapshot_stats['total_over']

@@ -8,10 +8,23 @@ import math
 import sqlite3
 import threading
 import time
+import ssl
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from prop_forecast_store import ledger_path, _aware
+
+try:
+    import certifi
+except ImportError:  # pragma: no cover
+    certifi = None
+
+
+def _ssl_context():
+    """macOS Python builds often lack system CAs; prefer certifi when present."""
+    if certifi is not None:
+        return ssl.create_default_context(cafile=certifi.where())
+    return ssl.create_default_context()
 
 PATHS = {"NBA": "basketball/nba", "WNBA": "basketball/wnba",
          "NCAAB": "basketball/mens-college-basketball", "NCAAW": "basketball/womens-college-basketball",
@@ -194,7 +207,7 @@ def settle_event(original_db, league, event_id, payload):
 
 
 def _fetch_summary(url):
-    with urlopen(url, timeout=12) as response:
+    with urlopen(url, timeout=12, context=_ssl_context()) as response:
         return json.load(response)
 
 

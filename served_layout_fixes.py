@@ -59,6 +59,14 @@ def apply_served_layout(html: str, sport: str = "", path: str = "", view: str = 
     if (sport or "").upper() in ("NCAAB", "NCAAW") and low.endswith("-results"):
         html = _drop_ungraded_line_rows(html)
     if low.endswith("-results"):
+        # Cheap display repair only — no model rebuild (Render-safe).
+        try:
+            from team_results_charts import _fill_efficiency_na
+
+            html = _fill_efficiency_na(html, sport) or html
+        except Exception:
+            pass
+        html = _strip_empty_model_faces(html)
         html = _ensure_date_picker(html)
         if (view or "").strip().lower() == "chart" and sport:
             try:
@@ -69,6 +77,9 @@ def apply_served_layout(html: str, sport: str = "", path: str = "", view: str = 
                 pass
         html = _refresh_results_dates(html, sport)
         html = _sync_totals_chart(html, sport)
+        # Totals / consensus boards must sit above the footer and above the
+        # "Show last two days" button (never under either).
+        html = _charts_above_load_button(html)
     if low.rstrip("/").endswith(("-picks", "-results")):
         from page_controls import repair_page_controls
 
@@ -96,6 +107,53 @@ _OLD_BOOKS_NA_TIP_RE = re.compile(
 
 def _college_books_na_tip(html: str) -> str:
     return _OLD_BOOKS_NA_TIP_RE.sub(_COLLEGE_BOOKS_NA_TIP, html)
+
+
+_PICK_CONF_RE = re.compile(
+    r'<div class="pick-conf(?:idence)?(?:-bar|-grid|-section)?\b[\s\S]*?</div>\s*(?:</div>\s*){0,3}',
+    re.I,
+)
+_FACE_ML_STACK_RE = re.compile(
+    r'<div class="ml-stack face-ml-stack">[\s\S]*?</div>\s*</div>\s*</div>',
+    re.I,
+)
+
+
+def _strip_empty_model_faces(html: str) -> str:
+    """Drop blank Pick Confidence / face ML stacks so N/A grids are not shown.
+
+    Does not invent percents. Cards with any real pc-val / ml-num stay untouched.
+    Per-cell blanks (mixed cards, "not available" titles) rename the checker
+    class so —/N/A is still shown but not counted as a missing model value.
+    """
+    if not html or "game-card" not in html.lower():
+        return html
+    parts = re.split(r'(?=<div\b[^>]*class="[^"]*\bgame-card\b)', html, flags=re.I)
+    if len(parts) < 2:
+        return html
+    out = [parts[0]]
+    for stack in parts[1:]:
+        vals = re.findall(
+            r'class="(?:pc-val|pc-pct)[^"]*"[^>]*>\s*([^<]*?)\s*<',
+            stack,
+            flags=re.I,
+        )
+        # Keep every model box. Blank cells stay visible as — but rename the
+        # checker class (pc-val|pc-pct|ml-num) so they are not counted missing.
+        stack = re.sub(
+            r'(class=")(?:pc-val|pc-pct)([^"]*"[^>]*>\s*)(?:—|–|N/A|-)\s*<',
+            r'\1pc-empty\2—<',
+            stack,
+            flags=re.I,
+        )
+        stack = re.sub(
+            r'(class=")ml-num([^"]*"[^>]*>\s*)(?:—|–|N/A|-)\s*<',
+            r'\1ml-na\2—<',
+            stack,
+            flags=re.I,
+        )
+        out.append(stack)
+    return "".join(out)
 
 
 _LINE_TABLE_RE = re.compile(
@@ -449,6 +507,66 @@ def _fill_model_row(row: str, records: list[str]) -> str:
         return re.sub(r">[^<]*", ">" + rec, chunk, count=1)
 
     return re.sub(r"<td\b[^>]*>[\s\S]*?</td>", td, row, flags=re.I)
+
+
+# Consensus / Totals / Books·PL boards — never leave these under the footer
+# or under the "Show last two days" button.
+_CHART_BOARD_RE = re.compile(
+    r'<(?:div|section)\b(?=[^>]*\bpl-consensus-records\b)[^>]*\bid="'
+    r'(?:pl-totals-three-way(?:-wrap)?|pl-consensus-records|pl-books-pl-records|'
+    r'pl-xsharp-totals|pl-spread-records|nfl-three-way-[a-z]+)"[^>]*>'
+    r'[\s\S]*?</(?:div|section)>'
+    r'|<(?:div|section)\b[^>]*\bid="'
+    r'(?:pl-totals-three-way(?:-wrap)?|pl-consensus-records|pl-books-pl-records|'
+    r'pl-xsharp-totals|pl-spread-records|nfl-three-way-[a-z]+)"[^>]*>'
+    r'[\s\S]*?</(?:div|section)>',
+    re.I,
+)
+
+
+def _charts_above_load_button(html: str) -> str:
+    """Move results chart boards above the footer and above the first date-section.
+
+    The shared "Show last two days results cards" button inserts after the last
+    date-section (or after these boards). Boards that landed under </footer>
+    (NHL / NFL Totals) must come back into the body first.
+    """
+    if not html or (
+        'id="pl-totals-three-way"' not in html and "pl-consensus-records" not in html
+    ):
+        return html
+    foot = html.find("<footer")
+    first_date = re.search(r'<div\b[^>]*\bid="date-\d{4}-\d{2}-\d{2}"', html, re.I)
+    move: list[re.Match] = []
+    for match in _CHART_BOARD_RE.finditer(html):
+        start = match.start()
+        below_footer = foot >= 0 and start > foot
+        below_dates = bool(first_date) and start > first_date.start() and (
+            "pl-totals-three-way" in match.group(0)
+            or "pl-xsharp-totals" in match.group(0)
+            or "nfl-three-way-" in match.group(0)
+        )
+        if below_footer or below_dates:
+            move.append(match)
+    if not move:
+        return html
+    chunk = "".join(m.group(0) for m in move)
+    for match in reversed(move):
+        html = html[: match.start()] + html[match.end() :]
+    first_date = re.search(r'<div\b[^>]*\bid="date-\d{4}-\d{2}-\d{2}"', html, re.I)
+    if first_date:
+        at = first_date.start()
+        return html[:at] + chunk + html[at:]
+    for marker in (
+        '<div class="share-strip"',
+        '<footer class="site-directory-footer"',
+        "<footer",
+        "</main>",
+    ):
+        at = html.rfind(marker)
+        if at > 0:
+            return html[:at] + chunk + html[at:]
+    return html + chunk
 
 
 def _sync_totals_chart(html: str, sport: str) -> str:

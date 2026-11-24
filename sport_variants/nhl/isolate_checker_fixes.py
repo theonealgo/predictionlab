@@ -496,46 +496,46 @@ def _served_results_are_stale(key: str, html: str) -> bool:
     return False
 
 
-def lookup_served_results(key: str) -> str:
-    """Finished results HTML. Memory first, then the last repaired page on disk.
-
-    A stale page is still served and rebuilt in the background: a full
-    rebuild takes 20s+, which a visitor must not wait on.
-    """
-    if results_refresh_forced():
-        return ""
-    now = time.time()
-    hit = _SERVED.get(key)
-    if hit and now - hit[0] < _SERVED_TTL and _REPAIRED_MARK in hit[1] and _NHL_EMPTY_SLATE not in hit[1]:
-        if _served_results_are_stale(key, hit[1]):
-            _schedule_served_refresh(key)
-        return _mark_served_from_disk(hit[1])
-    try:
-        path = _served_path(key)
-        if path.is_file() and now - path.stat().st_mtime < _SERVED_DISK_MAX:
-            text = path.read_text(encoding="utf-8")
-            age = now - path.stat().st_mtime
-            if _REPAIRED_MARK in text and len(text) > 500 and _NHL_EMPTY_SLATE not in text:
-                _SERVED[key] = (now, text)
-                if age >= _SERVED_REFRESH_AFTER or _served_results_are_stale(key, text):
-                    _schedule_served_refresh(key)
-                return _mark_served_from_disk(text)
-    except Exception:
-        pass
-    return ""
-
-
 _NHL_EMPTY_SLATE = "NHL results could not be loaded"
 
 
-def _mark_served_from_disk(html):
-    if html:
-        try:
-            from flask import g, has_request_context
-            if has_request_context():
-                g._pl_results_from_disk = True
-        except Exception:
-            pass
+def _nhl_results_is_stub(html: str) -> bool:
+    """True for the empty fallback card (never a real results board).
+
+    A failed rebuild used to save "NHL results are refreshing…" with a couple of
+    grafted chart tables. That page has the repaired mark, so it was re-served
+    forever. Reject it the same way as the older empty-slate text.
+    """
+    if not html:
+        return True
+    low = html.lower()
+    if _NHL_EMPTY_SLATE.lower() in low:
+        return True
+    if "results are refreshing" in low or "open again in a minute" in low:
+        return True
+    # Grafted chart <th>Last night</th> must not mask the empty fallback card.
+    if "refresh results page" in low and "last night's" not in low:
+        return True
+    return False
+
+
+def _nhl_served_html_ok(html: str) -> bool:
+    """Saved NHL results HTML that visitors may see again."""
+    if not html or _REPAIRED_MARK not in html or len(html) <= 500:
+        return False
+    if _nhl_results_is_stub(html):
+        return False
+    return True
+
+
+def _mark_served_from_disk(html=None):
+    """Flag this response as disk-served. html is optional (read_nhl_* call sites)."""
+    try:
+        from flask import g, has_request_context
+        if has_request_context():
+            g._pl_results_from_disk = True
+    except Exception:
+        pass
     return html
 
 
@@ -547,8 +547,44 @@ def _served_from_disk() -> bool:
         return False
 
 
+def lookup_served_results(key: str) -> str:
+    """Finished results HTML. Memory first, then the last repaired page on disk.
+
+    A stale page is still served and rebuilt in the background: a full
+    rebuild takes 20s+, which a visitor must not wait on.
+    """
+    if results_refresh_forced():
+        return ""
+    now = time.time()
+    hit = _SERVED.get(key)
+    if hit and now - hit[0] < _SERVED_TTL and _nhl_served_html_ok(hit[1]):
+        if _served_results_are_stale(key, hit[1]):
+            _schedule_served_refresh(key)
+        return _mark_served_from_disk(hit[1])
+    try:
+        path = _served_path(key)
+        if path.is_file() and now - path.stat().st_mtime < _SERVED_DISK_MAX:
+            text = path.read_text(encoding="utf-8")
+            age = now - path.stat().st_mtime
+            if _nhl_served_html_ok(text):
+                _SERVED[key] = (now, text)
+                if age >= _SERVED_REFRESH_AFTER or _served_results_are_stale(key, text):
+                    _schedule_served_refresh(key)
+                return _mark_served_from_disk(text)
+            # Poisoned stub on disk — drop it so the next rebuild can replace it.
+            try:
+                if _nhl_results_is_stub(text):
+                    path.unlink(missing_ok=True)
+                    _SERVED.pop(key, None)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return ""
+
+
 def store_served_results(key: str, html: str) -> None:
-    if not key or not html or _REPAIRED_MARK not in html or len(html) < 500 or _NHL_EMPTY_SLATE in html:
+    if not key or not _nhl_served_html_ok(html):
         return
     # Re-saving the copy that was just read resets its age, so it never refreshes.
     if _served_from_disk() and not results_refresh_forced():
@@ -1425,9 +1461,13 @@ def _nhl_results_html_usable(text: str) -> bool:
     """Reject wipe-poison / stale Last 7 boards so they are never re-served."""
     if not text or _NHL_RESULTS_MARK not in text:
         return False
+    if _nhl_results_is_stub(text):
+        return False
     if "game-card" not in text or "Last 7 Days" not in text:
         return False
     if "Consensus Based Betting Records" not in text:
+        return False
+    if "Last Night" not in text:
         return False
     if _NHL_ML_HIDDEN in text:
         return False
@@ -4777,6 +4817,8 @@ def _attach_three_way_charts(html: str, sport: str, view: str) -> str:
         return html
     if not html or 'id="three-way-moneyline"' in html:
         return html
+    if _nhl_results_is_stub(html):
+        return html
     cards = ""
     try:
         cpath = _served_path(results_serve_key(sport_u))
@@ -4829,6 +4871,8 @@ def repair_response_html(html: str, sport: str, view: str = "", path: str = "") 
         pass
     path_l = (path or "").lower()
     sport_u = (sport or "").strip().upper()
+    if "results" in path_l and _nhl_results_is_stub(html or ""):
+        return html or ""
     if sport_u == "NHL" and "results" in path_l and (view or "").strip().lower() in {
         "chart",
         "tabs",

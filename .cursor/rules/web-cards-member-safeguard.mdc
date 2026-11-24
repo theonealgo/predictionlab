@@ -1,0 +1,23 @@
+# Web cards member-feed safeguard
+
+## What went wrong (2026-11-24, local ship_tmp only)
+
+Member `web_cards` feeds were rebuilt while only patching
+`auth_system.is_premium_user`. Chip lock text comes from
+`paywall.is_premium_user` (imported by name). The rebuild baked
+"Members only · Join Premium" into the paid feed. Live was fine because
+live was never rebuilt that way — same code tree, poisoned **cache**.
+
+## Never do
+
+- Delete warm `web_cards/*.v2.json.gz` without an unlocked replacement ready
+- Save a `member` feed that contains "Members only" / "Join Premium" on chips
+- Patch only `auth_system.is_premium_user` for member SSR — also patch
+  `paywall.is_premium_user` and `NHL77FINAL.is_premium_user`
+
+## Always do
+
+- Refuse to persist locked member feeds (`_payload_has_locked_member_chips`)
+- Keep `*.member.ok.v2.json.gz` as the last known-good unlocked member feed
+- Keep `*.head10.v2.json.gz` so first 10 cards paint while a full rebuild runs
+- Prefer restoring `.ok` over serving a locked member feed
