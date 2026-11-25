@@ -66,12 +66,12 @@ threads = max(1, int(os.environ.get("GUNICORN_THREADS", _default_threads) or _de
 # 120s was killing the only worker mid rebuild (WORKER TIMEOUT) and forcing a
 # full cold boot under traffic. Allow one slow rebuild without recycling.
 timeout = max(60, int(os.environ.get("GUNICORN_TIMEOUT", "180") or 180))
-# max_requests recycle = site "crash" on a 1-worker box: caches die, in-flight
-# Google OAuth CSRF state dies, visitors get 502s while the only worker boots.
-# Render logs 2026-11-25: Autorestarting ~6 min after boot with max_requests=400.
-# Default 0 = never auto-recycle. Set GUNICORN_MAX_REQUESTS only if RSS OOMs.
-max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", "0") or 0)
-max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", "0") or 0)
+# 1-worker box: recycle is the only recovery if all gthreads wedge (no access
+# logs, pages spin forever). max_requests=400 recycled every ~5–10 min under
+# crawl (OAuth CSRF death). max_requests=0 never recovered from a wedge.
+# 5000 ≈ hours of normal traffic, still a safety valve. Override via env.
+max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", "5000") or 5000)
+max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", "200") or 200)
 
 
 def when_ready(server):

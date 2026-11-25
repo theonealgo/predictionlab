@@ -178,10 +178,9 @@ export PL_TENNIS_SYNC_S="${PL_TENNIS_SYNC_S:-1800}"
 export GUNICORN_THREADS="${GUNICORN_THREADS:-4}"
 export GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-180}"
 # Worker recycle — see gunicorn.conf.py max_requests (override via env if needed).
-# 0 = never auto-recycle the only worker (see gunicorn.conf.py).
-# If Render dashboard still sets GUNICORN_MAX_REQUESTS=400, DELETE that env var.
-export GUNICORN_MAX_REQUESTS="${GUNICORN_MAX_REQUESTS:-0}"
-export GUNICORN_MAX_REQUESTS_JITTER="${GUNICORN_MAX_REQUESTS_JITTER:-0}"
+# Safety-valve recycle (see gunicorn.conf.py). Do NOT set 400 in Render env.
+export GUNICORN_MAX_REQUESTS="${GUNICORN_MAX_REQUESTS:-5000}"
+export GUNICORN_MAX_REQUESTS_JITTER="${GUNICORN_MAX_REQUESTS_JITTER:-200}"
 # Props forks eat the only worker (WORKER TIMEOUT in logs). Off until stable;
 # set PL_PROP_PUBLICATION=1 in the Render dashboard when ready to turn back on.
 export PL_PROP_PUBLICATION="${PL_PROP_PUBLICATION:-0}"
