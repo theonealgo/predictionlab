@@ -444,6 +444,10 @@ def _public_request():
         return True
     if path.startswith(("/static/", "/sport-static/", "/soro-img/", "/blog/", "/cdn/")):
         return True
+    # ClipForge / Streamly video feed — app_api.py enforces X-PL-App-Key itself.
+    # Must not hit the premium paywall (that made the app look "logged out").
+    if path.startswith("/api/app/") or path == "/api/app":
+        return True
     if path in _PUBLIC_PAGES or path == "/blog" or _results_path(path):
         return True
     if _prediction_path(path) or _CARD_API_PATH.match(path) or path.startswith("/api/picks/"):
