@@ -66,10 +66,36 @@ threads = max(1, int(os.environ.get("GUNICORN_THREADS", _default_threads) or _de
 # 120s was killing the only worker mid rebuild (WORKER TIMEOUT) and forcing a
 # full cold boot under traffic. Allow one slow rebuild without recycling.
 timeout = max(60, int(os.environ.get("GUNICORN_TIMEOUT", "180") or 180))
-# Recycle the worker before RAM creep OOMs the 2–4 GB Render box.
-# Jitter spreads restarts so a traffic spike does not coincide with recycle.
-max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", "400") or 400)
-max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", "50") or 50)
+# max_requests recycle = site "crash" on a 1-worker box: caches die, in-flight
+# Google OAuth CSRF state dies, visitors get 502s while the only worker boots.
+# Render logs 2026-11-25: Autorestarting ~6 min after boot with max_requests=400.
+# Default 0 = never auto-recycle. Set GUNICORN_MAX_REQUESTS only if RSS OOMs.
+max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", "0") or 0)
+max_requests_jitter = int(os.environ.get("GUNICORN_MAX_REQUESTS_JITTER", "0") or 0)
+
+
+def when_ready(server):
+    # #region agent log
+    try:
+        server.log.warning(
+            "[dbg-B] gunicorn_ready workers=%s threads=%s max_requests=%s timeout=%s",
+            workers, threads, max_requests, timeout,
+        )
+    except Exception:
+        pass
+    # #endregion
+
+
+def worker_exit(server, worker):
+    # #region agent log
+    try:
+        server.log.warning(
+            "[dbg-B] worker_exit pid=%s max_requests=%s (recycle or kill)",
+            getattr(worker, "pid", None), max_requests,
+        )
+    except Exception:
+        pass
+    # #endregion
 # preload_app MUST stay False.
 # With preload_app=True gunicorn imports the whole app in the MASTER *before*
 # binding $PORT, so the port only opens after every top-level import finishes —
