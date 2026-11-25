@@ -91,15 +91,16 @@ logger = logging.getLogger(__name__)
 # #region agent log
 _DBG_LOG_PATH = os.environ.get(
     'PL_DEBUG_LOG_PATH',
-    '/Users/nimamesghali/Sports Sandbox/pl_nov22/.cursor/debug-83d290.log',
+    '/Users/nimamesghali/Sports Sandbox/predictionlab-live/.cursor/debug-27f897.log',
 )
-_DBG_INGEST = 'http://127.0.0.1:7493/ingest/32f085de-306b-420f-b089-13a4d49827f0'
+_DBG_INGEST = 'http://127.0.0.1:7443/ingest/974e3121-f99b-484e-89f5-6c80c3fc7c79'
 
 
 def _agent_dbg(hypothesis_id, location, message, data=None):
-    """NDJSON debug probe (session 83d290). Never raises."""
+    """NDJSON debug probe (session 27f897). Never raises. No secrets/PII."""
     payload = {
-        'sessionId': '83d290',
+        'sessionId': '27f897',
+        'runId': 'oauth-csrf-1',
         'hypothesisId': hypothesis_id,
         'location': location,
         'message': message,
@@ -118,12 +119,41 @@ def _agent_dbg(hypothesis_id, location, message, data=None):
             data=_json.dumps(payload, default=str).encode(),
             headers={
                 'Content-Type': 'application/json',
-                'X-Debug-Session-Id': '83d290',
+                'X-Debug-Session-Id': '27f897',
             },
             method='POST',
         ), timeout=0.3).read()
     except Exception:
         pass
+    # Mirror to Render logs (live repros never hit the local NDJSON path).
+    try:
+        logger.warning("[dbg-27f897] %s %s %s", hypothesis_id, message, _json.dumps(data or {}, default=str)[:500])
+    except Exception:
+        pass
+
+
+def _oauth_session_diag(state_from_url=None):
+    """Compact OAuth CSRF diagnostics — no tokens/emails."""
+    keys = list(session.keys()) if session else []
+    state_keys = [k for k in keys if isinstance(k, str) and k.startswith('_state_google_')]
+    cookie_val = request.cookies.get('session') or ''
+    state = (state_from_url or '').strip()
+    expect_key = f'_state_google_{state}' if state else None
+    return {
+        'host': (request.host or '')[:80],
+        'path': (request.path or '')[:80],
+        'cookie_len': len(cookie_val),
+        'cookie_present': bool(cookie_val),
+        'sess_key_n': len(keys),
+        'state_key_n': len(state_keys),
+        'state_key_prefix': (state_keys[0][:28] if state_keys else ''),
+        'url_state_len': len(state),
+        'url_state_prefix': state[:8] if state else '',
+        'has_exact_state_key': bool(expect_key and expect_key in session) if expect_key else False,
+        'cookie_domain_cfg': str(current_app.config.get('SESSION_COOKIE_DOMAIN') or ''),
+        'secure_cfg': bool(current_app.config.get('SESSION_COOKIE_SECURE')),
+        'samesite_cfg': str(current_app.config.get('SESSION_COOKIE_SAMESITE') or ''),
+    }
 # #endregion
 
 # ─── Blueprint ────────────────────────────────────────────────────────────────
@@ -616,6 +646,36 @@ def init_auth(app, db_path=None):
     if GOOGLE_OAUTH_READY:
         _setup_google_oauth(app)
 
+    # #region agent log
+    @app.after_request
+    def _dbg_oauth_bridge_chrome(response):
+        """Confirm /auth hops stay free of site chrome and carry Set-Cookie."""
+        try:
+            path = (request.path or '').rstrip('/')
+            if path not in ('/auth/google', '/auth/google/go'):
+                return response
+            body = ''
+            try:
+                if 'html' in ((response.mimetype or '') + '').lower():
+                    body = response.get_data(as_text=True) or ''
+            except Exception:
+                body = ''
+            set_cookie = response.headers.getlist('Set-Cookie') if hasattr(response.headers, 'getlist') else (
+                [response.headers.get('Set-Cookie')] if response.headers.get('Set-Cookie') else []
+            )
+            _agent_dbg('B', 'auth_system.py:after_request', 'oauth_hop_final_response', {
+                'path': path,
+                'status': response.status_code,
+                'body_len': len(body),
+                'has_pl_chrome': ('pl-chrome.css' in body) or ('pl2-header' in body),
+                'set_cookie_has_session': any('session=' in (c or '') for c in set_cookie),
+                'location_host': ((response.headers.get('Location') or '').split('/')[2:3] or [''])[0][:80],
+            })
+        except Exception:
+            pass
+        return response
+    # #endregion
+
     # Inject is_premium into all templates
     @app.context_processor
     def inject_auth():
@@ -675,48 +735,79 @@ def _setup_google_oauth(app):
 
 @auth_bp.route('/auth/google')
 def google_login():
-    """Start Google OAuth without losing the session cookie on the Google 302.
+    """Start Google OAuth: save CSRF state, then same-origin hop before Google.
 
-    Authlib's authorize_redirect() sets OAuth CSRF state in the Flask session
-    on a 302 to accounts.google.com. Mobile Chrome / Safari often drop that
-    Set-Cookie on a cross-site redirect → MismatchingStateError on callback
-    (seen in production logs as oauth_failed right after /auth/google).
-    Serve a same-origin 200 first so the session cookie sticks, then navigate.
+    A direct 302 (or instant HTML jump) to accounts.google.com often drops the
+    Set-Cookie that holds Authlib's state → MismatchingStateError / oauth_csrf
+    even when a session cookie is present (stale cookie without the new state).
+    Step 1: write state + Set-Cookie on a same-origin redirect to /auth/google/go.
+    Step 2: that next request already has the cookie, then 302 to Google.
     """
     if not _oauth:
         return "Google login not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.", 500
     redirect_uri = _google_redirect_uri()
     logger.info(f"[auth] Google OAuth redirect_uri={redirect_uri}")
-    # #region agent log
-    _agent_dbg('A', 'auth_system.py:google_login', 'oauth_start_html_bridge', {
-        'host': (request.host or '')[:80], 'has_session': bool(session),
-    })
-    # #endregion
     try:
         rv = _oauth.google.create_authorization_url(redirect_uri)
         _oauth.google.save_authorize_data(redirect_uri=redirect_uri, **rv)
-        session.permanent = True
-        session.modified = True
-        google_url = rv.get('url') or ''
+        google_url = (rv.get('url') or '').strip()
         if not google_url:
             return _oauth.google.authorize_redirect(redirect_uri)
-        safe = html.escape(google_url, quote=True)
-        js_url = _json.dumps(google_url)
-        body = (
-            '<!doctype html><html><head><meta charset="utf-8">'
-            f'<meta http-equiv="refresh" content="0;url={safe}">'
-            '<title>Continue with Google</title></head><body>'
-            '<p>Redirecting to Google…</p>'
-            f'<script>location.replace({js_url})</script>'
-            f'<p><a href="{safe}">Continue</a></p>'
-            '</body></html>'
-        )
-        resp = make_response(body)
+        session['_oauth_google_url'] = google_url
+        session.permanent = True
+        session.modified = True
+        state = (rv.get('state') or '').strip()
+        # #region agent log
+        diag = _oauth_session_diag(state)
+        diag['bridge'] = 'same_origin_hop'
+        diag['redirect_uri_host'] = (redirect_uri.split('/')[2] if '//' in redirect_uri else '')[:80]
+        diag['est_sess_bytes'] = len(_json.dumps(dict(session), default=str))
+        _agent_dbg('A', 'auth_system.py:google_login', 'oauth_start_hop', diag)
+        # #endregion
+        resp = redirect(url_for('auth.google_login_go'))
         resp.headers['Cache-Control'] = 'no-store'
+        # Ensure Set-Cookie is on THIS response before the browser follows the hop.
+        try:
+            current_app.session_interface.save_session(current_app, session, resp)
+        except Exception:
+            logger.exception("[auth] explicit save_session on oauth hop failed")
+        # #region agent log
+        set_cookie = resp.headers.getlist('Set-Cookie') if hasattr(resp.headers, 'getlist') else (
+            [resp.headers.get('Set-Cookie')] if resp.headers.get('Set-Cookie') else []
+        )
+        _agent_dbg('A', 'auth_system.py:google_login', 'oauth_start_hop_response', {
+            'set_cookie_has_session': any('session=' in (c or '') for c in set_cookie),
+            'set_cookie_n': len([c for c in set_cookie if c]),
+            'est_sess_bytes': len(_json.dumps(dict(session), default=str)),
+        })
+        # #endregion
         return resp
     except Exception:
-        logger.exception("[auth] Google authorize HTML bridge failed; falling back to 302")
+        logger.exception("[auth] Google authorize hop failed; falling back to 302")
         return _oauth.google.authorize_redirect(redirect_uri)
+
+
+@auth_bp.route('/auth/google/go')
+def google_login_go():
+    """Second hop: session cookie is already stored; now leave for Google."""
+    if not _oauth:
+        return "Google login not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.", 500
+    google_url = (session.get('_oauth_google_url') or '').strip()
+    # #region agent log
+    _agent_dbg('A', 'auth_system.py:google_login_go', 'oauth_go', {
+        'has_url': bool(google_url),
+        'state_key_n': len([k for k in (session.keys() if session else []) if isinstance(k, str) and k.startswith('_state_google_')]),
+        'cookie_present': bool(request.cookies.get('session')),
+        'host': (request.host or '')[:80],
+    })
+    # #endregion
+    if not google_url:
+        logger.warning("[auth] /auth/google/go missing stored Google URL — restarting OAuth")
+        return redirect(url_for('auth.google_login'))
+    # Drop the one-shot URL so a refresh does not reuse a spent authorize URL.
+    session.pop('_oauth_google_url', None)
+    session.modified = True
+    return redirect(google_url)
 
 
 @auth_bp.route('/auth/google/callback')
@@ -831,17 +922,24 @@ def google_callback():
         except Exception:
             is_csrf = 'mismatching_state' in str(exc).lower()
         # #region agent log
-        _agent_dbg('A', 'auth_system.py:google_callback', 'oauth_failed', {
-            'csrf': bool(is_csrf),
-            'exc': type(exc).__name__,
-            'has_cookie': bool(request.cookies.get('session')),
-        })
+        cb_diag = _oauth_session_diag(request.args.get('state'))
+        cb_diag['csrf'] = bool(is_csrf)
+        cb_diag['exc'] = type(exc).__name__
+        cb_diag['hyp_A_race'] = bool(is_csrf and cb_diag.get('cookie_present') and not cb_diag.get('has_exact_state_key'))
+        cb_diag['hyp_C_stale'] = bool(is_csrf and cb_diag.get('cookie_present') and cb_diag.get('state_key_n', 0) == 0)
+        cb_diag['hyp_E_oversized'] = bool(cb_diag.get('cookie_len', 0) > 3500)
+        _agent_dbg('C', 'auth_system.py:google_callback', 'oauth_failed', cb_diag)
         # #endregion
         if is_csrf:
             logger.warning(
                 "[auth] Google OAuth CSRF/state mismatch (session cookie missing or "
-                "worker recycled mid-login). cookie_present=%s",
-                bool(request.cookies.get('session')),
+                "worker recycled mid-login). cookie_present=%s has_exact_state_key=%s "
+                "state_key_n=%s cookie_len=%s host=%s",
+                cb_diag.get('cookie_present'),
+                cb_diag.get('has_exact_state_key'),
+                cb_diag.get('state_key_n'),
+                cb_diag.get('cookie_len'),
+                cb_diag.get('host'),
             )
             return redirect(url_for('auth.login_page', error='oauth_csrf'))
         logger.exception("Google OAuth callback failed")

@@ -25492,6 +25492,10 @@ def _graft_locked_site_chrome(response):
 
         if skip_path(path):
             return response
+        # OAuth / login bridge pages must stay tiny — grafting chrome onto
+        # /auth/google was loading pl-chrome and racing the session cookie.
+        if path.startswith("/auth") or path.rstrip("/") in ("/login", "/signup", "/logout"):
+            return response
         # All-region soccer picks is ~9MB. Re-scanning it for chrome on every
         # hit blocks the only worker for 20s+ and looks like a logout.
         if path.rstrip("/") in ("/soccer-picks", "/soccer-results", "/all-sports-results"):
