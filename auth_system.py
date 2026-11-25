@@ -1092,13 +1092,37 @@ def signup_submit():
 @auth_bp.route('/logout')
 def logout():
     logout_user()
+    # Drop leftover markers (e.g. _session_token) so a re-saved anonymous
+    # session cookie cannot look like a half-open login.
+    session.clear()
+    # Flask-Login's after_request only clears remember when this flag is set.
+    session['_remember'] = 'clear'
     resp = redirect('/')
-    # Older logins left host-only copies of these cookies; the domain-wide delete does not reach them,
-    # so the old remember cookie signed the visitor straight back in.
-    secure = bool(current_app.config.get('SESSION_COOKIE_SECURE'))
-    for name in (current_app.config.get('REMEMBER_COOKIE_NAME', 'remember_token'),
-                 current_app.config.get('SESSION_COOKIE_NAME', 'session')):
-        resp.delete_cookie(name, path='/', secure=secure, samesite='Lax')
+    # Browsers only drop a cookie when Domain / Secure / SameSite / HttpOnly
+    # match how it was set. Live uses Domain=.predictionlab.io + Secure +
+    # HttpOnly; older host-only copies also exist. Flask-Login's clear omits
+    # Secure/SameSite/HttpOnly, and a single host-only delete misses Domain —
+    # either gap leaves remember_token alive and signs the visitor back in
+    # (paywall then still serves member cards).
+    remember_name = current_app.config.get('REMEMBER_COOKIE_NAME', 'remember_token')
+    session_name = current_app.config.get('SESSION_COOKIE_NAME', 'session')
+    samesite = current_app.config.get('SESSION_COOKIE_SAMESITE') or 'Lax'
+    domains = {None}
+    for d in (
+        current_app.config.get('SESSION_COOKIE_DOMAIN'),
+        current_app.config.get('REMEMBER_COOKIE_DOMAIN'),
+        '.predictionlab.io',
+        'predictionlab.io',
+    ):
+        if d:
+            domains.add(d)
+    for name in (remember_name, session_name):
+        for domain in domains:
+            for secure_flag in (True, False):
+                resp.delete_cookie(
+                    name, path='/', domain=domain, secure=secure_flag,
+                    httponly=True, samesite=samesite,
+                )
     return resp
 
 
