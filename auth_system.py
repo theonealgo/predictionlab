@@ -75,8 +75,9 @@ try:
 except ImportError:
     pass
 
+import json as _json
 from flask import (
-    Blueprint, request, redirect, url_for, session,
+    Blueprint, request, redirect, url_for, session, make_response,
     render_template, render_template_string, jsonify, flash, g, current_app
 )
 from flask_login import (
@@ -86,6 +87,44 @@ from flask_login import (
 from werkzeug.security import generate_password_hash, check_password_hash
 
 logger = logging.getLogger(__name__)
+
+# #region agent log
+_DBG_LOG_PATH = os.environ.get(
+    'PL_DEBUG_LOG_PATH',
+    '/Users/nimamesghali/Sports Sandbox/pl_nov22/.cursor/debug-83d290.log',
+)
+_DBG_INGEST = 'http://127.0.0.1:7493/ingest/32f085de-306b-420f-b089-13a4d49827f0'
+
+
+def _agent_dbg(hypothesis_id, location, message, data=None):
+    """NDJSON debug probe (session 83d290). Never raises."""
+    payload = {
+        'sessionId': '83d290',
+        'hypothesisId': hypothesis_id,
+        'location': location,
+        'message': message,
+        'data': data or {},
+        'timestamp': int(time.time() * 1000),
+    }
+    try:
+        with open(_DBG_LOG_PATH, 'a', encoding='utf-8') as _f:
+            _f.write(_json.dumps(payload, default=str) + '\n')
+    except Exception:
+        pass
+    try:
+        import urllib.request as _ur
+        _ur.urlopen(_ur.Request(
+            _DBG_INGEST,
+            data=_json.dumps(payload, default=str).encode(),
+            headers={
+                'Content-Type': 'application/json',
+                'X-Debug-Session-Id': '83d290',
+            },
+            method='POST',
+        ), timeout=0.3).read()
+    except Exception:
+        pass
+# #endregion
 
 # ─── Blueprint ────────────────────────────────────────────────────────────────
 
@@ -636,11 +675,48 @@ def _setup_google_oauth(app):
 
 @auth_bp.route('/auth/google')
 def google_login():
+    """Start Google OAuth without losing the session cookie on the Google 302.
+
+    Authlib's authorize_redirect() sets OAuth CSRF state in the Flask session
+    on a 302 to accounts.google.com. Mobile Chrome / Safari often drop that
+    Set-Cookie on a cross-site redirect → MismatchingStateError on callback
+    (seen in production logs as oauth_failed right after /auth/google).
+    Serve a same-origin 200 first so the session cookie sticks, then navigate.
+    """
     if not _oauth:
         return "Google login not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.", 500
     redirect_uri = _google_redirect_uri()
     logger.info(f"[auth] Google OAuth redirect_uri={redirect_uri}")
-    return _oauth.google.authorize_redirect(redirect_uri)
+    # #region agent log
+    _agent_dbg('A', 'auth_system.py:google_login', 'oauth_start_html_bridge', {
+        'host': (request.host or '')[:80], 'has_session': bool(session),
+    })
+    # #endregion
+    try:
+        rv = _oauth.google.create_authorization_url(redirect_uri)
+        _oauth.google.save_authorize_data(redirect_uri=redirect_uri, **rv)
+        session.permanent = True
+        session.modified = True
+        google_url = rv.get('url') or ''
+        if not google_url:
+            return _oauth.google.authorize_redirect(redirect_uri)
+        safe = html.escape(google_url, quote=True)
+        js_url = _json.dumps(google_url)
+        body = (
+            '<!doctype html><html><head><meta charset="utf-8">'
+            f'<meta http-equiv="refresh" content="0;url={safe}">'
+            '<title>Continue with Google</title></head><body>'
+            '<p>Redirecting to Google…</p>'
+            f'<script>location.replace({js_url})</script>'
+            f'<p><a href="{safe}">Continue</a></p>'
+            '</body></html>'
+        )
+        resp = make_response(body)
+        resp.headers['Cache-Control'] = 'no-store'
+        return resp
+    except Exception:
+        logger.exception("[auth] Google authorize HTML bridge failed; falling back to 302")
+        return _oauth.google.authorize_redirect(redirect_uri)
 
 
 @auth_bp.route('/auth/google/callback')
@@ -725,15 +801,49 @@ def google_callback():
             )
             return redirect(url_for('auth.login_page', error='oauth_failed'))
 
+        # Paid in Stripe but local row missing premium (DB reseed / new Google email).
+        try:
+            _ensure_premium_from_stripe_email(email, user_id=user.id)
+            user = _load_user_by_id(user.id) or user
+        except Exception as sync_exc:
+            logger.warning("[auth] Stripe premium sync after Google login failed: %s", sync_exc)
+
         login_user(user, remember=True)
         _set_session_token(user.id)
         logger.info(
             "[auth] Google login ok user_id=%s email=%s premium=%s expires=%s",
             user.id, _mask_email(email), bool(user.premium_active), user.premium_expires,
         )
+        # #region agent log
+        _agent_dbg('A', 'auth_system.py:google_callback', 'oauth_ok', {
+            'user_id': user.id,
+            'premium': bool(user.premium_active),
+            'email_domain': (email.split('@')[-1] if email else ''),
+        })
+        # #endregion
         return redirect(request.args.get('next', '/'))
 
-    except Exception:
+    except Exception as exc:
+        # CSRF state lost (restart mid-login, cookie dropped on Google 302).
+        try:
+            from authlib.integrations.base_client.errors import MismatchingStateError
+            is_csrf = isinstance(exc, MismatchingStateError)
+        except Exception:
+            is_csrf = 'mismatching_state' in str(exc).lower()
+        # #region agent log
+        _agent_dbg('A', 'auth_system.py:google_callback', 'oauth_failed', {
+            'csrf': bool(is_csrf),
+            'exc': type(exc).__name__,
+            'has_cookie': bool(request.cookies.get('session')),
+        })
+        # #endregion
+        if is_csrf:
+            logger.warning(
+                "[auth] Google OAuth CSRF/state mismatch (session cookie missing or "
+                "worker recycled mid-login). cookie_present=%s",
+                bool(request.cookies.get('session')),
+            )
+            return redirect(url_for('auth.login_page', error='oauth_csrf'))
         logger.exception("Google OAuth callback failed")
         return redirect(url_for('auth.login_page', error='oauth_failed'))
 
@@ -748,6 +858,10 @@ def login_page():
         'exists': 'An account with that email already exists.',
         'no_email': 'Could not get email from Google.',
         'oauth_failed': 'Google login failed. Please try again.',
+        'oauth_csrf': (
+            'Google login was interrupted (site restart or cookie blocked). '
+            'Please tap Continue with Google again.'
+        ),
         'mismatch': 'Passwords do not match.',
         'session_expired': 'Your session expired. Please log in again.',
         'set_password': (
@@ -811,6 +925,12 @@ def login_submit():
 
     if not check_password_hash(row['password_hash'], password):
         return redirect(url_for('auth.login_page', error='invalid'))
+
+    try:
+        _ensure_premium_from_stripe_email(email, user_id=user.id)
+        user = _load_user_by_id(user.id) or user
+    except Exception as sync_exc:
+        logger.warning("[auth] Stripe premium sync after password login failed: %s", sync_exc)
 
     login_user(user, remember=True)
     _set_session_token(user.id)
@@ -906,6 +1026,83 @@ def admin_reset():
         return f'<h2>Done.</h2><p>Admin accounts updated. <a href="/login">Login now</a> with your ADMIN_PASSWORD.</p>'
     except Exception as e:
         return f'Error: {e}', 500
+
+
+@auth_bp.route('/admin/repair-premium')
+def admin_repair_premium():
+    """Grant/sync premium from Stripe for an email. ADMIN_PASSWORD required.
+
+    Example:
+      /admin/repair-premium?token=ADMIN_PASSWORD&email=hussain.alaswadi82@gmail.com
+      &also=hsuperman0608@gmail.com
+      &customer=cus_Vh1OH8qgdsniV8&sub=sub_1UfdM5LqTMBLPh0wsz8nyfxN
+    """
+    token = request.args.get('token', '').strip()
+    expected = os.environ.get('ADMIN_PASSWORD', '').strip()
+    if not token or not expected or token != expected:
+        return 'Unauthorized', 403
+
+    email = _normalize_email(request.args.get('email'))
+    also = _normalize_email(request.args.get('also'))
+    customer_id = _stripe_id(request.args.get('customer'))
+    sub_id = _stripe_id(request.args.get('sub'))
+    if not email:
+        return 'Missing email=', 400
+
+    lines = []
+    user = _find_or_create_user_by_email(email, name=email.split('@')[0])
+    if not user:
+        return f'Could not create user for {email}', 500
+    lines.append(f'primary user_id={user.id} email={email}')
+
+    if also and also != email:
+        other = _load_user_by_email(also)
+        if other and other.id != user.id:
+            keep = _merge_user_row_into(user.id, other.id)
+            user = _load_user_by_id(keep) or user
+            lines.append(f'merged {also} into user_id={user.id}')
+        elif not other:
+            # Attach alias email note only via merge if they Google-login later;
+            # also try Stripe sync for the alias.
+            _ensure_premium_from_stripe_email(also, user_id=user.id)
+            lines.append(f'alias {also} not in DB; Stripe sync attempted')
+
+    synced = _ensure_premium_from_stripe_email(email, user_id=user.id)
+    lines.append(f'stripe_email_sync={synced}')
+
+    if customer_id or sub_id:
+        expires = (datetime.now() + timedelta(days=31)).isoformat()
+        if sub_id and STRIPE_SECRET_KEY:
+            try:
+                import stripe as stripe_pkg
+                stripe_pkg.api_key = STRIPE_SECRET_KEY
+                sub = stripe_pkg.Subscription.retrieve(sub_id)
+                expires = _period_end_from_subscription(sub) or expires
+                customer_id = customer_id or _stripe_id(_obj_get(sub, 'customer'))
+            except Exception as e:
+                lines.append(f'sub retrieve warning: {e}')
+        ok = _activate_premium(
+            user.id,
+            plan='monthly',
+            stripe_customer_id=customer_id,
+            stripe_subscription_id=sub_id,
+            premium_expires=expires,
+        )
+        lines.append(f'force_activate={ok} customer={customer_id} sub={sub_id}')
+
+    user = _load_user_by_id(user.id) or user
+    lines.append(
+        f'final premium={bool(user.premium_active)} expires={user.premium_expires} '
+        f'stripe_customer={user.stripe_customer_id}'
+    )
+    # #region agent log
+    _agent_dbg('C', 'auth_system.py:admin_repair_premium', 'repair_done', {
+        'user_id': user.id, 'premium': bool(user.premium_active),
+    })
+    # #endregion
+    body = '<h2>Premium repair</h2><pre>' + html.escape('\n'.join(lines)) + '</pre>'
+    body += '<p><a href="/login">Login</a></p>'
+    return body
 
 
 @auth_bp.route('/smtp-diag')
@@ -3571,6 +3768,82 @@ def _list_active_subscription_ids(customer_id, stripe_mod=None):
             customer_id, e,
         )
         return []
+
+
+def _ensure_premium_from_stripe_email(email, user_id=None):
+    """If Stripe has an active sub for this email, grant local premium.
+
+    Fixes: webhook missed, DB reseed wiped is_premium, or customer paid under
+    email A then Google-signed-in under the same email on a fresh row.
+    Never raises. Returns True when premium was applied/confirmed active.
+    """
+    email = _normalize_email(email)
+    if not email or not STRIPE_SECRET_KEY:
+        return False
+    try:
+        import stripe as stripe_pkg
+        stripe_pkg.api_key = STRIPE_SECRET_KEY
+        customers = stripe_pkg.Customer.list(email=email, limit=10)
+        data = _obj_get(customers, 'data') or []
+        for cust in data:
+            customer_id = _stripe_id(_obj_get(cust, 'id'))
+            if not customer_id:
+                continue
+            subs = stripe_pkg.Subscription.list(customer=customer_id, status='all', limit=20)
+            for sub in (_obj_get(subs, 'data') or []):
+                status = (_obj_get(sub, 'status') or '').strip()
+                if status not in ('active', 'trialing', 'past_due'):
+                    continue
+                ok = _sync_premium_from_subscription(
+                    sub,
+                    stripe_mod=stripe_pkg,
+                    event_type='login_resync',
+                    fallback_email=email,
+                )
+                if ok:
+                    logger.info(
+                        "[auth] Stripe login-resync granted email=%s customer=%s sub=%s",
+                        _mask_email(email), customer_id, _stripe_id(_obj_get(sub, 'id')),
+                    )
+                    # #region agent log
+                    _agent_dbg('C', 'auth_system.py:_ensure_premium_from_stripe_email', 'resync_ok', {
+                        'via': 'sync', 'customer_suffix': customer_id[-6:],
+                    })
+                    # #endregion
+                    return True
+                # Sync failed to resolve user — force activate on known user_id.
+                if user_id:
+                    period_end = _period_end_from_subscription(sub)
+                    plan = _plan_from_checkout_or_subscription(None, sub)
+                    if _activate_premium(
+                        user_id,
+                        plan=plan,
+                        stripe_customer_id=customer_id,
+                        stripe_subscription_id=_stripe_id(_obj_get(sub, 'id')),
+                        premium_expires=period_end,
+                    ):
+                        logger.info(
+                            "[auth] Stripe login-resync activate user_id=%s email=%s",
+                            user_id, _mask_email(email),
+                        )
+                        # #region agent log
+                        _agent_dbg('C', 'auth_system.py:_ensure_premium_from_stripe_email', 'resync_ok', {
+                            'via': 'activate', 'user_id': user_id,
+                        })
+                        # #endregion
+                        return True
+        # #region agent log
+        _agent_dbg('C', 'auth_system.py:_ensure_premium_from_stripe_email', 'resync_miss', {
+            'customers': len(data),
+        })
+        # #endregion
+        return False
+    except Exception as e:
+        logger.warning(
+            "[auth] Stripe login-resync failed email=%s: %s",
+            _mask_email(email), e,
+        )
+        return False
 
 
 def _existing_subscriber_portal_redirect(customer_id, *, reason='already_subscribed'):
