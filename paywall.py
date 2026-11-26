@@ -435,6 +435,20 @@ def _feature_query():
                 "chart", "spread", "spreads", "total", "totals", "ats", "markets", "tabbed", "tabs"})
 
 
+def _app_feed_authorized() -> bool:
+    """Streamly/ClipForge video API — only the shared app key, not visitor sessions."""
+    import hmac
+    import os
+    from flask import request
+
+    path = request.path.rstrip("/") or "/"
+    if not (path.startswith("/api/app/") or path == "/api/app"):
+        return False
+    key = (os.environ.get("PL_APP_API_KEY") or "").strip()
+    given = (request.headers.get("X-PL-App-Key") or "").strip()
+    return bool(key) and bool(given) and hmac.compare_digest(key, given)
+
+
 def _public_request():
     from flask import request
     path = request.path.rstrip("/") or "/"
@@ -444,9 +458,9 @@ def _public_request():
         return True
     if path.startswith(("/static/", "/sport-static/", "/soro-img/", "/blog/", "/cdn/")):
         return True
-    # ClipForge / Streamly video feed — app_api.py enforces X-PL-App-Key itself.
-    # Must not hit the premium paywall (that made the app look "logged out").
-    if path.startswith("/api/app/") or path == "/api/app":
+    # Video app feed: paywall does not apply when X-PL-App-Key matches PL_APP_API_KEY.
+    # Wrong/missing key still denied here (or by app_api). Customer picks paywall unchanged.
+    if _app_feed_authorized():
         return True
     if path in _PUBLIC_PAGES or path == "/blog" or _results_path(path):
         return True

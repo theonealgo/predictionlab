@@ -25,6 +25,9 @@ services:
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
         sync: false
+      # Streamly / ClipForge video feed (must match Streamly PL_APP_KEY)
+      - key: PL_APP_API_KEY
+        sync: false
       # ── Optional ──────────────────────────────────────────────────────
       - key: GA_TRACKING_ID
         sync: false
