@@ -601,7 +601,37 @@ def _cycle(app, db: str, sync_fns: dict, state: dict) -> None:
         _refresh_picks()
     except Exception as exc:
         logger.debug(f"[autorefresh] picks refresh failed: {exc}")
+    try:
+        _wake_props(app)
+    except Exception as exc:
+        logger.warning(f"[autorefresh] props wake failed: {exc}")
     logger.info(f"[autorefresh] cycle done in {time.time() - now:.0f}s · memory {_memory_text()}")
+
+
+PROPS_WAKE_EVERY_S = int(os.environ.get("PL_PROPS_WAKE_EVERY", str(30 * 60)))
+
+
+def _wake_props(app) -> None:
+    """Queue today's props for in-season leagues so a sport coming back needs no hand edit.
+
+    Predictions/results already follow stored games (see module docstring). Props
+    only publish when asked — wake them on the same cadence as score sync.
+    """
+    if os.environ.get("PL_PROP_PUBLICATION", "1") != "1":
+        return
+    now = time.time()
+    if now - _last_sync.get("_props_wake", 0.0) < PROPS_WAKE_EVERY_S:
+        return
+    _last_sync["_props_wake"] = now
+    day = _today_et()
+    try:
+        import NHL77FINAL as site
+        from props_service import ensure
+        ensure(site, day)
+        logger.info("[autorefresh] props wake queued for %s", day)
+    except Exception as exc:
+        logger.warning("[autorefresh] props ensure failed: %s", exc)
+        raise
 
 
 def _memory_text() -> str:

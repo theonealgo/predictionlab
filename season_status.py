@@ -95,16 +95,24 @@ def parse_scoreboard(data: dict) -> dict | None:
     }
 
 
+def _as_date(today: datetime):
+    """Compare calendar days only — callers may pass aware or naive datetimes."""
+    if isinstance(today, datetime):
+        return today.date()
+    return today
+
+
 def league_in_season(info: dict | None, today: datetime) -> bool | None:
     """True / False from ESPN, or None when ESPN's answer is unusable."""
     if not info or not info.get("start") or not info.get("end"):
         return None
-    t = today.strftime("%Y-%m-%d")
+    today_d = _as_date(today)
+    t = today_d.strftime("%Y-%m-%d")
     try:
-        end_dt = datetime.strptime(info["end"], "%Y-%m-%d")
+        end_d = datetime.strptime(info["end"], "%Y-%m-%d").date()
     except ValueError:
         return None
-    if (today - end_dt).days > STALE_AFTER_DAYS:
+    if (today_d - end_d).days > STALE_AFTER_DAYS:
         return None
     if info.get("type") == 4:
         return False
@@ -112,7 +120,8 @@ def league_in_season(info: dict | None, today: datetime) -> bool | None:
     # (ESPN keeps the calendar open for games that were never needed).
     if info.get("type") == 3 and info.get("events_all_final") and info.get("last_event"):
         try:
-            if (today - datetime.strptime(info["last_event"], "%Y-%m-%d")).days >= 2:
+            last_d = datetime.strptime(info["last_event"], "%Y-%m-%d").date()
+            if (today_d - last_d).days >= 2:
                 return False
         except ValueError:
             pass
@@ -120,7 +129,8 @@ def league_in_season(info: dict | None, today: datetime) -> bool | None:
         return True
     # Opening week: picks for the first games are already up.
     try:
-        if 0 < (datetime.strptime(info["start"], "%Y-%m-%d") - today).days + 1 <= OPENING_LEAD_DAYS:
+        start_d = datetime.strptime(info["start"], "%Y-%m-%d").date()
+        if 0 < (start_d - today_d).days + 1 <= OPENING_LEAD_DAYS:
             return True
     except ValueError:
         pass

@@ -49,6 +49,7 @@
                 </div>
             </div>
             <a href="/blog">Blog</a>
+            <a href="/plans">Pricing</a>
         </nav>
         <div class="pl-right">
             <form class="pl-search-form" action="/search" method="get" role="search" autocomplete="off">
@@ -61,6 +62,7 @@
                 <div class="pl2-account-menu" id="pl2AccountMenu" hidden>
                     {% if _logged_in %}
                     <a href="/account">Account</a>
+                    <a href="https://g.page/r/CV8aZifaGgd_ECE/review" target="_blank" rel="noopener noreferrer">Rate us on Google</a>
                     <form class="pl2-account-portal-form" method="POST" action="/create-portal-session">
                         <button type="submit" class="pl2-account-menu-action">Manage Subscription</button>
                     </form>
@@ -133,6 +135,7 @@
             <div class="pl-drawer-account">
             {% if _logged_in %}
             <a href="/account">Manage subscription</a>
+            <a href="https://g.page/r/CV8aZifaGgd_ECE/review" target="_blank" rel="noopener noreferrer">Rate us on Google</a>
             <a href="/logout">Sign out</a>
             {% else %}
             <a href="/login">Log in</a>

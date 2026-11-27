@@ -228,7 +228,7 @@ export default function App() {
     <div className="pl-app">
       <Header />
       {!wideLayout && <LiveStrip />}
-      <div className={wideLayout ? 'pl-body pl-body-wide' : 'pl-body'}>
+      <div className={`pl-body${wideLayout ? ' pl-body-wide' : ''}${route.page === 'props' ? ' is-props-body' : ''}${route.page === 'home' ? ' is-home-body' : ''}`}>
         {!wideLayout && (route.page === 'props'
           ? <PropsNav address={address} />
           : <SportsList activeSlug={route.slug} />)}

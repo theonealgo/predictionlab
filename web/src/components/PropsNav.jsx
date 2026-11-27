@@ -21,12 +21,18 @@ function todayET() {
   }).format(new Date());
 }
 
+function isOutOfSeason(sport) {
+  if (sport.in_season === false || sport.status === 'off_season') return true;
+  if (sport.status === 'unsupported') return true;
+  return false;
+}
+
 export default function PropsNav({ address }) {
   const params = useMemo(() => new URLSearchParams((address || '').split('?')[1] || ''), [address]);
   const league = (params.get('league') || '').toUpperCase();
   const date = params.get('date') || todayET();
   const side = params.get('side') || '';
-  const [counts, setCounts] = useState({});
+  const [sports, setSports] = useState([]);
 
   useEffect(() => {
     let alive = true;
@@ -36,22 +42,12 @@ export default function PropsNav({ address }) {
       getJson(`/api/web/props-navigation?${query}`, { maxAge: 0 })
         .then((data) => {
           if (!alive) return;
-          const next = {};
-          (data.sports || []).forEach((sport) => {
-            // Only show positive ready counts — hide null (not loaded) and 0 (no verified props).
-            if (Number.isInteger(sport.count) && sport.count > 0) {
-              next[sport.league] = sport.count;
-            }
-          });
-          setCounts(next);
-          // Keep refreshing while a big slate (NBA) is still missing a count.
-          const missingReady = (data.sports || []).some(
-            (sport) => sport.status === 'ready' && !(Number.isInteger(sport.count) && sport.count > 0),
+          const list = data.sports || [];
+          setSports(list);
+          const stillLoading = list.some(
+            (sport) => sport.status === 'not_loaded' || sport.status === 'building' || sport.note === 'Loading…',
           );
-          const stillLoading = (data.sports || []).some(
-            (sport) => sport.status === 'not_loaded' || sport.status === 'building',
-          );
-          if (missingReady || stillLoading || !data.complete) {
+          if (stillLoading || !data.complete) {
             timer = setTimeout(load, 8000);
           }
         })
@@ -64,6 +60,29 @@ export default function PropsNav({ address }) {
     return () => { alive = false; clearTimeout(timer); };
   }, [date]);
 
+  const byCode = useMemo(() => Object.fromEntries(sports.map((s) => [s.league, s])), [sports]);
+  const active = SPORTS.filter((code) => !isOutOfSeason(byCode[code] || {}));
+  const resting = SPORTS.filter((code) => isOutOfSeason(byCode[code] || {}));
+
+  const row = (code) => {
+    const sport = byCode[code] || {};
+    const note = sport.note || (sport.count > 0 ? `${sport.count} props` : 'Loading…');
+    const positive = Number.isInteger(sport.count) && sport.count > 0;
+    return (
+      <a
+        key={code}
+        href={propsHref({ league: code, date, side })}
+        className={`pl-sport-link${league === code ? ' is-active' : ''}`}
+        title={sport.reason || note}
+      >
+        <span>{nameOf(code)}</span>
+        {positive
+          ? <span className="pl-nav-count">({sport.count})</span>
+          : <span className="pl-nav-status">{note}</span>}
+      </a>
+    );
+  };
+
   return (
     <aside className="pl-left is-props-nav" aria-label="Sports Props">
       <div className="pl-left-title">Sports Props</div>
@@ -74,19 +93,16 @@ export default function PropsNav({ address }) {
         >
           <span>All sports</span>
         </a>
-        {SPORTS.map((code) => (
-          <a
-            key={code}
-            href={propsHref({ league: code, date, side })}
-            className={`pl-sport-link${league === code ? ' is-active' : ''}`}
-          >
-            <span>{nameOf(code)}</span>
-            {counts[code] != null && <span className="pl-nav-count">({counts[code]})</span>}
-          </a>
-        ))}
+        {active.map(row)}
       </nav>
       <hr className="pl-nav-divider" />
-      <nav className="pl-nav">
+      <nav className="pl-nav" aria-label="Out of season and predictions">
+        {resting.length > 0 && (
+          <details className="pl-props-resting" open={resting.includes(league) || undefined}>
+            <summary className="pl-props-resting-title">Out of season ({resting.length})</summary>
+            {resting.map(row)}
+          </details>
+        )}
         <a href="/nba-predictions" className="pl-nav-group-link">
           <span>Back to predictions</span>
         </a>

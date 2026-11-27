@@ -114,7 +114,17 @@ export default function HomePage() {
 
         {noSports && <p className="pl-empty">No games are scheduled right now.</p>}
         {sportsError && <p className="pl-empty" role="alert">Could not load the sports list. Please reload to retry.</p>}
-        {!noSports && !sportsError && !sports && <p className="pl-empty">Loading games…</p>}
+        {/* Fixed skeleton stack before /api/web/sports returns — a one-line
+            "Loading…" then a tall card list was the main mobile CLS (0.8+). */}
+        {mode === 'cards' && !noSports && !sportsError && !sports && (
+          <div className="pl-home-stack" aria-busy="true" aria-label="Loading sports">
+            {Array.from({ length: 6 }, (_, n) => (
+              <section className="pl-home-sport is-skeleton" key={`home-sk-${n}`} aria-hidden="true">
+                <p className="pl-empty">&nbsp;</p>
+              </section>
+            ))}
+          </div>
+        )}
         {mode === 'cards' && sports && !stillLoading && !anyPreview && (
           <p className="pl-empty">No upcoming cards to show right now.</p>
         )}
@@ -134,7 +144,18 @@ export default function HomePage() {
             );
           }
           const preview = feed.preview;
-          if (!preview) return null;
+          // Keep the reserved card height — collapsing to null shifts .pl-body.
+          if (!preview) {
+            return (
+              <section
+                className="pl-home-sport is-empty-slot"
+                key={sport.slug}
+                data-home-sport={sport.key}
+              >
+                <p className="pl-empty">No {sportLabel(sport)} card to show right now.</p>
+              </section>
+            );
+          }
           const name = sportLabel(sport);
           const href = publicPath(sport.slug);
           const games = todayGameCount(sport) || feed.total || 0;

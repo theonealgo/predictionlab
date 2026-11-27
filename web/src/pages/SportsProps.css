@@ -33,5 +33,4 @@
 .pl-props-games{margin:0 0 8px 12px;border-left:1px solid var(--line);padding-left:8px}
 .pl-props-games .pl-nav-item{font-size:12px;gap:6px}
 .pl-props-games .pl-nav-item>span:first-child{overflow-wrap:anywhere}
-.pl-left.is-props-nav{max-height:calc(100dvh - var(--pl-header-h,72px) - 32px);overflow-y:auto}
 .pp-hub-sports a:focus-visible,.pp-hub-table:focus-visible{outline:2px solid #0369a1;outline-offset:3px}

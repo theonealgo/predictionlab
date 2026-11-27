@@ -234,12 +234,27 @@ button {
 .pl-left {
   position: sticky;
   top: calc(var(--pl-header-h, 72px) + 16px);
+  align-self: start;
   background: #fff;
-  /* Reserve rail height so Featured / nav do not shove .pl-body (desktop CLS). */
+  /* Cap every left rail so a tall nav cannot stretch .pl-body past the
+     center column (white tower above the footer on short pages). */
+  min-height: 0;
+  max-height: calc(100dvh - var(--pl-header-h, 72px) - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Homepage only: reserve Featured height while sports load (CLS). */
+.pl-body.is-home-body .pl-left {
   min-height: 560px;
 }
 
 .pl-sport-nav {
+  min-height: 0;
+}
+
+.pl-body.is-home-body .pl-sport-nav {
   min-height: 280px;
 }
 
@@ -1334,17 +1349,28 @@ button {
 }
 
 /* The home page: one section per sport. */
+.pl-home-stack {
+  /* Six skeleton cards × ~220px — holds .pl-body while sports/cards load (mobile CLS). */
+  min-height: 1320px;
+}
+
 .pl-home-sport {
   margin-bottom: 28px;
-  /* Match a filled preview card so NBA/Soccer sections stop shifting (CLS 0.11). */
+  /* Match a filled preview card so sections do not collapse mid-load (CLS). */
   min-height: 220px;
 }
 
-.pl-home-sport.is-skeleton {
+.pl-home-sport.is-skeleton,
+.pl-home-sport.is-empty-slot {
   min-height: 220px;
   border-radius: 16px;
   background: linear-gradient(90deg, #f1f5f9 0%, #e2e8f0 50%, #f1f5f9 100%);
   background-size: 200% 100%;
+}
+
+.pl-home-sport.is-empty-slot {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
 }
 
 .pl-home-sport-title {
@@ -1894,9 +1920,66 @@ button {
 }
 
 .pl-nav-status {
+  margin-left: 6px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
+  text-align: right;
+}
+
+/* Props page: homepage CLS min-heights on .pl-left (560px) stretch the grid
+   row when the center column is short → white tower above the footer. */
+.pl-body.is-props-body {
+  align-items: start;
+  padding-bottom: 32px;
+}
+
+.pl-body.is-props-body > .pl-left.is-props-nav {
+  align-self: start;
+  min-height: 0 !important;
+  height: auto;
+  max-height: calc(100dvh - var(--pl-header-h, 72px) - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.pl-body.is-props-body > .pl-left.is-props-nav .pl-sport-nav {
+  min-height: 0 !important;
+}
+
+.pl-props-resting {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pl-props-resting > summary {
+  cursor: pointer;
+  list-style: none;
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.pl-props-resting > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pl-left.is-props-nav .pl-sport-link {
+  align-items: baseline;
+}
+
+.pl-left.is-props-nav .pl-props-resting-title {
+  margin-top: 4px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .pl-nav-chevron {
@@ -2049,8 +2132,12 @@ button {
     padding: 0;
     margin: 0;
   }
+  /* One chip row height while Featured loads — avoids .pl-body jump on phones. */
   .pl-sport-nav {
-    min-height: 0;
+    min-height: 36px;
+  }
+  .pl-home-stack {
+    min-height: 1320px;
   }
   .pl-left-title,
   .pl-left .pl-nav-divider,

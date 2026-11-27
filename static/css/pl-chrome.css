@@ -355,13 +355,48 @@ footer.site-directory-footer .pl-footer-grid {
   gap: 32px;
 }
 
+footer.site-directory-footer .pl-footer-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 footer.site-directory-footer .pl-footer-logo {
   display: block;
-  padding: 0 0 12px;
+  margin: 0;
+  padding: 0 0 8px;
   color: #111827;
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.02em;
+}
+
+footer.site-directory-footer a.pl-footer-qr-link {
+  display: block;
+  margin: 0;
+  padding: 0 0 8px;
+  line-height: 0;
+}
+
+footer.site-directory-footer .pl-footer-qr {
+  display: block;
+  width: 88px;
+  height: 88px;
+  margin: 0;
+  padding: 0;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+}
+
+footer.site-directory-footer a.pl-footer-rate {
+  display: block;
+  margin: 0;
+  padding: 0 0 10px;
+  color: #0369a1;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
 }
 
 footer.site-directory-footer .pl-footer-brand .pl-footer-social {
