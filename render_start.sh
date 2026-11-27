@@ -181,11 +181,12 @@ export GUNICORN_TIMEOUT="${GUNICORN_TIMEOUT:-180}"
 # Safety-valve recycle (see gunicorn.conf.py). Do NOT set 400 in Render env.
 export GUNICORN_MAX_REQUESTS="${GUNICORN_MAX_REQUESTS:-5000}"
 export GUNICORN_MAX_REQUESTS_JITTER="${GUNICORN_MAX_REQUESTS_JITTER:-200}"
-# Props forks eat the only worker (WORKER TIMEOUT in logs). Off until stable;
-# set PL_PROP_PUBLICATION=1 in the Render dashboard when ready to turn back on.
+# Props forks can starve the only gunicorn worker. Keep publication opt-in via
+# Render dashboard (PL_PROP_PUBLICATION=1). Job timeout must cover NBA/NHL
+# slates — 90s was killing mid-build and marking sports unavailable for hours.
 export PL_PROP_PUBLICATION="${PL_PROP_PUBLICATION:-0}"
 export PL_PROPS_START_DELAY="${PL_PROPS_START_DELAY:-1800}"
-export PL_PROPS_JOB_TIMEOUT="${PL_PROPS_JOB_TIMEOUT:-90}"
+export PL_PROPS_JOB_TIMEOUT="${PL_PROPS_JOB_TIMEOUT:-300}"
 
 # ── Launch Flask app via gunicorn (optional Datadog APM via ddtrace-run) ───────
 if [ -n "${DD_API_KEY:-}" ] || [ "${DD_TRACE_ENABLED:-}" = "true" ]; then

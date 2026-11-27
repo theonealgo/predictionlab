@@ -137,11 +137,13 @@ def _read_snapshot(path):
 def run_isolated(site, league, day):
     """Only called by the queue thread; the child never imports the website."""
     directory = _path(site, league, day).parent.parent
-    # Cap job time: a 600s props child held the lock through gunicorn's old
-    # 120s worker timeout and killed live traffic.
-    _default_job_timeout = "90" if Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") else "600"
+    # Render used to cap at 90s so a props child could not starve gunicorn.
+    # NBA (and NHL) regularly need longer than 90s; killing mid-build marks the
+    # sport "unavailable" for FAIL_COOLDOWN. Keep a hard cap, but allow a full slate.
+    _on_render = bool(Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID"))
+    _default_job_timeout = "300" if _on_render else "600"
     timeout = max(30, int(os.getenv("PL_PROPS_JOB_TIMEOUT", _default_job_timeout) or _default_job_timeout))
-    memory_mb = max(128, int(os.getenv("PL_PROPS_JOB_MEMORY_MB", "512")))
+    memory_mb = max(128, int(os.getenv("PL_PROPS_JOB_MEMORY_MB", "768" if _on_render else "512")))
     with _PROCESS_LOCK:
         directory.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, "PL_PROP_WORKER": "1", "OMP_NUM_THREADS": "1",
@@ -167,6 +169,9 @@ def run_isolated(site, league, day):
                     if int(rss) > memory_mb*1024:
                         raise RuntimeError("Props generation exceeded its memory budget")
                     time.sleep(.25)
+                # Exit 75 = another props worker holds publication.lock — not a data failure.
+                if process.returncode == 75:
+                    raise RuntimeError("Props publication lock busy")
                 if process.returncode:
                     raise RuntimeError(f"Props generation did not publish (exit {process.returncode})")
             finally:
@@ -269,6 +274,15 @@ def ensure_selected(site, league, day):
     ).start()
 
 
+def _soft_skip_lock_busy(key, previous, league, day):
+    """Lock contention is transient — do not mark the sport unavailable for hours."""
+    logger.warning("Prop publication lock busy for %s %s — will retry", league, day)
+    with _LOCK:
+        if previous:
+            _CACHE[key] = previous
+        _STATE.pop(key, None)
+
+
 def _publish_selected(site, league, day):
     key = _key(site, league, day)
     previous = entries(site, day).get(league)
@@ -277,7 +291,10 @@ def _publish_selected(site, league, day):
     failed = False
     try:
         entry = run_isolated(site, league, day)
-    except Exception:
+    except Exception as exc:
+        if "lock busy" in str(exc):
+            _soft_skip_lock_busy(key, previous, league, day)
+            return
         failed = True
         logger.exception("Prop publication unavailable for %s %s", league, day)
         if previous and preview(league, previous, limit=0, day=day)["total"] is not None:
@@ -418,7 +435,11 @@ def _loop():
         try:
             time.sleep(max(0, _NOT_BEFORE-time.monotonic()))
             entry = run_isolated(site, league, day)
-        except Exception:
+        except Exception as exc:
+            if "lock busy" in str(exc):
+                _soft_skip_lock_busy(key, previous, league, day)
+                _QUEUE.task_done()
+                continue
             failed = True
             logger.exception("Prop publication unavailable for %s %s", league, day)
             if previous and preview(league, previous, limit=0, day=day)["total"] is not None:
