@@ -15,27 +15,54 @@ function propsHref({ league = '', date = '', game = '', side = '' } = {}) {
   return qs ? `/player-props?${qs}` : '/player-props';
 }
 
+function todayET() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+}
+
 export default function PropsNav({ address }) {
   const params = useMemo(() => new URLSearchParams((address || '').split('?')[1] || ''), [address]);
   const league = (params.get('league') || '').toUpperCase();
-  const date = params.get('date') || '';
+  const date = params.get('date') || todayET();
   const side = params.get('side') || '';
   const [counts, setCounts] = useState({});
 
   useEffect(() => {
     let alive = true;
-    getJson('/api/web/props-navigation')
-      .then((data) => {
-        if (!alive) return;
-        const next = {};
-        (data.sports || []).forEach((sport) => {
-          next[sport.league] = sport.count;
+    let timer;
+    const load = () => {
+      const query = new URLSearchParams({ date });
+      getJson(`/api/web/props-navigation?${query}`, { maxAge: 0 })
+        .then((data) => {
+          if (!alive) return;
+          const next = {};
+          (data.sports || []).forEach((sport) => {
+            // Only show positive ready counts — hide null (not loaded) and 0 (no verified props).
+            if (Number.isInteger(sport.count) && sport.count > 0) {
+              next[sport.league] = sport.count;
+            }
+          });
+          setCounts(next);
+          // Keep refreshing while a big slate (NBA) is still missing a count.
+          const missingReady = (data.sports || []).some(
+            (sport) => sport.status === 'ready' && !(Number.isInteger(sport.count) && sport.count > 0),
+          );
+          const stillLoading = (data.sports || []).some(
+            (sport) => sport.status === 'not_loaded' || sport.status === 'building',
+          );
+          if (missingReady || stillLoading || !data.complete) {
+            timer = setTimeout(load, 8000);
+          }
+        })
+        .catch(() => {
+          if (!alive) return;
+          timer = setTimeout(load, 12000);
         });
-        setCounts(next);
-      })
-      .catch(() => { if (alive) setCounts({}); });
-    return () => { alive = false; };
-  }, []);
+    };
+    load();
+    return () => { alive = false; clearTimeout(timer); };
+  }, [date]);
 
   return (
     <aside className="pl-left is-props-nav" aria-label="Sports Props">

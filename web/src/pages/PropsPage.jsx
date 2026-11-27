@@ -206,7 +206,9 @@ export default function PropsPage() {
             <option value="">Choose a sport</option>
             {SPORTS.map(code => {
               const count = sportCounts[code];
-              const suffix = count && count.count != null ? ` (${count.count} ${count.kind} props)` : '';
+              // Only annotate sports with a positive ready count (hide 0 / blank).
+              const suffix = count && Number.isInteger(count.count) && count.count > 0
+                ? ` (${count.count} ${count.kind} props)` : '';
               return <option key={code} value={code}>{nameOf(code)}{suffix}</option>;
             })}
           </select></label>
