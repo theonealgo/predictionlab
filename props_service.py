@@ -20,12 +20,13 @@ from prop_player_pool import VERSION as PLAYER_POOL_VERSION
 
 ET = ZoneInfo("America/New_York")
 TTL = max(600, int(os.getenv("PL_PROPS_TTL", "3600")))
-# After a failed publish, do not re-queue the same league/day for hours — each
-# attempt forks a props worker and can OOM the single 2 GB Render worker.
-FAIL_COOLDOWN = max(TTL, int(os.getenv("PL_PROPS_FAIL_COOLDOWN", str(6 * 3600))))
+_ON_RENDER = bool(Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID"))
+# Short cooldown so a failed NBA publish can retry soon (was 6h and left sports dead).
+_DEFAULT_FAIL_COOLDOWN = "120" if _ON_RENDER else str(6 * 3600)
+FAIL_COOLDOWN = max(60, int(os.getenv("PL_PROPS_FAIL_COOLDOWN", _DEFAULT_FAIL_COOLDOWN) or _DEFAULT_FAIL_COOLDOWN))
 # On Render (/data), only warm today+tomorrow on the first daily pass so boot
 # does not enqueue ~40 isolated props jobs at once.
-_DEFAULT_BOOT_DAYS = "2" if Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") else "8"
+_DEFAULT_BOOT_DAYS = "2" if _ON_RENDER else "8"
 BOOT_DAYS = max(1, min(8, int(os.getenv("PL_PROPS_BOOT_DAYS", _DEFAULT_BOOT_DAYS) or _DEFAULT_BOOT_DAYS)))
 UNSUPPORTED = {
     "TENNIS": "Verified player-stat prop markets and settlement coverage are not connected for tennis.",
@@ -39,12 +40,21 @@ _DAILY = set()
 _DISK = {}
 _PROCESS_LOCK = threading.Lock()
 _SETTLEMENT = set()
-# Render: wait 30m so homepage/results own the only worker (props forks caused
+# Render: wait so homepage/results own the only worker (props forks caused
 # WORKER TIMEOUT). Override with PL_PROPS_START_DELAY if needed.
-_DEFAULT_START_DELAY = "1800" if Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID") else "120"
+_DEFAULT_START_DELAY = "1800" if _ON_RENDER else "120"
 START_DELAY = max(0, int(os.getenv("PL_PROPS_START_DELAY", _DEFAULT_START_DELAY) or _DEFAULT_START_DELAY))
 _NOT_BEFORE = time.monotonic() + START_DELAY
 logger = logging.getLogger(__name__)
+
+
+def _transient_props_error(exc):
+    text = str(exc).lower()
+    return any(token in text for token in (
+        "lock busy", "time budget", "memory budget",
+        "exit -9", "exit 137", "exit 143", "exit 75",
+        "did not produce a verified snapshot",
+    ))
 
 
 def start_daily(site):
@@ -137,18 +147,17 @@ def _read_snapshot(path):
 def run_isolated(site, league, day):
     """Only called by the queue thread; the child never imports the website."""
     directory = _path(site, league, day).parent.parent
-    # Render used to cap at 90s so a props child could not starve gunicorn.
-    # NBA (and NHL) regularly need longer than 90s; killing mid-build marks the
-    # sport "unavailable" for FAIL_COOLDOWN. Keep a hard cap, but allow a full slate.
-    _on_render = bool(Path("/data").is_dir() or os.getenv("RENDER") or os.getenv("RENDER_SERVICE_ID"))
-    _default_job_timeout = "300" if _on_render else "600"
+    # NBA/NHL need a full slate window; keep a hard cap but do not starve the job.
+    _default_job_timeout = "300" if _ON_RENDER else "600"
     timeout = max(30, int(os.getenv("PL_PROPS_JOB_TIMEOUT", _default_job_timeout) or _default_job_timeout))
-    memory_mb = max(128, int(os.getenv("PL_PROPS_JOB_MEMORY_MB", "768" if _on_render else "512")))
+    # 2 GB instance: leave room for gunicorn; still allow a large NBA child.
+    memory_mb = max(128, int(os.getenv("PL_PROPS_JOB_MEMORY_MB", "1400" if _ON_RENDER else "512")))
+    history_workers = os.getenv("PL_PROPS_HISTORY_WORKERS", "2" if _ON_RENDER else "8")
     with _PROCESS_LOCK:
         directory.mkdir(parents=True, exist_ok=True)
         env = {**os.environ, "PL_PROP_WORKER": "1", "OMP_NUM_THREADS": "1",
                "OPENBLAS_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
-               "PL_PROP_MODEL_THREADS": "1", "PL_PROPS_HISTORY_WORKERS": "8"}
+               "PL_PROP_MODEL_THREADS": "1", "PL_PROPS_HISTORY_WORKERS": str(history_workers)}
         command = [sys.executable, str(Path(__file__).with_name("props_worker.py")),
                    "--database", str(Path(site.DATABASE).resolve()), "--cache-dir", str(directory),
                    "--league", league, "--date", day, "--timeout", str(timeout)]
@@ -266,7 +275,18 @@ def ensure_selected(site, league, day):
         return
     key = _key(site, league, day)
     with _LOCK:
-        if (_STATE.get(key) or {}).get("status") in ("queued", "building"):
+        state = _STATE.get(key) or {}
+        status = state.get("status")
+        age = time.time() - float(state.get("ts") or 0)
+        # Stuck / poisoned builds must not block visitor retries.
+        if status == "building" and age > 400:
+            _STATE.pop(key, None)
+            _CACHE.pop(key, None)
+        elif status in ("failed", "unavailable") and age > 30:
+            _STATE.pop(key, None)
+            if ( (_CACHE.get(key) or {}).get("payload") or {}).get("availability") == "unavailable":
+                _CACHE.pop(key, None)
+        elif status in ("queued", "building"):
             return
         _STATE[key] = {"status": "queued", "ts": time.time()}
     threading.Thread(
@@ -274,26 +294,30 @@ def ensure_selected(site, league, day):
     ).start()
 
 
-def _soft_skip_lock_busy(key, previous, league, day):
-    """Lock contention is transient — do not mark the sport unavailable for hours."""
-    logger.warning("Prop publication lock busy for %s %s — will retry", league, day)
+def _soft_skip_transient(key, previous, league, day, reason):
+    """Operational failures are transient — never poison the sport as unavailable."""
+    logger.warning("Prop publication soft-skip for %s %s (%s) — will retry", league, day, reason)
     with _LOCK:
-        if previous:
+        if previous and (previous.get("payload") or {}).get("availability") not in (None, "unavailable"):
             _CACHE[key] = previous
+        else:
+            _CACHE.pop(key, None)
         _STATE.pop(key, None)
 
 
 def _publish_selected(site, league, day):
     key = _key(site, league, day)
     previous = entries(site, day).get(league)
+    if previous and (previous.get("payload") or {}).get("availability") == "unavailable":
+        previous = None
     with _LOCK:
         _STATE[key] = {"status": "building", "ts": time.time()}
     failed = False
     try:
         entry = run_isolated(site, league, day)
     except Exception as exc:
-        if "lock busy" in str(exc):
-            _soft_skip_lock_busy(key, previous, league, day)
+        if _transient_props_error(exc):
+            _soft_skip_transient(key, previous, league, day, str(exc))
             return
         failed = True
         logger.exception("Prop publication unavailable for %s %s", league, day)
@@ -301,9 +325,9 @@ def _publish_selected(site, league, day):
             entry = {**previous, "payload": {**previous["payload"],
                      "refresh_notice": "The latest refresh is unavailable. Showing the last verified props for this date."}}
         else:
-            entry = {"ts": time.time(), "payload": {"requested_date": day,
-                     "availability": "unavailable", "availability_reason":
-                     "The current fixture or player-stat service could not be verified. Please retry later."}}
+            # Do not poison the hub with a hard unavailable — leave room to retry.
+            _soft_skip_transient(key, previous, league, day, str(exc))
+            return
     with _LOCK:
         _CACHE[key] = entry
         _STATE[key] = {
@@ -429,6 +453,8 @@ def _loop():
             continue
         key = _key(site, league, day)
         previous = entries(site, day).get(league)
+        if previous and (previous.get("payload") or {}).get("availability") == "unavailable":
+            previous = None
         with _LOCK:
             _STATE[key] = {"status": "building", "ts": time.time()}
         failed = False
@@ -436,25 +462,18 @@ def _loop():
             time.sleep(max(0, _NOT_BEFORE-time.monotonic()))
             entry = run_isolated(site, league, day)
         except Exception as exc:
-            if "lock busy" in str(exc):
-                _soft_skip_lock_busy(key, previous, league, day)
-                _QUEUE.task_done()
-                continue
-            failed = True
-            logger.exception("Prop publication unavailable for %s %s", league, day)
-            if previous and preview(league, previous, limit=0, day=day)["total"] is not None:
-                entry = {**previous, "payload": {**previous["payload"],
-                         "refresh_notice": "The latest refresh is unavailable. Showing the last verified props for this date."}}
-            else:
-                entry = {"ts": time.time(), "payload": {"requested_date": day,
-                         "availability": "unavailable", "availability_reason":
-                         "The current fixture or player-stat service could not be verified. Please retry later."}}
+            # Never write hub "unavailable" from the queue — that blanked NBA for customers.
+            logger.exception("Prop publication failed for %s %s", league, day)
+            _soft_skip_transient(key, previous, league, day, str(exc))
+            with _LOCK:
+                # Short failed stamp so FAIL_COOLDOWN (default 120s on Render) spaces retries.
+                _STATE[key] = {"status": "failed", "ts": time.time()}
+            _QUEUE.task_done()
+            time.sleep(max(5, int(os.getenv("PL_PROPS_FAIL_PAUSE_S", "15") or "15")))
+            continue
         with _LOCK:
             _CACHE[key] = entry
-            status = "failed" if failed else (
+            status = (
                 "unavailable" if entry["payload"].get("refresh_notice") else entry["payload"].get("availability"))
             _STATE[key] = {"status": status, "ts": time.time()}
-        if failed:
-            # Give the main gunicorn worker room before the next props fork.
-            time.sleep(max(5, int(os.getenv("PL_PROPS_FAIL_PAUSE_S", "30") or "30")))
         _QUEUE.task_done()
